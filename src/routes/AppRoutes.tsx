@@ -1,11 +1,14 @@
 import { Routes, Route } from "react-router-dom";
 import Login from "../screens/auth/Login";
+import Landing from "../screens/Landing";
+import Register from "../screens/auth/Register";
 
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<h1 className="text-7xl text-blue-800 font-medium">Hello SmartOps!</h1>} />
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
     </Routes>
   );
 }

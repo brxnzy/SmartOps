@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import landingImg from "../assets/landin2.svg";
-import logoImg from "../assets/SmartOps.png";
+import landingImg from "../assets/landing.svg";
+import logoImg from "../assets/logo.png";
+import { Link } from "react-router-dom";
 
 const Landing: React.FC = () => {
-  // Bloquear scroll del body
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
@@ -19,20 +19,20 @@ const Landing: React.FC = () => {
           {/* LOGO + TITULO */}
           <div className="flex items-center space-x-1">
             <img className="w-auto h-30 sm:h-15" src={logoImg} alt="Logo" />
-            <h1 className="text-xl font-bold">
-              <span style={{ color: "#3F3D56" }}>Smart</span>
+            <h1 className="text-2xl font-bold">
+              <span>Smart</span>
               <span className="text-blue-500">Ops</span>
             </h1>
           </div>
-
-          {/* BOTON */}
-          <button
-            className="px-5 py-2 text-sm tracking-wider text-white uppercase
-                 transition-colors duration-300 transform bg-blue-500 rounded-lg
-                 hover:bg-blue-600 focus:outline-none"
-          >
-            Iniciar
-          </button>
+          <Link to="/register">
+            <button
+              className="px-5 py-2 text-sm tracking-wider text-white uppercase
+                       transition-colors duration-300 transform bg-blue-500 rounded-lg
+                       hover:bg-blue-600 focus:outline-none"
+            >
+              Iniciar
+            </button>
+          </Link>
         </div>
       </nav>
 
@@ -42,13 +42,15 @@ const Landing: React.FC = () => {
           {/* TEXTO */}
           <div className="w-full lg:w-1/2">
             <div className="lg:max-w-lg">
-              <h1 className="text-4xl font-bold leading-tight text-[#3F3D56] lg:text-5xl">
-                Todo tu negocio de domótica <span className="text-blue-500">bajo control</span>
-              
+              <h1 className="text-4xl font-bold leading-tight  lg:text-5xl">
+                Todo tu negocio de domótica{" "}
+                <span className="text-blue-500">bajo control</span>
               </h1>
 
               <p className="mt-4 text-lg text-gray-600">
-               Simplifica la gestión de tus clientes y proyectos con herramientas que integran comunicación, planificación y seguimiento en una plataforma única.
+                Simplifica la gestión de tus clientes y proyectos con
+                herramientas que integran comunicación, planificación y
+                seguimiento en una plataforma única.
               </p>
             </div>
           </div>
