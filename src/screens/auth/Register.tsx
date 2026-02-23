@@ -5,24 +5,15 @@
   Building2,
   MapPin,
   Phone,
+  IdCard,
+  FileText,
 } from "lucide-react";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import FileInput from "../../components/FileInput";
 import logo from "../../assets/logo.png";
-
-// Field wrapper
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({
-  label,
-  children,
-}) => (
-  <div className="flex flex-col gap-1.5">
-    <label className="text-sm font-medium text-gray-500 tracking-wide">
-      {label}
-    </label>
-    {children}
-  </div>
-);
+import { Link } from "react-router-dom";
+import Field from "../../components/Field";
 
 // Register
 const Register: React.FC = () => {
@@ -30,6 +21,9 @@ const Register: React.FC = () => {
     <div className="min-h-screen  flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-3xl ">
         {/* Logo */}
+
+        {/* Card */}
+        <div className="bg-gray-50 border border-gray-300 shadow-sm rounded-2xl p-6 sm:p-8">
         <div className="flex justify-center ">
           <img src={logo} alt="Logo" className="h-24 w-auto object-contain" />
         </div>
@@ -40,18 +34,19 @@ const Register: React.FC = () => {
             Crea tu cuenta
           </h1>
         </div>
-
-        {/* Card */}
-        <div className="bg-gray-50 border border-gray-300 shadow-sm rounded-2xl p-6 sm:p-8">
-          <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
             {/* Sección personal */}
             <section>
-              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
+              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-2">
                 Datos personales
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre completo">
-                  <Input placeholder="Ana García" icon={<User size={21} />} required />
+                  <Input
+                    placeholder="Ana García"
+                    icon={<User size={21} />}
+                    required
+                  />
                 </Field>
                 <Field label="Correo electrónico">
                   <Input
@@ -59,6 +54,29 @@ const Register: React.FC = () => {
                     placeholder="ana@empresa.com"
                     icon={<Mail size={21} />}
                     required
+                  />
+                </Field>
+                <Field label="Cedula">
+                  <Input
+                    type="text"
+                    pattern="\d{3}-\d{7}-\d{1}"
+                    placeholder="001-1234567-8"
+                    icon={<IdCard size={21} />}
+                    inputMode="numeric"
+                    maxLength={12}
+                    onChange={(e) => {
+                      let value = e.target.value.replace(/\D/g, "");
+                      if (value.length > 3) {
+                        value = value.slice(0, 3) + "-" + value.slice(3);
+                      }
+                      if (value.length > 11) {
+                        value = value.slice(0, 11) + "-" + value.slice(11);
+                      }
+                      e.target.value = value;
+                    }}
+                    required
+                  title="Formato: 001-1234567-8"
+
                   />
                 </Field>
                 <Field label="Contraseña">
@@ -79,7 +97,7 @@ const Register: React.FC = () => {
               <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
                 Tu empresa
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre">
                   <Input
                     placeholder="Smart Home S.A."
@@ -96,10 +114,33 @@ const Register: React.FC = () => {
                 </Field>
                 <Field label="Teléfono">
                   <Input
+                  type="tel"
+                  pattern="\d{3}-\d{3}-\d{4}"
+                  placeholder="809-000-0000"
+                  icon={<Phone size={21} />}
+                  inputMode="numeric"
+                  maxLength={12}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/\D/g, "");
+                    if (value.length > 3) {
+                    value = value.slice(0, 3) + "-" + value.slice(3);
+                    }
+                    if (value.length > 7) {
+                    value = value.slice(0, 7) + "-" + value.slice(7);
+                    }
+                    e.target.value = value;
+                  }}
+                  required
+                  title="Formato: 809-000-0000"
+                  />
+                </Field>
+                <Field label="RNC">
+                  <Input
                     type="tel"
-                    placeholder="+1 809 000 0000"
-                    icon={<Phone size={21} />}
+                    placeholder=""
+                    icon={<FileText size={21} />}
                     required
+                    maxLength={12}
                   />
                 </Field>
               </div>
@@ -116,10 +157,11 @@ const Register: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
               <p className="text-md text-gray-500">
                 ¿Ya tienes cuenta?{" "}
-                <a href="#" className="text-blue-700 font-medium hover:underline">
+                <Link to="/login" className="text-blue-600 hover:underline">
                   Inicia sesión
-                </a>
+                </Link>
               </p>
+
               <Button
                 type="submit"
                 fullWidth
