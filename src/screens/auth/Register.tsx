@@ -13,8 +13,9 @@ import Input from "../../components/Input";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
-import { useRegister } from "../../hooks/useRegister";
+import Field from "../../components/Field";
 
+// Register
 const Register: React.FC = () => {
   const {
     form,
@@ -78,7 +79,7 @@ const Register: React.FC = () => {
                     title="Formato: 001-1234567-8"
                   />
                 </Field>
-                <Field label="Contraseña">
+                <Field label="ContraseÃ±a">
                   <Input
                     value={form.password}
                     onChange={handleFieldChange("password")}
