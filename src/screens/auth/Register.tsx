@@ -1,4 +1,4 @@
-import {
+﻿import {
   User,
   Mail,
   Lock,
@@ -13,7 +13,7 @@ import Input from "../../components/Input";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
-import Field from "../../components/Field";
+import { useRegister } from "../../hooks/useRegister";
 
 // Register
 const Register: React.FC = () => {
