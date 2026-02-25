@@ -1,70 +1,89 @@
-﻿import {
+import {
   User,
   Mail,
   Lock,
   Building2,
   MapPin,
   Phone,
+  IdCard,
+  FileText,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
-import FileInput from "../../components/FileInput";
+import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
+import { useRegister } from "../../hooks/useRegister";
 
-// Field wrapper
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({
-  label,
-  children,
-}) => (
-  <div className="flex flex-col gap-1.5">
-    <label className="text-sm font-medium text-gray-500 tracking-wide">
-      {label}
-    </label>
-    {children}
-  </div>
-);
-
-// Register
 const Register: React.FC = () => {
+  const {
+    form,
+    isSubmitting,
+    handleSubmit,
+    handleFieldChange,
+    handleIdCardChange,
+    handleCompanyPhoneChange,
+  } = useRegister();
+
   return (
-    <div className="min-h-screen  flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-3xl ">
-        {/* Logo */}
-        <div className="flex justify-center ">
-          <img src={logo} alt="Logo" className="h-24 w-auto object-contain" />
-        </div>
-
-        {/* Header */}
-        <div className="mb-4 text-center">
-          <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
-            Crea tu cuenta
-          </h1>
-        </div>
-
-        {/* Card */}
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-3xl">
         <div className="bg-gray-50 border border-gray-300 shadow-sm rounded-2xl p-6 sm:p-8">
-          <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
-            {/* Sección personal */}
+          <div className="flex justify-center">
+            <img src={logo} alt="Logo" className="h-24 w-auto object-contain" />
+          </div>
+
+          <div className="mb-4 text-center">
+            <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
+              Crea tu cuenta
+            </h1>
+          </div>
+
+          <form className="space-y-3" onSubmit={handleSubmit}>
             <section>
-              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
+              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-2">
                 Datos personales
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre completo">
-                  <Input placeholder="Ana García" icon={<User size={21} />} required />
-                </Field>
-                <Field label="Correo electrónico">
                   <Input
+                    value={form.name}
+                    onChange={handleFieldChange("name")}
+                    placeholder="Ana Garcia"
+                    icon={<User size={21} />}
+                    required
+                  />
+                </Field>
+                <Field label="Correo electronico">
+                  <Input
+                    value={form.email}
+                    onChange={handleFieldChange("email")}
                     type="email"
                     placeholder="ana@empresa.com"
                     icon={<Mail size={21} />}
                     required
                   />
                 </Field>
-                <Field label="Contraseña">
+                <Field label="Cedula">
                   <Input
+                    value={form.idCard}
+                    type="text"
+                    pattern="\d{3}-\d{7}-\d{1}"
+                    placeholder="001-1234567-8"
+                    icon={<IdCard size={21} />}
+                    inputMode="numeric"
+                    maxLength={13}
+                    onChange={handleIdCardChange}
+                    required
+                    title="Formato: 001-1234567-8"
+                  />
+                </Field>
+                <Field label="Contrase�a">
+                  <Input
+                    value={form.password}
+                    onChange={handleFieldChange("password")}
                     type="password"
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Minimo 8 caracteres"
                     icon={<Lock size={21} />}
                     required
                   />
@@ -74,58 +93,71 @@ const Register: React.FC = () => {
 
             <hr className="border-gray-100" />
 
-            {/* Sección empresa */}
             <section>
               <p className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-4">
                 Tu empresa
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre">
                   <Input
+                    value={form.companyName}
+                    onChange={handleFieldChange("companyName")}
                     placeholder="Smart Home S.A."
                     icon={<Building2 size={21} />}
                     required
                   />
                 </Field>
-                <Field label="Dirección">
+                <Field label="Direccion">
                   <Input
+                    value={form.companyAddress}
+                    onChange={handleFieldChange("companyAddress")}
                     placeholder="Av. Principal 123"
                     icon={<MapPin size={21} />}
                     required
                   />
                 </Field>
-                <Field label="Teléfono">
+                <Field label="Telefono">
                   <Input
+                    value={form.companyPhone}
                     type="tel"
-                    placeholder="+1 809 000 0000"
+                    pattern="\d{3}-\d{3}-\d{4}"
+                    placeholder="809-000-0000"
                     icon={<Phone size={21} />}
+                    inputMode="numeric"
+                    maxLength={12}
+                    onChange={handleCompanyPhoneChange}
                     required
+                    title="Formato: 809-000-0000"
                   />
                 </Field>
-              </div>
-
-              {/* Logo upload */}
-              <div className="mt-4">
-                <Field label="Logotipo">
-                  <FileInput accept="image/*" />
+                <Field label="RNC">
+                  <Input
+                    value={form.companyRnc}
+                    onChange={handleFieldChange("companyRnc")}
+                    type="tel"
+                    icon={<FileText size={21} />}
+                    required
+                    maxLength={12}
+                  />
                 </Field>
               </div>
             </section>
 
-            {/* Actions */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
               <p className="text-md text-gray-500">
-                ¿Ya tienes cuenta?{" "}
-                <a href="#" className="text-blue-700 font-medium hover:underline">
-                  Inicia sesión
-                </a>
+                Ya tienes cuenta?{" "}
+                <Link to="/login" className="text-blue-600 hover:underline">
+                  Inicia sesion
+                </Link>
               </p>
+
               <Button
                 type="submit"
                 fullWidth
+                disabled={isSubmitting}
                 className="sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
               >
-                Crear cuenta
+                {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
               </Button>
             </div>
           </form>
