@@ -1,4 +1,4 @@
-﻿import {
+import {
   User,
   Mail,
   Lock,
@@ -8,51 +8,22 @@
   IdCard,
   FileText,
 } from "lucide-react";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
-import { registerUser } from "../../services/auth.service";
-import { formatIdCard, formatPhone } from "../../utils/format";
-
-const initialForm = {
-  name: "",
-  email: "",
-  password: "",
-  idCard: "",
-  companyName: "",
-  companyAddress: "",
-  companyPhone: "",
-  companyRnc: "",
-};
+import { useRegister } from "../../hooks/useRegister";
 
 const Register: React.FC = () => {
-  const [form, setForm] = useState(initialForm);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-
-    try {
-      setIsSubmitting(true);
-      await registerUser({ ...form });
-      alert("Registro exitoso. Revisa tu correo para confirmar la cuenta.");
-      setForm(initialForm);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo completar el registro.";
-      alert(`Error al registrar usuario: ${message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const {
+    form,
+    isSubmitting,
+    handleSubmit,
+    handleFieldChange,
+    handleIdCardChange,
+    handleCompanyPhoneChange,
+  } = useRegister();
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -77,9 +48,7 @@ const Register: React.FC = () => {
                 <Field label="Nombre completo">
                   <Input
                     value={form.name}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, name: e.target.value }))
-                    }
+                    onChange={handleFieldChange("name")}
                     placeholder="Ana Garcia"
                     icon={<User size={21} />}
                     required
@@ -88,9 +57,7 @@ const Register: React.FC = () => {
                 <Field label="Correo electronico">
                   <Input
                     value={form.email}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, email: e.target.value }))
-                    }
+                    onChange={handleFieldChange("email")}
                     type="email"
                     placeholder="ana@empresa.com"
                     icon={<Mail size={21} />}
@@ -106,22 +73,15 @@ const Register: React.FC = () => {
                     icon={<IdCard size={21} />}
                     inputMode="numeric"
                     maxLength={13}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        idCard: formatIdCard(e.target.value),
-                      }))
-                    }
+                    onChange={handleIdCardChange}
                     required
                     title="Formato: 001-1234567-8"
                   />
                 </Field>
-                <Field label="Contraseña">
+                <Field label="Contrase�a">
                   <Input
                     value={form.password}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, password: e.target.value }))
-                    }
+                    onChange={handleFieldChange("password")}
                     type="password"
                     placeholder="Minimo 8 caracteres"
                     icon={<Lock size={21} />}
@@ -141,12 +101,7 @@ const Register: React.FC = () => {
                 <Field label="Nombre">
                   <Input
                     value={form.companyName}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        companyName: e.target.value,
-                      }))
-                    }
+                    onChange={handleFieldChange("companyName")}
                     placeholder="Smart Home S.A."
                     icon={<Building2 size={21} />}
                     required
@@ -155,18 +110,13 @@ const Register: React.FC = () => {
                 <Field label="Direccion">
                   <Input
                     value={form.companyAddress}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        companyAddress: e.target.value,
-                      }))
-                    }
+                    onChange={handleFieldChange("companyAddress")}
                     placeholder="Av. Principal 123"
                     icon={<MapPin size={21} />}
                     required
                   />
                 </Field>
-                <Field label="Tel�fono">
+                <Field label="Telefono">
                   <Input
                     value={form.companyPhone}
                     type="tel"
@@ -175,12 +125,7 @@ const Register: React.FC = () => {
                     icon={<Phone size={21} />}
                     inputMode="numeric"
                     maxLength={12}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        companyPhone: formatPhone(e.target.value),
-                      }))
-                    }
+                    onChange={handleCompanyPhoneChange}
                     required
                     title="Formato: 809-000-0000"
                   />
@@ -188,12 +133,7 @@ const Register: React.FC = () => {
                 <Field label="RNC">
                   <Input
                     value={form.companyRnc}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        companyRnc: e.target.value,
-                      }))
-                    }
+                    onChange={handleFieldChange("companyRnc")}
                     type="tel"
                     icon={<FileText size={21} />}
                     required
@@ -201,8 +141,6 @@ const Register: React.FC = () => {
                   />
                 </Field>
               </div>
-
- 
             </section>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
