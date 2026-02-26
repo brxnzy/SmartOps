@@ -1,15 +1,13 @@
 import AppRoutes from "./routes/AppRoutes";
-import {Toaster } from "sileo";
+import { Toaster } from "sileo";
 
 function App() {
-  return  (
-
+  return (
     <>
-  <Toaster position="top-right" />
-  <AppRoutes />;
-  
-  </>
-  )
+      <Toaster position="top-right" />
+      <AppRoutes />
+    </>
+  );
 }
 
 export default App;

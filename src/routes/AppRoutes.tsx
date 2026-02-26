@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import Login from "../screens/auth/Login";
 import Landing from "../screens/landing";
 import Register from "../screens/auth/Register";
+import VerifyEmail from "../screens/auth/VerifyEmail";
 import PublicRoute from "./PublicRoute";
 import Dashboard from "../screens/Dashboard/Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
@@ -44,6 +45,15 @@ export default function AppRoutes() {
         element={
           <PublicRoute>
             <Register />
+          </PublicRoute>
+        }
+      />
+
+      <Route
+        path="/verify"
+        element={
+          <PublicRoute>
+            <VerifyEmail />
           </PublicRoute>
         }
       />

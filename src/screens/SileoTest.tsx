@@ -9,8 +9,6 @@ export default function SileoTest() {
       fill: "#171717",
       styles: {
         description: "text-white/75!"
-      
-    
       },
     });
   };

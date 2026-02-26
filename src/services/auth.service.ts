@@ -1,6 +1,28 @@
 import { supabase } from "../libs/supabase"
 import type { RegisterInput } from "../types/RegisterInput"
 
+interface LoginInput {
+  email: string
+  password: string
+}
+
+export async function loginUser({ email, password }: LoginInput) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  })
+
+  if (error) throw error
+  if (!data.user) throw new Error("No se pudo iniciar sesion.")
+
+  return data.user
+}
+
+export async function logoutUser() {
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+}
+
 export async function registerUser(input: RegisterInput) {
 
   const { data: check, error: checkError } = await supabase
