@@ -35,7 +35,7 @@ const Register: React.FC = () => {
           </div>
 
           <div className="mb-4 text-center">
-            <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
+            <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">
               Crea tu cuenta
             </h1>
           </div>

@@ -32,7 +32,7 @@ const useLogin = () => {
 
     try {
       await notifications.promise(
-        () => loginUser({ email: form.email, password: form.password }),
+        () => loginUser(form.email, form.password),
         {
           loading: {
             title: "Iniciando sesion...", 

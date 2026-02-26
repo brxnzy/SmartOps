@@ -1,34 +1,11 @@
 import { supabase } from "../libs/supabase"
 import type { RegisterInput } from "../types/RegisterInput"
 
-
 /**
  * ============================
  * REGISTER USER
  * ============================
  */
-interface LoginInput {
-  email: string
-  password: string
-}
-
-export async function loginUser({ email, password }: LoginInput) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
-    password,
-  })
-
-  if (error) throw error
-  if (!data.user) throw new Error("No se pudo iniciar sesion.")
-
-  return data.user
-}
-
-export async function logoutUser() {
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
-}
-
 export async function registerUser(input: RegisterInput) {
   // 1️⃣ Validar disponibilidad usando RPC
   const { data: check, error: checkError } = await supabase
@@ -62,7 +39,6 @@ export async function registerUser(input: RegisterInput) {
   if (data.user && data.user.identities?.length === 0) {
     throw new Error("Este correo ya está registrado")
   }
-
 
   if (!data.user) {
     throw new Error("No se pudo crear el usuario")
@@ -149,7 +125,4 @@ export async function getCurrentUser() {
   if (error) throw error
 
   return data.user
-}
-
-  if (!data.user) throw new Error("No se pudo crear el usuario")
 }
