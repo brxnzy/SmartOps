@@ -1,7 +1,7 @@
-import logoImg from "../../assets/logo.png";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import useUpdatePassword from "../../hooks/useUpdatePassword";
+import { LockKeyhole, Lock } from "lucide-react";
 
 export default function UpdatePassword() {
   const {
@@ -15,37 +15,20 @@ export default function UpdatePassword() {
   handleSubmit,
   } = useUpdatePassword()
 
-  const lockIcon = (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-      />
-    </svg>
-  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
 
       {/* Logo top left */}
-      <div className="absolute top-6 left-6 flex items-center gap-2.5">
-        <img src={logoImg} alt="Logo" className="w-14 h-14 object-contain" />
-        <span className="text-2xl font-semibold tracking-tight">
-          <span className="text-gray-900">Smart</span>
-          <span className="text-blue-500">Ops</span>
-        </span>
-      </div>
+    
 
       <div className="relative w-full max-w-md">
         <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
 
           {/* Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
-                />
-              </svg>
+            <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center">
+              <LockKeyhole size={30} color="#2563EB"/>
             </div>
           </div>
 
@@ -71,7 +54,7 @@ export default function UpdatePassword() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                icon={lockIcon}
+                icon={<Lock size={21}/>}
               />
             </div>
 
@@ -85,7 +68,7 @@ export default function UpdatePassword() {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required
-                icon={lockIcon}
+                icon={<Lock size={21}/>}
               />
             </div>
 
@@ -93,7 +76,7 @@ export default function UpdatePassword() {
               type="submit"
               disabled={submitting}
               fullWidth
-              className="bg-blue-800 hover:bg-blue-700 border-blue-800"
+              className="bg-blue-600 hover:bg-blue-500 border-blue-600"
               icon={
                 submitting ? (
                   <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">

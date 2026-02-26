@@ -39,6 +39,7 @@ const Login: React.FC = () => {
 
             <Field label="Correo electrónico">
               <Input
+                placeholder="ana@empresa.com"
                 type="email"
                 icon={<Mail size={20} />}
                 required
@@ -50,6 +51,7 @@ const Login: React.FC = () => {
 
             <Field label="Contraseña">
               <Input
+                placeholder="Ingrese su contrasena"
                 type="password"
                 icon={<Lock size={20} />}
                 required

@@ -1,4 +1,4 @@
-import logoImg from "../../assets/logo.png";
+import { UserKey } from "lucide-react";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import useForgotPassword from "../../hooks/useForgotPassword";
@@ -17,31 +17,14 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
 
-      {/* Logo top left */}
-      <div className="absolute top-6 left-6 flex items-center gap-2.5">
-        <img
-          src={logoImg}
-          alt="Logo"
-          className="w-14 h-14 object-contain"
-        />
-        <span className="text-2xl font-semibold tracking-tight">
-          <span className="text-gray-900">Smart</span>
-          <span className="text-blue-500">Ops</span>
-        </span>
-      </div>
-
       <div className="relative w-full max-w-md">
         {/* Card */}
         <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
 
           {/* Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
-                />
-              </svg>
+            <div className="w-15 h-15 rounded-xl bg-blue-100 flex items-center justify-center">
+              <UserKey size={31} color="#2563EB"/>
             </div>
           </div>
 
@@ -81,7 +64,7 @@ export default function ForgotPassword() {
               type="submit"
               disabled={loading}
               fullWidth
-              className="bg-blue-800 hover:bg-blue-700 border-blue-800"
+              className="bg-blue-600 hover:bg-blue-500 border-blue-600"
               icon={
                 loading ? (
                   <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">

@@ -30,6 +30,8 @@ export default function AppRoutes() {
 
   return (
     <Routes>
+
+      
       <Route path="/" element={<Landing />} />
       {/* Rutas públicas normales */}
       <Route
