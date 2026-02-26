@@ -1,4 +1,4 @@
-import {
+﻿import {
   User,
   Mail,
   Lock,
@@ -7,6 +7,7 @@ import {
   Phone,
   IdCard,
   FileText,
+  
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import Input from "../../components/Input";
@@ -30,7 +31,7 @@ const Register: React.FC = () => {
       <div className="w-full max-w-3xl">
         <div className="bg-gray-50 border border-gray-300 shadow-sm rounded-2xl p-6 sm:p-8">
           <div className="flex justify-center">
-            <img src={logo} alt="Logo" className="h-24 w-auto object-contain" />
+            <img src={logo} alt="Logo" className="h-28 w-auto object-contain" />
           </div>
 
           <div className="mb-4 text-center">
