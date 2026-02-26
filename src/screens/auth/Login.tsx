@@ -11,13 +11,13 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-xl">
         <div className="bg-white border border-gray-200 shadow-md rounded-2xl p-8">
           <div className="flex justify-center">
-            <img src={logo} alt="Logo" className="h-24 w-auto" />
+            <img src={logo} alt="Logo" className="h-28 w-auto object-contain" />
           </div>
 
-          <h1 className="text-2xl mb-6 text-center font-semibold text-gray-900">
+          <h1 className="text-4xl font-semibold text-center mb-6 text-gray-900 tracking-tight">
             Iniciar sesion
           </h1>
 

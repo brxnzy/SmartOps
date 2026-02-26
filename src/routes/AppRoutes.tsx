@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import Login from "../screens/auth/Login";
-import Landing from "../screens/landing";
+import Landing from "../screens/Landing";
 import Register from "../screens/auth/Register";
 import VerifyEmail from "../screens/auth/VerifyEmail";
 import PublicRoute from "./PublicRoute";
