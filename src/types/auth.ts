@@ -9,3 +9,12 @@ export interface AuthContextType{
     login: (userData: User) => void;
     logout: () => void;
 }
+
+export interface ForgotPasswordForm {
+  email: string;
+}
+
+export interface UpdatePasswordForm {
+  password: string;
+  confirmPassword: string;
+}

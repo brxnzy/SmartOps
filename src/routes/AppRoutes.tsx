@@ -6,6 +6,8 @@ import VerifyEmail from "../screens/auth/VerifyEmail";
 import PublicRoute from "./PublicRoute";
 import Dashboard from "../screens/Dashboard/Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
+import ForgotPassword from "../screens/auth/ForgotPassword";
+import UpdatePassword from "../screens/auth/UpdatePassword";
 import SileoTest from "../screens/SileoTest";
 
 /**
@@ -28,7 +30,19 @@ import SileoTest from "../screens/SileoTest";
 export default function AppRoutes() {
   return (
     <Routes>
+
+      
       <Route path="/" element={<Landing />} />
+      {/* Rutas públicas normales */}
+      <Route
+        path="/forgot-password"
+        element={<ForgotPassword />}
+      />
+
+      <Route
+        path="/update-password"
+        element={<UpdatePassword />}
+      />
 
       {/* Rutas públicas controladas */}
       <Route

@@ -24,6 +24,7 @@ const Login: React.FC = () => {
           <form className="space-y-5" onSubmit={handleLogin}>
             <Field label="Correo electronico">
               <Input
+                placeholder="ana@empresa.com"
                 type="email"
                 icon={<Mail size={20} />}
                 required
@@ -33,6 +34,7 @@ const Login: React.FC = () => {
 
             <Field label="Contrasena">
               <Input
+                placeholder="Ingrese su contrasena"
                 type="password"
                 icon={<Lock size={20} />}
                 required
@@ -41,13 +43,12 @@ const Login: React.FC = () => {
             </Field>
 
             <div className="flex justify-end">
-              <button
-                type="button"
-                disabled={loading}
-                className="text-sm text-blue-600 hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+              <Link
+                to="/forgot-password"
+                className="text-sm text-blue-600 hover:underline"
               >
-                Olvidaste tu contrasena?
-              </button>
+                Olvidaste tu contraseña
+              </Link>
             </div>
 
             <Button

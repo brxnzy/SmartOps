@@ -84,6 +84,7 @@ const Register: React.FC = () => {
                     onChange={handleFieldChange("password")}
                     type="password"
                     placeholder="Minimo 8 caracteres"
+                    minLength={8}
                     icon={<Lock size={21} />}
                     required
                   />
