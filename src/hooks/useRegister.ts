@@ -1,6 +1,9 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { registerUser } from "../services/auth.service";
+import { notifications } from "../services/notification.service";
 import type { RegisterInput } from "../types/RegisterInput";
+import { translateAuthError } from "../utils/authErrorMessages";
 import { formatIdCard, formatPhone } from "../utils/format";
 
 const initialForm: RegisterInput = {
@@ -15,6 +18,7 @@ const initialForm: RegisterInput = {
 };
 
 export const useRegister = () => {
+  const navigate = useNavigate();
   const [form, setForm] = useState<RegisterInput>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,15 +47,39 @@ export const useRegister = () => {
 
     try {
       setIsSubmitting(true);
-      await registerUser({ ...form });
-      alert("Registro exitoso. Revisa tu correo para confirmar la cuenta.");
+      await notifications.promise(
+        () => registerUser({ ...form, email: form.email.trim().toLowerCase() }),
+        {
+          loading: {
+            title: "Creando cuenta...",
+            description: "Estamos registrando tu usuario.",
+          },
+          success: {
+            title: "Registro completado",
+            description: "Revisa tu correo para confirmar tu cuenta.",
+          },
+          error: (error) => ({
+            title: "Error al registrar usuario",
+            description: translateAuthError(error, "No se pudo completar el registro."),
+          }),
+        }
+      );
+
+      notifications.action({
+        title: "Verifica tu correo",
+        description: "Abre tu email y confirma la cuenta para continuar.",
+        button: {
+          title: "Ir a verificar",
+          onClick: () =>
+            navigate("/verify", {
+              state: { email: form.email.trim().toLowerCase() },
+            }),
+        },
+      });
+
       setForm(initialForm);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo completar el registro.";
-      alert(`Error al registrar usuario: ${message}`);
+    } catch {
+      // Toasts are handled by notifications.promise.
     } finally {
       setIsSubmitting(false);
     }
