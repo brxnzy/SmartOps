@@ -61,12 +61,12 @@ const Login: React.FC = () => {
 
             {/* Forgot password */}
             <div className="flex justify-end">
-              <button
-                type="button"
+              <Link
+                to="/forgot-password"
                 className="text-sm text-blue-600 hover:underline"
               >
-                ¿Olvidaste tu contraseña?
-              </button>
+                Olvidaste tu contraseña
+              </Link>
             </div>
 
             {/* Button */}
