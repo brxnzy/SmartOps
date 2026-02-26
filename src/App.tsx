@@ -1,16 +1,13 @@
-import { Route, Routes } from "react-router-dom";
-import Sidebar from "./layouts/Sidebar";
-import Landing from "./screens/landing";
+import AppRoutes from "./routes/AppRoutes";
+import { Toaster } from "sileo";
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/sidebar" element={<Sidebar />} />
-    </Routes>
+    <>
+      <Toaster position="top-right" />
+      <AppRoutes />
+    </>
   );
 }
 
 export default App;
-
-
