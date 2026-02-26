@@ -1,45 +1,62 @@
 import { useState } from "react";
 import { supabase } from "../libs/supabase";
-import {  useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const useLogin = () => {
-    const navigate = useNavigate();
-    const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
-    const [form, setForm] = useState({
-        email: "",
-        password: "",
-    });
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
 
-    const handleChange = (key: string, value: string) => {
-        setForm({ ...form, [key]: value });
-    };
+  const handleChange = (key: string, value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-        const { error } = await supabase.auth.signInWithPassword({
+    if (loading) return;
+
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password,
-        });
+      });
 
-        if (error) {
-        alert(error.message);
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error("No se pudo iniciar sesión.");
+      }
+      
+      navigate("/dashboard", { replace: true });
+
+    } catch (err: unknown) {
+    if (err instanceof Error) {
+        alert(err.message);
+    } else {
+        alert("Ocurrió un error inesperado");
+    }
+    } finally {
         setLoading(false);
-        return;
         }
-
-        navigate("/dashboard");
     };
 
-    return{
-        loading,
-        setLoading,
-        handleChange,
-        handleLogin,
-    }
-
-}
+  return {
+    loading,
+    handleChange,
+    handleLogin,
+  };
+};
 
 export default useLogin;
