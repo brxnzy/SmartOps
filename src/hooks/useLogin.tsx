@@ -1,6 +1,11 @@
 import { useState } from "react";
-import { supabase } from "../libs/supabase";
 import { useNavigate } from "react-router-dom";
+import { loginUser } from "../services/auth.service";
+import { notifications } from "../services/notification.service";
+import {
+  isEmailNotConfirmedError,
+  translateAuthError,
+} from "../utils/authErrorMessages";
 
 const useLogin = () => {
   const navigate = useNavigate();
@@ -26,31 +31,45 @@ const useLogin = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email,
-        password: form.password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data.user) {
-        throw new Error("No se pudo iniciar sesión.");
-      }
-      
-      navigate("/dashboard", { replace: true });
-
-    } catch (err: unknown) {
-    if (err instanceof Error) {
-        alert(err.message);
-    } else {
-        alert("Ocurrió un error inesperado");
-    }
-    } finally {
-        setLoading(false);
+      await notifications.promise(
+        () => loginUser({ email: form.email, password: form.password }),
+        {
+          loading: {
+            title: "Iniciando sesion...", 
+            description: "Validando tus credenciales.",
+          },
+          success: {
+            title: "Bienvenido",
+            description: "Inicio de sesion exitoso.",
+          },
+          error: (err) =>
+            isEmailNotConfirmedError(err)
+              ? {
+                  title: "Correo no confirmado",
+                  description:
+                    "Debes confirmar tu correo antes de iniciar sesion.",
+                  button: {
+                    title: "Ir a verificar",
+                    onClick: () =>
+                      navigate("/verify", {
+                        state: { email: form.email.trim().toLowerCase() },
+                      }),
+                  },
+                }
+              : {
+                  title: "Error iniciando sesion",
+                  description: translateAuthError(err),
+                },
         }
-    };
+      );
+
+      navigate("/dashboard", { replace: true });
+    } catch {
+      // Toasts are handled by notifications.promise.
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return {
     loading,

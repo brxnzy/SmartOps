@@ -1,4 +1,4 @@
-﻿import {
+import {
   User,
   Mail,
   Lock,
@@ -15,7 +15,6 @@ import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
 import { useRegister } from "../../hooks/useRegister";
 
-// Register
 const Register: React.FC = () => {
   const {
     form,
@@ -79,7 +78,7 @@ const Register: React.FC = () => {
                     title="Formato: 001-1234567-8"
                   />
                 </Field>
-                <Field label="Contraseña">
+                <Field label="Contrasena">
                   <Input
                     value={form.password}
                     onChange={handleFieldChange("password")}
@@ -159,7 +158,7 @@ const Register: React.FC = () => {
                 disabled={isSubmitting}
                 className="sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
               >
-                {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
+                Crear cuenta
               </Button>
             </div>
           </form>

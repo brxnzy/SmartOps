@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../libs/supabase";
 import { useState } from "react";
+import { logoutUser } from "../../services/auth.service";
 
 
 
@@ -14,13 +14,7 @@ const Dashboard = () => {
   const handleLogout = async () => {
     try {
       setLoading(true);
-
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        console.error(error.message);
-        return;
-      }
+      await logoutUser();
 
       navigate("/login", { replace: true });
     } catch (error: unknown) {

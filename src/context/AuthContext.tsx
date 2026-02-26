@@ -12,6 +12,7 @@ import { createContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logoutUser } from "../services/auth.service";
 
 interface AuthContextType {
   user: User | null;
@@ -67,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * Cerrar sesión
    */
   const logout = async () => {
-    await supabase.auth.signOut();
+    await logoutUser();
   };
 
   return (
