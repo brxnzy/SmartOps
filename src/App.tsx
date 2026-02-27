@@ -1,12 +1,13 @@
-import { Route, Routes } from "react-router-dom"
+import AppRoutes from "./routes/AppRoutes";
+import { Toaster } from "sileo";
 
 function App() {
-
   return (
-    <Routes>
-      <Route path="/" element={<h1 className="text-3xl text-blue-800 font-medium">Hello SmartOps!</h1>} />
-    </Routes>
-  )
+    <>
+      <Toaster position="top-right" />
+      <AppRoutes />
+    </>
+  );
 }
 
-export default App
+export default App;
