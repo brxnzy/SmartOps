@@ -4,7 +4,7 @@ import AuthContext from "../context/AuthContext";
 import { updatePassword } from "../services/auth.service";
 
 const useUpdatePassword = () => {
-    const { user, loading } = useContext(AuthContext)!;
+    const { authUser, loading } = useContext(AuthContext)!;
     const navigate = useNavigate();
 
     const [password, setPassword] = useState("");
@@ -14,10 +14,10 @@ const useUpdatePassword = () => {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        if (!loading && !user) {
+        if (!loading && !authUser) {
             navigate("/login");
         }
-    }, [user, loading, navigate]);
+    }, [authUser, loading, navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

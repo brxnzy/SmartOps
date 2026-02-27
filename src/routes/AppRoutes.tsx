@@ -1,50 +1,27 @@
-import { Routes, Route } from "react-router-dom";
-import Login from "../screens/auth/Login";
-import Landing from "../screens/Landing";
-import Register from "../screens/auth/Register";
-import VerifyEmail from "../screens/auth/VerifyEmail";
-import PublicRoute from "./PublicRoute";
-import Dashboard from "../screens/Dashboard/Dashboard";
-import ProtectedRoute from "./ProtectedRoute";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { PERMISSIONS } from "../constants/permissions";
+import Sidebar from "../layouts/Sidebar";
+import AdminDashboard from "../screens/admin/AdminDashboard";
+import Customers from "../screens/admin/Customers";
+import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
+import Login from "../screens/auth/Login";
+import Register from "../screens/auth/Register";
 import UpdatePassword from "../screens/auth/UpdatePassword";
-
-
-/**
- * En esta pantalla se trabaja de la siguiente manera:
- *
- * PublicRoute::: Cualquier persona puede acceder aun sin estar logueado
- *
- * ----Para poder usarlo simplemente en route dentro de element envolverlo como PublicRoute
- * ----Y paserle como children el elemento que deseamos ponerlo en publico
- *
- * ProtectRoute::: Solo podran acceder las personas que se encuentra logueada
- *
- * sin intentar acceder a una de esta ruta no podran entrar y lo envia al login en auto
- * Para poder Usarla es de la siguente manera Waaa very easier eeh
- *
- * ----Dentro de routes pasarle la ruta que estara protegida
- * ----Envolve el elemento dentro de ProctedRouter
- */
+import VerifyEmail from "../screens/auth/VerifyEmail";
+import Landing from "../screens/Landing";
+import AdminDefaultRoute from "./AdminDefaultRoute";
+import PermissionRoute from "./PermissionRoute";
+import ProtectedRoute from "./ProtectedRoute";
+import PublicRoute from "./PublicRoute";
 
 export default function AppRoutes() {
   return (
     <Routes>
-
-      
       <Route path="/" element={<Landing />} />
-      {/* Rutas públicas normales */}
-      <Route
-        path="/forgot-password"
-        element={<ForgotPassword />}
-      />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/update-password" element={<UpdatePassword />} />
 
-      <Route
-        path="/update-password"
-        element={<UpdatePassword />}
-      />
-
-      {/* Rutas públicas controladas */}
       <Route
         path="/login"
         element={
@@ -72,17 +49,45 @@ export default function AppRoutes() {
         }
       />
 
-
-
-      {/* Ruta protegida */}
       <Route
-        path="/dashboard"
+        path="/admin"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <Sidebar />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<AdminDefaultRoute />} />
+        <Route
+          path="dashboard"
+          element={
+            <PermissionRoute permission={PERMISSIONS.dashboardRead}>
+              <AdminDashboard />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="customers"
+          element={
+            <PermissionRoute permission={PERMISSIONS.customersRead}>
+              <Customers />
+            </PermissionRoute>
+          }
+        />
+      </Route>
+
+      <Route
+        path="/403"
+        element={
+          <ProtectedRoute>
+            <Forbidden />
           </ProtectedRoute>
         }
       />
+
+      <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

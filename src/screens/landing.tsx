@@ -2,8 +2,16 @@ import { useEffect } from "react";
 import landingImg from "../assets/landing.svg";
 import logoImg from "../assets/logo.png";
 import { Link } from "react-router-dom";
+import { CircleUserRound } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
 
 const Landing: React.FC = () => {
+  const { authUser, userProfile } = useAuth();
+
+  const isAuthenticated = Boolean(authUser);
+  const userDisplayName =
+    userProfile?.name 
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
@@ -24,13 +32,20 @@ const Landing: React.FC = () => {
               <span className="text-blue-500">Ops</span>
             </h1>
           </div>
-          <Link to="/register">
+          <Link to={isAuthenticated ? "/admin" : "/register"}>
             <button
-              className="px-5 py-2 text-sm tracking-wider text-white uppercase
+              className="inline-flex items-center gap-2 px-5 py-2 text-sm tracking-wider text-white uppercase
                        transition-colors duration-300 transform bg-blue-500 rounded-lg
                        hover:bg-blue-600 focus:outline-none"
             >
-              Iniciar
+              {isAuthenticated ? (
+                <>
+                  <CircleUserRound size={18} />
+                  <span className="normal-case">{userDisplayName}</span>
+                </>
+              ) : (
+                "Iniciar"
+              )}
             </button>
           </Link>
         </div>

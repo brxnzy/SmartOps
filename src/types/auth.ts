@@ -1,18 +1,22 @@
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
-
-export interface User{
-    id: string,
-    name: string,
-    email: string
-}
+import type { UserProfile } from "./User";
+import type { CompanyProfile } from "./Company";
+import type { RoleProfile } from "./Role";
 
 export interface AuthContextType {
-  user: SupabaseUser | null;
+  authUser: SupabaseUser | null;
   session: Session | null;
+  userProfile: UserProfile | null;
+  companyProfile: CompanyProfile | null;
+  roleProfile: RoleProfile | null;
+  permissions: string[];
   loading: boolean;
+  initializing: boolean;
+  authzLoading: boolean;
+  canAccess: (permissionCode: string) => boolean;
+  refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
 }
-
 
 export interface ForgotPasswordForm {
   email: string;
