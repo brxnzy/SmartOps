@@ -1,5 +1,23 @@
 import { supabase } from "../libs/supabase"
 import type { RegisterInput } from "../types/RegisterInput"
+import { translateAuthError } from "../utils/authErrorMessages"
+
+const REQUEST_TIMEOUT_MS = 12000
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("La solicitud tardo demasiado. Intenta de nuevo."))
+      }, timeoutMs)
+    }),
+  ])
+}
+
+function mapAuthError(message: string) {
+  return translateAuthError({ message }, message)
+}
 
 /**
  * ============================
@@ -125,4 +143,35 @@ export async function getCurrentUser() {
   if (error) throw error
 
   return data.user
+}
+
+/**
+ * Verifica el codigo OTP (6 digitos) enviado al correo.
+ */
+export async function verifyEmailOtp(email: string, token: string) {
+  const { data, error } = await withTimeout(
+    supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "signup",
+    })
+  )
+
+  if (error) throw new Error(mapAuthError(error.message))
+
+  return data
+}
+
+/**
+ * Reenvia el codigo OTP al correo del usuario.
+ */
+export async function resendVerificationOtp(email: string) {
+  const { error } = await withTimeout(
+    supabase.auth.resend({
+      type: "signup",
+      email,
+    })
+  )
+
+  if (error) throw new Error(mapAuthError(error.message))
 }

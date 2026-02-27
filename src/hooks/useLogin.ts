@@ -50,10 +50,13 @@ const useLogin = () => {
                     "Debes confirmar tu correo antes de iniciar sesion.",
                   button: {
                     title: "Ir a verificar",
-                    onClick: () =>
+                    onClick: () => {
+                      const email = form.email.trim().toLowerCase();
+                      sessionStorage.setItem("pending_verification_email", email);
                       navigate("/verify", {
-                        state: { email: form.email.trim().toLowerCase() },
-                      }),
+                        state: { email, shouldResend: true },
+                      });
+                    },
                   },
                 }
               : {
@@ -71,10 +74,25 @@ const useLogin = () => {
     }
   };
 
+  const goToVerifyEmail = () => {
+    const email = form.email.trim().toLowerCase();
+    if (!email) {
+      notifications.warning({
+        title: "Correo requerido",
+        description: "Escribe tu correo para enviarte el codigo de verificacion.",
+      });
+      return;
+    }
+
+    sessionStorage.setItem("pending_verification_email", email);
+    navigate("/verify", { state: { email, shouldResend: true } });
+  };
+
   return {
     loading,
     handleChange,
     handleLogin,
+    goToVerifyEmail,
   };
 };
 

@@ -33,6 +33,18 @@ const MESSAGE_PATTERNS: Array<{ pattern: RegExp; translated: string }> = [
     pattern: /unable to validate email address/i,
     translated: "El correo electronico no es valido.",
   },
+  {
+    pattern: /otp|token.*invalid|invalid token/i,
+    translated: "El codigo de verificacion no es valido.",
+  },
+  {
+    pattern: /expired|token.*expired/i,
+    translated: "El codigo ha expirado. Solicita uno nuevo.",
+  },
+  {
+    pattern: /too many requests|rate limit/i,
+    translated: "Demasiados intentos. Espera un momento e intenta de nuevo.",
+  },
 ];
 
 function normalizeError(error: unknown): { code: string; message: string } {

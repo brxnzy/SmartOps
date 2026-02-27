@@ -64,17 +64,11 @@ export const useRegister = () => {
           }),
         }
       );
-
-      notifications.action({
-        title: "Verifica tu correo",
-        description: "Abre tu email y confirma la cuenta para continuar.",
-        button: {
-          title: "Ir a verificar",
-          onClick: () =>
-            navigate("/verify", {
-              state: { email: form.email.trim().toLowerCase() },
-            }),
-        },
+      const email = form.email.trim().toLowerCase();
+      sessionStorage.setItem("pending_verification_email", email);
+      navigate("/verify", {
+        replace: true,
+        state: { email },
       });
 
       setForm(initialForm);
