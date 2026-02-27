@@ -8,5 +8,3 @@ export type RegisterInput = {
   companyPhone: string;
   companyRnc: string;
 };
-
-

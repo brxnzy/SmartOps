@@ -1,5 +1,5 @@
 import { supabase } from "../libs/supabase"
-import type { RegisterInput } from "../types/RegisterInput"
+import type { RegisterInput } from "../types/types"
 import { translateAuthError } from "../utils/authErrorMessages"
 
 const REQUEST_TIMEOUT_MS = 12000

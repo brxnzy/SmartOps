@@ -1,6 +1,6 @@
 import { sileo, type SileoOptions, type SileoPosition, type SileoState } from "sileo";
 
-type NotifyType = Exclude<SileoState, "loading">;
+type NotifyType = SileoState;
 
 export interface NotifyOptions extends Omit<SileoOptions, "type"> {
   type?: NotifyType;
@@ -37,6 +37,8 @@ export function notify({ type = "info", ...options }: NotifyOptions) {
   const payload: SileoOptions = withDefaults({ ...options, type });
 
   switch (type) {
+    case "loading":
+      return sileo.show(payload);
     case "success":
       return sileo.success(payload);
     case "error":
@@ -81,6 +83,8 @@ export function notifyPromise<T>(
 
 export const notifications = {
   show: notify,
+  loading: (options: Omit<NotifyOptions, "type">) =>
+    notify({ ...options, type: "loading" }),
   success: (options: Omit<NotifyOptions, "type">) =>
     notify({ ...options, type: "success" }),
   error: (options: Omit<NotifyOptions, "type">) =>
