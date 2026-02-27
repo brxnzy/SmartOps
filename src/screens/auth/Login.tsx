@@ -7,7 +7,7 @@ import Field from "../../components/Field";
 import useLogin from "../../hooks/useLogin";
 
 const Login: React.FC = () => {
-  const { loading, handleLogin, handleChange } = useLogin();
+  const { loading, handleLogin, handleChange, goToVerifyEmail } = useLogin();
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
@@ -47,8 +47,18 @@ const Login: React.FC = () => {
                 to="/forgot-password"
                 className="text-sm text-blue-600 hover:underline"
               >
-                Olvidaste tu contraseña
+                Olvidaste tu contrasena
               </Link>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={goToVerifyEmail}
+                className="text-sm text-gray-600 hover:underline cursor-pointer"
+              >
+                No has confirmado tu correo?
+              </button>
             </div>
 
             <Button
