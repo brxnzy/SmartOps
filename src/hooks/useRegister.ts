@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerUser } from "../services/auth.service";
 import { notifications } from "../services/notification.service";
-import type { RegisterInput } from "../types/RegisterInput";
+import type { RegisterInput } from "../types/types";
 import { translateAuthError } from "../utils/authErrorMessages";
 import { formatIdCard, formatPhone } from "../utils/format";
 

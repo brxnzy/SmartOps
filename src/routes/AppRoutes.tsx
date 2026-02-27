@@ -8,7 +8,7 @@ import Dashboard from "../screens/Dashboard/Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import UpdatePassword from "../screens/auth/UpdatePassword";
-import SileoTest from "../screens/SileoTest";
+
 
 /**
  * En esta pantalla se trabaja de la siguiente manera:
@@ -72,14 +72,7 @@ export default function AppRoutes() {
         }
       />
 
-      <Route
-        path="/sileo"
-        element={
-          <PublicRoute>
-            <SileoTest />
-          </PublicRoute>
-        }
-      />
+
 
       {/* Ruta protegida */}
       <Route

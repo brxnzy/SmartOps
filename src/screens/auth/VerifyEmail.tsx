@@ -8,11 +8,9 @@ import { notifications } from "../../services/notification.service";
 import { resendVerificationOtp, verifyEmailOtp } from "../../services/auth.service";
 import { translateAuthError } from "../../utils/authErrorMessages";
 import { supabase } from "../../libs/supabase";
+import type { VerifyState } from "../../types/auth";
 
-interface VerifyState {
-  email?: string;
-  shouldResend?: boolean;
-}
+
 
 const STORAGE_KEY = "pending_verification_email";
 const RESEND_COOLDOWN_SECONDS = 60;

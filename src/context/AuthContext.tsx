@@ -13,13 +13,7 @@ import type { ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
 import { logoutUser } from "../services/auth.service";
-
-interface AuthContextType {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  logout: () => Promise<void>;
-}
+import type { AuthContextType } from "../types/auth";
 
 const AuthContext = createContext<AuthContextType | undefined>(
   undefined
