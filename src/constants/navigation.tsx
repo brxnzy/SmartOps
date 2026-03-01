@@ -2,7 +2,7 @@ import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
 import { LayoutDashboard, UserCheck2} from "lucide-react";
 
-export const SIDEBAR_ITEMS: SidebarItem[] = [
+const SIDEBAR_ITEMS: SidebarItem[] = [
   {
     name: "Dashboard",
     to: "/admin/dashboard",
@@ -22,3 +22,5 @@ export const DEFAULT_ADMIN_ROUTES: DefaultAdminRoute[] = SIDEBAR_ITEMS.map(({ to
   to,
   permission,
 }));
+
+export default SIDEBAR_ITEMS

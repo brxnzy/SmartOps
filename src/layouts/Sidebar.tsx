@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
-import { SIDEBAR_ITEMS } from "../constants/navigation";
+import SIDEBAR_ITEMS from "../constants/navigation";
 import { useAuth } from "../hooks/useAuth";
 
 export default function Sidebar() {

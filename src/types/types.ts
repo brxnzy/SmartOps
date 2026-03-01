@@ -1,3 +1,5 @@
+
+
 export type RegisterInput = {
   name: string;
   email: string;
@@ -8,3 +10,7 @@ export type RegisterInput = {
   companyPhone: string;
   companyRnc: string;
 };
+
+
+
+

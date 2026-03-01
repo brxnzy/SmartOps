@@ -9,7 +9,7 @@ import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
 import UpdatePassword from "../screens/auth/UpdatePassword";
 import VerifyEmail from "../screens/auth/VerifyEmail";
-import Landing from "../screens/Landing";
+import Landing from "../screens/landing";
 import AdminDefaultRoute from "./AdminDefaultRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
