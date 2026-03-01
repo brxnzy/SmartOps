@@ -1,13 +1,60 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
 import SIDEBAR_ITEMS from "../constants/navigation";
 import { useAuth } from "../hooks/useAuth";
+import { notifications } from "../services/notification.service";
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
+  const prevPathRef = useRef(location.pathname);
+  const transitionTimeoutRef = useRef<number | null>(null);
+  const routeToastIdRef = useRef<string | null>(null);
 
   const visibleSidebarItems = SIDEBAR_ITEMS.filter((item) => canAccess(item.permission));
+
+  useEffect(() => {
+    const previousPath = prevPathRef.current;
+    const currentPath = location.pathname;
+
+    if (previousPath === currentPath) return;
+
+    prevPathRef.current = currentPath;
+    routeToastIdRef.current = notifications.loading({
+      title: "Cargando modulo",
+      description: "Obteniendo informacion de la vista...",
+      duration: null,
+    });
+
+    if (transitionTimeoutRef.current) {
+      window.clearTimeout(transitionTimeoutRef.current);
+    }
+
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      if (routeToastIdRef.current) {
+        notifications.dismiss(routeToastIdRef.current);
+        routeToastIdRef.current = null;
+      }
+      transitionTimeoutRef.current = null;
+    }, 650);
+  }, [location.pathname]);
+
+  useEffect(
+    () => () => {
+      if (transitionTimeoutRef.current) {
+        window.clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = null;
+      }
+
+      if (routeToastIdRef.current) {
+        notifications.dismiss(routeToastIdRef.current);
+        routeToastIdRef.current = null;
+      }
+    },
+    []
+  );
 
   const handleLogout = async () => {
     await logout();

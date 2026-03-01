@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
 import { logoutUser } from "../services/auth.service";
 import { getUserCompanyAndRole } from "../services/company.service";
@@ -24,12 +24,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [initializing, setInitializing] = useState(true);
   const [authzLoading, setAuthzLoading] = useState(false);
   const loadingToastIdRef = useRef<string | null>(null);
+  const hydratedUserIdRef = useRef<string | null>(null);
 
   const resetAuthData = useCallback(() => {
     setUserProfile(null);
     setCompanyProfile(null);
     setRoleProfile(null);
     setPermissions([]);
+    hydratedUserIdRef.current = null;
   }, []);
 
   const loadDomainProfile = useCallback(async (userId: string) => {
@@ -78,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await syncAuthState(data.session);
+        hydratedUserIdRef.current = data.session?.user?.id ?? null;
       } catch (error) {
         console.error("Error cargando sesion inicial:", error);
         resetAuthData();
@@ -89,7 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     getInitialSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, currentSession) => {
       setSession(currentSession);
       setAuthUser(currentSession?.user ?? null);
 
@@ -99,14 +102,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      setAuthzLoading(true);
-      loadDomainProfile(currentSession.user.id)
+      // A token refresh should not force a full authz reload/flicker in admin routes.
+      if (event === "TOKEN_REFRESHED") {
+        return;
+      }
+
+      const userId = currentSession.user.id;
+      const isHydratedUser = hydratedUserIdRef.current === userId;
+
+      // Supabase can emit SIGNED_IN again when a tab regains focus.
+      // If authz for this user is already hydrated, skip blocking reload.
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && isHydratedUser) {
+        return;
+      }
+
+      if (!isHydratedUser) {
+        setAuthzLoading(true);
+      }
+
+      loadDomainProfile(userId)
+        .then(() => {
+          hydratedUserIdRef.current = userId;
+        })
         .catch((error) => {
           console.error("Error sincronizando sesion:", error);
           resetAuthData();
         })
         .finally(() => {
-          setAuthzLoading(false);
+          if (!isHydratedUser) {
+            setAuthzLoading(false);
+          }
         });
     });
 
@@ -122,6 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshProfile = async () => {
     if (!authUser?.id) return;
     await loadDomainProfile(authUser.id);
+    hydratedUserIdRef.current = authUser.id;
   };
 
   const permissionsSet = useMemo(() => new Set(permissions), [permissions]);
