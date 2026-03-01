@@ -1,13 +1,32 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
 import { SIDEBAR_ITEMS } from "../constants/navigation";
 import { useAuth } from "../hooks/useAuth";
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleSidebarItems = SIDEBAR_ITEMS.filter((item) => canAccess(item.permission));
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -15,8 +34,24 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-100">
-      <aside className="flex w-full max-w-75 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm">
+    <div className="relative flex min-h-screen w-full bg-slate-100">
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menu"
+          className="fixed inset-0 z-40 bg-slate-900/35 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex w-[82%] max-w-75 flex-col border-r border-slate-200
+          bg-slate-50 px-6 py-8 shadow-sm transition-transform duration-300 ease-out
+          lg:static lg:z-auto lg:w-full lg:max-w-75 lg:translate-x-0
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
         <div className="mb-8 flex items-center gap-3">
           <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
           <span className="text-xl font-semibold text-slate-800">SmartOps</span>
@@ -65,7 +100,18 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <main className="flex-1 p-8 md:p-10">
+      <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileOpen((current) => !current)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+            aria-label={mobileOpen ? "Cerrar menu" : "Abrir menu"}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <span className="text-sm font-semibold text-slate-700">SmartOps</span>
+        </div>
         <Outlet />
       </main>
     </div>

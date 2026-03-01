@@ -197,7 +197,6 @@ export default function Roles() {
             <thead className="bg-slate-100 text-slate-700">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Nombre</th>
-                <th className="px-4 py-3 text-left font-semibold">Alcance</th>
                 {(canUpdateRole || canDeleteRole) && (
                   <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                 )}
@@ -208,7 +207,7 @@ export default function Roles() {
                 <tr>
                   <td
                     className="px-4 py-4 text-slate-500"
-                    colSpan={canUpdateRole || canDeleteRole ? 3 : 2}
+                    colSpan={canUpdateRole || canDeleteRole ? 2 : 1}
                   >
                     Cargando roles...
                   </td>
@@ -219,7 +218,7 @@ export default function Roles() {
                 <tr>
                   <td
                     className="px-4 py-4 text-slate-500"
-                    colSpan={canUpdateRole || canDeleteRole ? 3 : 2}
+                    colSpan={canUpdateRole || canDeleteRole ? 2 : 1}
                   >
                     No hay roles disponibles.
                   </td>
@@ -245,13 +244,10 @@ export default function Roles() {
                           <span className="font-medium">{role.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {isGlobalAdmin ? "Global" : "Compania"}
-                      </td>
                       {(canUpdateRole || canDeleteRole) && (
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
-                            {canUpdateRole && !isEditing && (
+                            {canUpdateRole && !isEditing && !isGlobalAdmin && (
                               <Button
                                 type="button"
                                 onClick={() => startEdit(role)}
@@ -262,7 +258,7 @@ export default function Roles() {
                               </Button>
                             )}
 
-                            {canUpdateRole && isEditing && (
+                            {canUpdateRole && isEditing && !isGlobalAdmin && (
                               <>
                                 <Button
                                   type="button"
@@ -283,7 +279,7 @@ export default function Roles() {
                               </>
                             )}
 
-                            {canDeleteRole && !isEditing && (
+                            {canDeleteRole && !isEditing && !isGlobalAdmin && (
                               <Button
                                 type="button"
                                 onClick={() => handleDeleteRole(role)}
@@ -292,6 +288,12 @@ export default function Roles() {
                               >
                                 Eliminar
                               </Button>
+                            )}
+
+                            {isGlobalAdmin && (
+                              <span className="self-center text-xs font-medium text-slate-500">
+                                Solo lectura
+                              </span>
                             )}
                           </div>
                         </td>
