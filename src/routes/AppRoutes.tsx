@@ -14,6 +14,7 @@ import AdminDefaultRoute from "./AdminDefaultRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import Roles from "../screens/admin/Roles";
 
 export default function AppRoutes() {
   return (
@@ -58,6 +59,7 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<AdminDefaultRoute />} />
+
         <Route
           path="dashboard"
           element={
@@ -75,6 +77,17 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route
+          path="roles"
+          element={
+            <PermissionRoute permission={PERMISSIONS.rolesRead}>
+              <Roles />
+            </PermissionRoute>
+          }
+        />
+
+
       </Route>
 
       <Route
