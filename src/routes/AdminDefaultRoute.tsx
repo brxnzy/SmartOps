@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { DEFAULT_ADMIN_ROUTES } from "../constants/navigation";
-import { useAuth } from "../hooks/useAuth";
+import useAuth from "../hooks/useAuth";
 import RouteLoading from "./RouteLoading";
 
 export default function AdminDefaultRoute() {

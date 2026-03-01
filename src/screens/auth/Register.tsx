@@ -14,7 +14,7 @@ import Input from "../../components/Input";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import logo from "../../assets/logo.png";
-import { useRegister } from "../../hooks/useRegister";
+import useRegister from "../../hooks/useRegister";
 
 const Register: React.FC = () => {
   const {

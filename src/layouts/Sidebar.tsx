@@ -1,37 +1,19 @@
-import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import logo from "../assets/logo.png";
-import { SIDEBAR_ITEMS } from "../constants/navigation";
-import { useAuth } from "../hooks/useAuth";
+import useSidebar from "../hooks/useSidebar";
 
 export default function Sidebar() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const visibleSidebarItems = SIDEBAR_ITEMS.filter((item) => canAccess(item.permission));
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [mobileOpen]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  };
+  const {
+    mobileOpen,
+    userProfile,
+    roleProfile,
+    companyProfile,
+    visibleSidebarItems,
+    closeSidebar,
+    toggleSidebar,
+    handleLogout,
+  } = useSidebar();
 
   return (
     <div className="relative flex min-h-screen w-full bg-slate-100">
@@ -40,7 +22,7 @@ export default function Sidebar() {
           type="button"
           aria-label="Cerrar menu"
           className="fixed inset-0 z-40 bg-slate-900/35 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
@@ -104,7 +86,7 @@ export default function Sidebar() {
         <div className="mb-4 flex items-center justify-between lg:hidden">
           <button
             type="button"
-            onClick={() => setMobileOpen((current) => !current)}
+            onClick={toggleSidebar}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
             aria-label={mobileOpen ? "Cerrar menu" : "Abrir menu"}
           >
