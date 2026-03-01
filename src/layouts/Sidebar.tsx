@@ -62,14 +62,14 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-100">
-      <aside className="flex w-full max-w-75 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm">
+    <div className="flex h-screen w-full overflow-hidden bg-slate-100">
+      <aside className="flex h-full min-h-0 w-full max-w-75 shrink-0 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm">
         <div className="mb-8 flex items-center gap-3">
           <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
           <span className="text-xl font-semibold text-slate-800">SmartOps</span>
         </div>
 
-        <nav className="space-y-2">
+        <nav className="flex-1 space-y-2 overflow-y-auto">
           {visibleSidebarItems.map((item) => (
             <NavLink
               key={item.name}
@@ -112,7 +112,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <main className="flex-1 p-8 md:p-10">
+      <main className="min-h-0 flex-1 overflow-y-auto p-8 md:p-10">
         <Outlet />
       </main>
     </div>
