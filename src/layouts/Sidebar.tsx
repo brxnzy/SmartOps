@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { CircleUserRound, LogOut } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
 import SIDEBAR_ITEMS from "../constants/navigation";
@@ -66,7 +67,12 @@ export default function Sidebar() {
       <aside className="flex h-full min-h-0 w-full max-w-75 shrink-0 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm">
         <div className="mb-8 flex items-center gap-3">
           <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
-          <span className="text-xl font-semibold text-slate-800">SmartOps</span>
+          <div className="min-w-0">
+            <p className="text-xl font-semibold leading-tight text-slate-800">SmartOps</p>
+            <p className="truncate text-xs font-medium text-slate-500">
+              {companyProfile?.name ?? "Sin compania"}
+            </p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto">
@@ -96,17 +102,21 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div className="mt-auto space-y-4 pt-10">
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">{userProfile?.name ?? "Usuario"}</p>
-            <p>{roleProfile?.name ?? "Sin rol"}</p>
-            <p className="truncate text-slate-500">{companyProfile?.name ?? "Sin compania"}</p>
+        <div className="mt-auto space-y-4 pt-8">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Cuenta activa</p>
+            <div className="mt-2 flex items-center gap-2 text-slate-800">
+              <CircleUserRound size={18} className="text-slate-500" />
+              <p className="truncate font-semibold">{userProfile?.name ?? "Usuario"}</p>
+            </div>
+            <p className="mt-1 truncate text-xs text-slate-500">{roleProfile?.name ?? "Sin rol"}</p>
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full cursor-pointer rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
           >
+            <LogOut size={16} />
             Cerrar sesion
           </button>
         </div>
