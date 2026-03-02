@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PERMISSIONS } from "../constants/permissions";
 import useAuth from "./useAuth";
 import { notifications } from "../services/notification.service";
@@ -9,15 +9,40 @@ import {
   updateRole,
   type Role,
 } from "../services/role.service";
+import {
+  getAllPermissions,
+  getPermissionsByRoleIds,
+  syncRolePermissions,
+  type Permission,
+} from "../services/permission.service";
+
+function normalizePermissionCodes(permissionCodes: string[]): string[] {
+  return Array.from(new Set(permissionCodes)).sort((a, b) => a.localeCompare(b));
+}
+
+function arePermissionsEqual(left: string[], right: string[]): boolean {
+  const normalizedLeft = normalizePermissionCodes(left);
+  const normalizedRight = normalizePermissionCodes(right);
+
+  if (normalizedLeft.length !== normalizedRight.length) return false;
+
+  return normalizedLeft.every((code, index) => code === normalizedRight[index]);
+}
 
 const useRoles = () => {
   const { companyProfile, canAccess } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
   const [editingName, setEditingName] = useState("");
+  const [editingPermissionCodes, setEditingPermissionCodes] = useState<string[]>([]);
+  const [editingInitialName, setEditingInitialName] = useState("");
+  const [editingInitialPermissionCodes, setEditingInitialPermissionCodes] = useState<string[]>([]);
+  const loadingToastIdRef = useRef<string | null>(null);
 
   const companyId = companyProfile?.id ?? null;
   const canCreateRole = canAccess(PERMISSIONS.rolesCreate);
@@ -27,12 +52,20 @@ const useRoles = () => {
   const loadRoles = useCallback(async () => {
     setLoading(true);
     try {
-      const loadedRoles = await getRolesByCompany(companyId);
+      const [loadedRoles, loadedPermissions] = await Promise.all([
+        getRolesByCompany(companyId),
+        getAllPermissions(),
+      ]);
+
+      const permissionsByRole = await getPermissionsByRoleIds(loadedRoles.map((role) => role.id));
+
       setRoles(loadedRoles);
+      setAllPermissions(loadedPermissions);
+      setRolePermissions(permissionsByRole);
     } catch (error) {
       notifications.error({
         title: "Error cargando roles",
-        description: "No se pudieron cargar los roles desde Supabase.",
+        description: "No se pudieron cargar roles y permisos desde Supabase.",
       });
       console.error(error);
     } finally {
@@ -44,86 +77,173 @@ const useRoles = () => {
     loadRoles();
   }, [loadRoles]);
 
-  const companyRolesCount = useMemo(
-    () => roles.filter((role) => role.companyId === companyId).length,
-    [companyId, roles]
-  );
+  useEffect(() => {
+    if (loading && !loadingToastIdRef.current) {
+      loadingToastIdRef.current = notifications.loading({
+        title: "Cargando",
+        description: "Obteniendo roles y permisos...",
+        duration: null,
+      });
+      return;
+    }
 
-  const handleCreateRole = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const cleanName = newRoleName.trim();
+    if (!loading && loadingToastIdRef.current) {
+      notifications.dismiss(loadingToastIdRef.current);
+      loadingToastIdRef.current = null;
+    }
+  }, [loading]);
 
-      if (!cleanName) return;
-      if (!companyId) {
-        notifications.warning({
-          title: "Compania requerida",
-          description: "No se puede crear un rol sin compania asignada.",
-        });
-        return;
-      }
-
-      setSubmitting(true);
-      try {
-        const createdRole = await createRole({ name: cleanName, companyId });
-        setRoles((current) => [...current, createdRole].sort((a, b) => a.name.localeCompare(b.name)));
-        setNewRoleName("");
-        notifications.success({
-          title: "Rol creado",
-          description: `El rol ${createdRole.name} fue creado correctamente.`,
-        });
-      } catch (error) {
-        notifications.error({
-          title: "Error creando rol",
-          description: "No se pudo crear el rol.",
-        });
-        console.error(error);
-      } finally {
-        setSubmitting(false);
-      }
+  useEffect(
+    () => () => {
+      if (!loadingToastIdRef.current) return;
+      notifications.dismiss(loadingToastIdRef.current);
+      loadingToastIdRef.current = null;
     },
-    [companyId, newRoleName]
+    []
   );
 
-  const startEdit = useCallback((role: Role) => {
-    setEditingRoleId(role.id);
-    setEditingName(role.name);
-  }, []);
+  const handleCreateRole = useCallback(async (): Promise<boolean> => {
+    const cleanName = newRoleName.trim();
+
+    if (!cleanName) return false;
+    if (!companyId) {
+      notifications.warning({
+        title: "Compania requerida",
+        description: "No se puede crear un rol sin compania asignada.",
+      });
+      return false;
+    }
+
+    setSubmitting(true);
+    try {
+      const createdRole = await createRole({ name: cleanName, companyId });
+
+      setRoles((current) => [...current, createdRole].sort((a, b) => a.name.localeCompare(b.name)));
+      setRolePermissions((current) => ({ ...current, [createdRole.id]: [] }));
+      setNewRoleName("");
+
+      notifications.success({
+        title: "Rol creado",
+        description: `El rol ${createdRole.name} fue creado correctamente.`,
+      });
+
+      return true;
+    } catch (error) {
+      notifications.error({
+        title: "Error creando rol",
+        description: "No se pudo crear el rol.",
+      });
+      console.error(error);
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [companyId, newRoleName]);
+
+  const startEdit = useCallback(
+    (role: Role) => {
+      const currentPermissions = rolePermissions[role.id] ?? [];
+
+      setEditingRoleId(role.id);
+      setEditingName(role.name);
+      setEditingInitialName(role.name.trim());
+
+      const normalizedPermissions = normalizePermissionCodes(currentPermissions);
+      setEditingPermissionCodes(normalizedPermissions);
+      setEditingInitialPermissionCodes(normalizedPermissions);
+    },
+    [rolePermissions]
+  );
 
   const cancelEdit = useCallback(() => {
     setEditingRoleId(null);
     setEditingName("");
+    setEditingPermissionCodes([]);
+    setEditingInitialName("");
+    setEditingInitialPermissionCodes([]);
   }, []);
+
+  const toggleEditingPermission = useCallback((permissionCode: string) => {
+    setEditingPermissionCodes((current) => {
+      if (current.includes(permissionCode)) {
+        return current.filter((code) => code !== permissionCode);
+      }
+
+      return [...current, permissionCode].sort((a, b) => a.localeCompare(b));
+    });
+  }, []);
+
+  const hasEditingChanges = useMemo(() => {
+    if (!editingRoleId) return false;
+
+    const cleanName = editingName.trim();
+    const hasNameChanges = cleanName !== editingInitialName;
+    const hasPermissionChanges = !arePermissionsEqual(
+      editingPermissionCodes,
+      editingInitialPermissionCodes
+    );
+
+    return hasNameChanges || hasPermissionChanges;
+  }, [editingInitialName, editingInitialPermissionCodes, editingName, editingPermissionCodes, editingRoleId]);
 
   const handleUpdateRole = useCallback(
     async (roleId: string) => {
+      if (roleId !== editingRoleId) return;
+
       const cleanName = editingName.trim();
       if (!cleanName) return;
 
+      const hasNameChanges = cleanName !== editingInitialName;
+      const nextPermissionCodes = normalizePermissionCodes(editingPermissionCodes);
+      const hasPermissionChanges = !arePermissionsEqual(nextPermissionCodes, editingInitialPermissionCodes);
+
+      if (!hasNameChanges && !hasPermissionChanges) return;
+
       setSubmitting(true);
       try {
-        const updatedRole = await updateRole({ id: roleId, name: cleanName });
-        setRoles((current) =>
-          current
-            .map((role) => (role.id === updatedRole.id ? updatedRole : role))
-            .sort((a, b) => a.name.localeCompare(b.name))
-        );
+        let savedRoleName = cleanName;
+
+        if (hasNameChanges) {
+          const nextRole = await updateRole({ id: roleId, name: cleanName });
+          savedRoleName = nextRole.name;
+          setRoles((current) =>
+            current
+              .map((role) => (role.id === nextRole.id ? nextRole : role))
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+
+        if (hasPermissionChanges) {
+          await syncRolePermissions(roleId, nextPermissionCodes);
+          setRolePermissions((current) => ({
+            ...current,
+            [roleId]: nextPermissionCodes,
+          }));
+        }
+
         cancelEdit();
         notifications.success({
           title: "Rol actualizado",
-          description: `El rol ${updatedRole.name} fue actualizado correctamente.`,
+          description: `Los cambios del rol ${savedRoleName} se guardaron correctamente.`,
         });
       } catch (error) {
         notifications.error({
           title: "Error actualizando rol",
-          description: "No se pudo actualizar el rol.",
+          description: "No se pudieron guardar los cambios del rol.",
         });
         console.error(error);
       } finally {
         setSubmitting(false);
       }
     },
-    [cancelEdit, editingName]
+    [
+      cancelEdit,
+      editingInitialName,
+      editingInitialPermissionCodes,
+      editingName,
+      editingPermissionCodes,
+      editingRoleId,
+    ]
   );
 
   const handleDeleteRole = useCallback(async (role: Role) => {
@@ -134,6 +254,11 @@ const useRoles = () => {
     try {
       await deleteRole(role.id);
       setRoles((current) => current.filter((item) => item.id !== role.id));
+      setRolePermissions((current) => {
+        const next = { ...current };
+        delete next[role.id];
+        return next;
+      });
       notifications.success({
         title: "Rol eliminado",
         description: `El rol ${role.name} fue eliminado.`,
@@ -151,22 +276,25 @@ const useRoles = () => {
 
   return {
     roles,
+    allPermissions,
+    rolePermissions,
     loading,
     submitting,
     editingRoleId,
     newRoleName,
     editingName,
+    editingPermissionCodes,
+    hasEditingChanges,
     companyId,
-    companyProfile,
     canCreateRole,
     canUpdateRole,
     canDeleteRole,
-    companyRolesCount,
     setNewRoleName,
     setEditingName,
     handleCreateRole,
     startEdit,
     cancelEdit,
+    toggleEditingPermission,
     handleUpdateRole,
     handleDeleteRole,
     loadRoles,
