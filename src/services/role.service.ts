@@ -1,26 +1,7 @@
 import { supabase } from "../libs/supabase";
+import type {Role, CreateRolePayload, UpdateRolePayload } from "../types/Role";
+import type { RoleRow } from "../types/types";
 
-export interface Role {
-  id: string;
-  name: string;
-  companyId: string | null;
-}
-
-type RoleRow = {
-  id: string;
-  name: string;
-  company_id: string | null;
-};
-
-interface CreateRolePayload {
-  name: string;
-  companyId: string;
-}
-
-interface UpdateRolePayload {
-  id: string;
-  name: string;
-}
 
 export async function getRolesByCompany(companyId: string | null): Promise<Role[]> {
   const baseQuery = supabase

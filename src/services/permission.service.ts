@@ -1,18 +1,8 @@
 ﻿import { supabase } from "../libs/supabase";
+import type { Permission } from "../types/Role";
+import type { RolePermissionByRoleId, RolePermissionByRoleRow } from "../types/types";
 
-export interface Permission {
-  id: string;
-  code: string;
-}
 
-type RolePermissionByRoleRow = {
-  role_id: string;
-  permissions: {
-    code: string;
-  } | null;
-};
-
-type RolePermissionByRoleId = Record<string, string[]>;
 
 export async function getAllPermissions(): Promise<Permission[]> {
   const { data, error } = await supabase
@@ -91,6 +81,28 @@ export async function syncRolePermissions(roleId: string, permissionCodes: strin
   const rows = uniqueCodes.map((code) => ({
     role_id: roleId,
     permission_id: validIds.get(code) as string,
+  }));
+
+  const { error: insertError } = await supabase.from("roles_permissions").insert(rows);
+
+  if (insertError) throw insertError;
+}
+
+export async function syncRolePermissionIds(roleId: string, permissionIds: string[]): Promise<void> {
+  const uniquePermissionIds = Array.from(new Set(permissionIds));
+
+  const { error: deleteError } = await supabase
+    .from("roles_permissions")
+    .delete()
+    .eq("role_id", roleId);
+
+  if (deleteError) throw deleteError;
+
+  if (uniquePermissionIds.length === 0) return;
+
+  const rows = uniquePermissionIds.map((permissionId) => ({
+    role_id: roleId,
+    permission_id: permissionId,
   }));
 
   const { error: insertError } = await supabase.from("roles_permissions").insert(rows);

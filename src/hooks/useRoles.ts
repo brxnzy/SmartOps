@@ -7,13 +7,15 @@ import {
   deleteRole,
   getRolesByCompany,
   updateRole,
-  type Role,
 } from "../services/role.service";
+
+import type { Role } from "../types/Role";
+import type { Permission } from "../types/Role";
 import {
   getAllPermissions,
   getPermissionsByRoleIds,
-  syncRolePermissions,
-  type Permission,
+  syncRolePermissionIds,
+
 } from "../services/permission.service";
 
 function normalizePermissionCodes(permissionCodes: string[]): string[] {
@@ -214,7 +216,19 @@ const useRoles = () => {
         }
 
         if (hasPermissionChanges) {
-          await syncRolePermissions(roleId, nextPermissionCodes);
+          const permissionIds = nextPermissionCodes
+            .map((code) => allPermissions.find((permission) => permission.code === code)?.id)
+            .filter((value): value is string => Boolean(value));
+
+          if (permissionIds.length !== nextPermissionCodes.length) {
+            notifications.error({
+              title: "Error actualizando permisos",
+              description: "Hay permisos seleccionados que no existen en catalogo.",
+            });
+            return;
+          }
+
+          await syncRolePermissionIds(roleId, permissionIds);
           setRolePermissions((current) => ({
             ...current,
             [roleId]: nextPermissionCodes,
@@ -243,6 +257,7 @@ const useRoles = () => {
       editingName,
       editingPermissionCodes,
       editingRoleId,
+      allPermissions,
     ]
   );
 
