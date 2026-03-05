@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
+import Devices from "../screens/admin/Devices";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import Login from "../screens/auth/Login";
@@ -16,6 +17,9 @@ import CustomerAreaRoute from "./CustomerAreaRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import Roles from "../screens/admin/Roles";
+import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
+import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 
 export default function AppRoutes() {
   return (
@@ -68,6 +72,7 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<AdminDefaultRoute />} />
+
         <Route
           path="dashboard"
           element={
@@ -85,6 +90,43 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="devices"
+          element={
+            <PermissionRoute permission={PERMISSIONS.devicesRead}>
+              <Devices />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="roles"
+          element={
+            <PermissionRoute permission={PERMISSIONS.rolesRead}>
+              <Roles />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="protocols"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsProtocolsRead}>
+              <SettingsProtocols />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="devices-types"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
+              <SettingsDeviceTypes />
+            </PermissionRoute>
+          }
+        />
+
+
       </Route>
 
       <Route

@@ -17,7 +17,7 @@ const initialForm: RegisterInput = {
   companyRnc: "",
 };
 
-export const useRegister = () => {
+const useRegister = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState<RegisterInput>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,3 +88,5 @@ export const useRegister = () => {
     handleCompanyPhoneChange,
   };
 };
+
+export default useRegister;

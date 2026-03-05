@@ -95,11 +95,11 @@ export default function Sidebar() {
             </NavLink>
           ))}
 
-          {visibleSidebarItems.length === 0 && (
+          {visibleSidebarItems.length === 0 || activePaths.size === 0 ? (
             <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
               No tienes modulos disponibles.
             </p>
-          )}
+          ) : null}
         </nav>
 
         <div className="mt-auto space-y-4 pt-8">
@@ -121,7 +121,19 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto p-8 md:p-10">
+      <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+            aria-label={mobileOpen ? "Cerrar menu" : "Abrir menu"}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
+
+        </div>
         <Outlet />
       </main>
     </div>
