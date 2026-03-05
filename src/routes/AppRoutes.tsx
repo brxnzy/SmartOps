@@ -15,6 +15,8 @@ import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
+import SettingsProtocols from "../screens/settings/SettingsProtocols";
+import SettingsDeviceTypes from "../screens/settings/SettingsDeviceTypes";
 
 export default function AppRoutes() {
   return (
@@ -83,6 +85,24 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.rolesRead}>
               <Roles />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="protocols"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsProtocolsRead}>
+              <SettingsProtocols />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="devices-types"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
+              <SettingsDeviceTypes />
             </PermissionRoute>
           }
         />

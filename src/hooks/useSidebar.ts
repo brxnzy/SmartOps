@@ -10,7 +10,22 @@ const useSidebar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleSidebarItems = useMemo(
-    () => SIDEBAR_ITEMS.filter((item) => canAccess(item.permission)),
+    () =>
+      SIDEBAR_ITEMS.flatMap((item) => {
+        const visibleChildren = item.children?.filter(
+          (child) => !child.permission || canAccess(child.permission)
+        );
+
+        if (visibleChildren?.length) {
+          return [{ ...item, children: visibleChildren }];
+        }
+
+        if (!item.children?.length && (!item.permission || canAccess(item.permission))) {
+          return [item];
+        }
+
+        return [];
+      }),
     [canAccess]
   );
 
