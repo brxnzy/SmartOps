@@ -24,9 +24,7 @@ export type RoleRow = {
 
 export type RolePermissionByRoleRow = {
   role_id: string;
-  permissions: {
-    code: string;
-  } | null;
+  permission: { code: string } | null; // era "permissions", ahora "permission"
 };
 
 export type RolePermissionByRoleId = Record<string, string[]>;
@@ -45,4 +43,19 @@ export type UserRoleRow = {
     id: string;
     name: string;
   } | null;
+};
+
+export type ProtocolRow = {
+  id: number;
+  name: string | null;
+  company_id: string | null;
+  created_at: string | null;
+};
+
+export type DeviceTypeRow = {
+  id: number;
+  name: string;
+  description: string | null;
+  company_id: string | null;
+  created_at: string | null;
 };

@@ -26,14 +26,14 @@ export async function getPermissionsByRoleIds(roleIds: string[]): Promise<RolePe
 
   const { data, error } = await supabase
     .from("roles_permissions")
-    .select("role_id, permissions:permission_id ( code )")
+    .select("role_id, permission:permissions!roles_permissions_permission_id_fkey ( code )")
     .in("role_id", roleIds)
     .returns<RolePermissionByRoleRow[]>();
 
   if (error) throw error;
 
   const grouped = (data ?? []).reduce<RolePermissionByRoleId>((acc, row) => {
-    const code = row.permissions?.code;
+    const code = row.permission?.code;
     if (!code) return acc;
 
     const current = acc[row.role_id] ?? [];

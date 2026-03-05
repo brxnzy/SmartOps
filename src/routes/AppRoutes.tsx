@@ -15,8 +15,8 @@ import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
-import SettingsProtocols from "../screens/settings/SettingsProtocols";
-import SettingsDeviceTypes from "../screens/settings/SettingsDeviceTypes";
+import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
+import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 
 export default function AppRoutes() {
   return (
