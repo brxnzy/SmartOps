@@ -14,6 +14,10 @@ export const PERMISSIONS = {
   settingsDeviceTypesCreate: "settings.device-types.create",
   settingsDeviceTypesUpdate: "settings.device-types.update",
   settingsDeviceTypesDelete: "settings.device-types.delete",
+  settingsBrandsRead: "settings.brands.read",
+  settingsBrandsCreate: "settings.brands.create",
+  settingsBrandsUpdate: "settings.brands.update",
+  settingsBrandsDelete: "settings.brands.delete",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

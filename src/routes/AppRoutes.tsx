@@ -10,7 +10,7 @@ import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
 import UpdatePassword from "../screens/auth/UpdatePassword";
 import VerifyEmail from "../screens/auth/VerifyEmail";
-import Landing from "../screens/Landing";
+import Landing from "../screens/landing";
 import AdminDefaultRoute from "./AdminDefaultRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
@@ -18,6 +18,7 @@ import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
+import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 
 export default function AppRoutes() {
   return (
@@ -112,6 +113,15 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
               <SettingsDeviceTypes />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="brands"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsBrandsRead}>
+              <SettingsBrands />
             </PermissionRoute>
           }
         />

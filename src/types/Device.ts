@@ -34,3 +34,20 @@ export interface UpdateDeviceTypePayload {
   name: string;
   description: string | null;
 }
+
+export interface Brand {
+  id: string;
+  name: string;
+  companyId: string;
+  createdAt: string | null;
+}
+
+export interface CreateBrandPayload {
+  name: string;
+  companyId: string;
+}
+
+export interface UpdateBrandPayload {
+  id: string;
+  name: string;
+}
