@@ -3,6 +3,7 @@ import { PERMISSIONS } from "../constants/permissions";
 import Sidebar from "../layouts/Sidebar";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
+import Devices from "../screens/admin/Devices";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import Login from "../screens/auth/Login";
@@ -76,6 +77,14 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.customersRead}>
               <Customers />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="devices"
+          element={
+            <PermissionRoute permission={PERMISSIONS.devicesRead}>
+              <Devices />
             </PermissionRoute>
           }
         />

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import landingImg from "../assets/landing.svg";
 import logoImg from "../assets/logo.png";
 import { Link } from "react-router-dom";
@@ -9,39 +8,30 @@ const Landing: React.FC = () => {
   const { authUser, userProfile } = useAuth();
 
   const isAuthenticated = Boolean(authUser);
-  const userDisplayName =
-    userProfile?.name 
-
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, []);
+  const userDisplayName = userProfile?.name ?? "Dashboard";
 
   return (
-    <header className="h-screen overflow-hidden bg-white white:bg-gray-900">
-      {/* NAVBAR SOLO LOGO */}
-      <nav className="bg-white white:bg-gray-900">
-        <div className="container px-6 py-4 mx-auto flex items-center justify-between">
-          {/* LOGO + TITULO */}
-          <div className="flex items-center space-x-1">
-            <img className="w-auto h-30 sm:h-15" src={logoImg} alt="Logo" />
-            <h1 className="text-2xl font-bold">
+    <header className="min-h-screen overflow-x-hidden bg-white">
+      <nav className="bg-white">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-1">
+            <img className="h-10 w-auto sm:h-12" src={logoImg} alt="Logo" />
+            <h1 className="text-xl font-bold sm:text-2xl">
               <span>Smart</span>
               <span className="text-blue-500">Ops</span>
             </h1>
           </div>
+
           <Link to={isAuthenticated ? "/admin" : "/register"}>
             <button
-              className="inline-flex items-center gap-2 px-5 py-2 text-sm tracking-wider text-white uppercase
-                       transition-colors duration-300 transform bg-blue-500 rounded-lg
-                       hover:bg-blue-600 focus:outline-none"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold tracking-wide text-white uppercase transition-colors duration-300 hover:bg-blue-600 focus:outline-none sm:px-5 sm:text-sm"
             >
               {isAuthenticated ? (
                 <>
                   <CircleUserRound size={18} />
-                  <span className="normal-case">{userDisplayName}</span>
+                  <span className="max-w-28 truncate normal-case sm:max-w-40">
+                    {userDisplayName}
+                  </span>
                 </>
               ) : (
                 "Iniciar"
@@ -51,29 +41,26 @@ const Landing: React.FC = () => {
         </div>
       </nav>
 
-      {/* HERO */}
-      <div className="container px-6 h-[calc(100vh-80px)] mx-auto flex items-center">
-        <div className="items-center lg:flex w-full">
-          {/* TEXTO */}
+      <div className="container mx-auto px-4 pb-10 pt-4 sm:px-6 sm:pb-14 sm:pt-8">
+        <div className="flex w-full flex-col-reverse items-center gap-8 lg:flex-row lg:gap-10">
           <div className="w-full lg:w-1/2">
-            <div className="lg:max-w-lg">
-              <h1 className="text-4xl font-bold leading-tight  lg:text-5xl">
-                Todo tu negocio de domótica{" "}
+            <div className="mx-auto max-w-xl text-center lg:mx-0 lg:text-left">
+              <h1 className="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+                Todo tu negocio de domotica{" "}
                 <span className="text-blue-500">bajo control</span>
               </h1>
 
-              <p className="mt-4 text-lg text-gray-600">
-                Simplifica la gestión de tus clientes y proyectos con
-                herramientas que integran comunicación, planificación y
-                seguimiento en una plataforma única.
+              <p className="mt-4 text-base leading-relaxed text-gray-600 sm:text-lg">
+                Simplifica la gestion de tus clientes y proyectos con
+                herramientas que integran comunicacion, planificacion y
+                seguimiento en una plataforma unica.
               </p>
             </div>
           </div>
 
-          {/* IMAGEN */}
-          <div className="flex items-center justify-center w-full lg:w-1/2">
+          <div className="flex w-full items-center justify-center lg:w-1/2">
             <img
-              className="w-full max-h-[80vh] object-contain"
+              className="h-auto w-full max-w-md object-contain sm:max-w-lg lg:max-w-xl"
               src={landingImg}
               alt="Smart Home Illustration"
             />
