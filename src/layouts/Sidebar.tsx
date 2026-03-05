@@ -1,42 +1,22 @@
 import { ChevronDown, Menu, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import logo from "../assets/logo.png";
 import useSidebar from "../hooks/useSidebar";
 
 export default function Sidebar() {
-  const location = useLocation();
   const {
     mobileOpen,
     userProfile,
     roleProfile,
     companyProfile,
     visibleSidebarItems,
+    activePaths,
     closeSidebar,
     toggleSidebar,
+    isGroupOpen,
+    toggleGroup,
     handleLogout,
   } = useSidebar();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-
-  const activePaths = useMemo(() => {
-    const paths = new Set<string>();
-
-    visibleSidebarItems.forEach((item) => {
-      if (item.to) paths.add(item.to);
-      item.children?.forEach((child) => paths.add(child.to));
-    });
-
-    return paths;
-  }, [visibleSidebarItems]);
-
-  const isGroupOpen = (key: string, childPaths: string[]) => {
-    if (openGroups[key] !== undefined) return openGroups[key];
-    return childPaths.some((path) => location.pathname.startsWith(path));
-  };
-
-  const toggleGroup = (key: string, childPaths: string[]) => {
-    setOpenGroups((current) => ({ ...current, [key]: !isGroupOpen(key, childPaths) }));
-  };
 
   return (
     <div className="relative flex min-h-screen w-full bg-slate-100">

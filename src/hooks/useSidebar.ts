@@ -8,6 +8,7 @@ const useSidebar = () => {
   const location = useLocation();
   const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const visibleSidebarItems = useMemo(
     () =>
@@ -28,6 +29,16 @@ const useSidebar = () => {
       }),
     [canAccess]
   );
+  const activePaths = useMemo(() => {
+    const paths = new Set<string>();
+
+    visibleSidebarItems.forEach((item) => {
+      if (item.to) paths.add(item.to);
+      item.children?.forEach((child) => paths.add(child.to));
+    });
+
+    return paths;
+  }, [visibleSidebarItems]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -52,6 +63,21 @@ const useSidebar = () => {
     setMobileOpen((current) => !current);
   }, []);
 
+  const isGroupOpen = useCallback(
+    (key: string, childPaths: string[]) => {
+      if (openGroups[key] !== undefined) return openGroups[key];
+      return childPaths.some((path) => location.pathname.startsWith(path));
+    },
+    [location.pathname, openGroups]
+  );
+
+  const toggleGroup = useCallback(
+    (key: string, childPaths: string[]) => {
+      setOpenGroups((current) => ({ ...current, [key]: !isGroupOpen(key, childPaths) }));
+    },
+    [isGroupOpen]
+  );
+
   const handleLogout = useCallback(async () => {
     await logout();
     navigate("/login", { replace: true });
@@ -63,8 +89,11 @@ const useSidebar = () => {
     roleProfile,
     companyProfile,
     visibleSidebarItems,
+    activePaths,
     closeSidebar,
     toggleSidebar,
+    isGroupOpen,
+    toggleGroup,
     handleLogout,
   };
 };
