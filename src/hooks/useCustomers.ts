@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifications } from "../services/notification.service";
 import {
-  createCustomer,
   createCustomerWithInvitation,
   deleteCustomer,
   listCustomers,
@@ -110,29 +109,23 @@ export function useCustomers({
 
       setSubmitting(true);
       try {
-        if (options?.sendInvitation) {
-          if (!invitedByUserId) {
-            throw new Error("No se encontro usuario autenticado para registrar la invitacion.");
-          }
-
-          if (!options.invitationEmail) {
-            throw new Error("Debes indicar el email para enviar la invitacion.");
-          }
-
-          await createCustomerWithInvitation(companyId, input, {
-            invitationEmail: options.invitationEmail,
-            invitedByUserId,
-            appBaseUrl: window.location.origin,
-          });
-        } else {
-          await createCustomer(companyId, input);
+        if (!invitedByUserId) {
+          throw new Error("No se encontro usuario autenticado para registrar la invitacion.");
         }
+
+        if (!options?.invitationEmail) {
+          throw new Error("Debes indicar el email para enviar la invitacion.");
+        }
+
+        await createCustomerWithInvitation(companyId, input, {
+          invitationEmail: options.invitationEmail,
+          invitedByUserId,
+          appBaseUrl: window.location.origin,
+        });
 
         notifications.success({
           title: "Cliente creado",
-          description: options?.sendInvitation
-            ? "Cliente creado e invitacion enviada correctamente."
-            : "El cliente fue registrado correctamente.",
+          description: "Cliente creado e invitacion enviada correctamente.",
         });
         await fetchCustomers();
       } finally {
@@ -181,14 +174,101 @@ export function useCustomers({
     [companyId, fetchCustomers]
   );
 
+
+
+  //Segunda parte
+
+  const [isModalOpen, setModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+
+  const stats = useMemo(() => {
+    return items.reduce(
+      (acc, customer) => {
+        acc.total += 1;
+        if (customer.type === "hogar") acc.hogar += 1;
+        if (customer.type === "comercio") acc.comercio += 1;
+        if (customer.type === "empresa") acc.empresa += 1;
+        return acc;
+      },
+      { total: 0, hogar: 0, comercio: 0, empresa: 0 }
+    );
+  }, [items]);
+
+  const openCreateModal = () => {
+    setSelectedCustomer(null);
+    setModalOpen(true);
+  };
+
+  const openEditModal = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setModalOpen(true);
+  };
+
+  const closeModal = (force = false) => {
+    if (submitting && !force) return;
+    setModalOpen(false);
+    setSelectedCustomer(null);
+  };
+
+  const openDeleteModal = (customer: Customer) => {
+    setDeleteTarget(customer);
+  };
+
+  const closeDeleteModal = () => {
+    if (submitting) return;
+    setDeleteTarget(null);
+  };
+
+  const handleSubmit = async (payload: CustomerInput, options: CustomerSubmitOptions) => {
+    try {
+      if (selectedCustomer) {
+        await updateOne(selectedCustomer.id, payload);
+      } else {
+        await createOne(payload, options);
+      }
+      closeModal(true);
+    } catch (err) {
+      notifications.error({
+        title: "Operacion fallida",
+        description: err instanceof Error ? err.message : "No se pudo guardar el cliente.",
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      await removeOne(deleteTarget.id);
+      closeDeleteModal();
+    } catch (err) {
+      notifications.error({
+        title: "No se pudo eliminar",
+        description: err instanceof Error ? err.message : "Intenta nuevamente.",
+      });
+    }
+  };
+
   return {
     items,
     total,
+    stats,
+    isModalOpen,
     loading,
     submitting,
     error,
     query,
     totalPages,
+    selectedCustomer,
+    deleteTarget,
+    closeDeleteModal,
+    closeModal,
+    handleSubmit,
+    handleDelete,
+    openDeleteModal,
+    openCreateModal,
+    openEditModal,
     refresh: fetchCustomers,
     setSearch,
     setType,

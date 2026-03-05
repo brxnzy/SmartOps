@@ -1,5 +1,5 @@
 import type { CustomerFormValues, CustomerInput } from "../types/customer.types";
-import { formatPhoneDigits } from "../utils/formatters";
+import { formatPhoneDigits } from "./formatters";
 
 export type CustomerFormErrors = Partial<Record<keyof CustomerFormValues, string>>;
 
@@ -44,3 +44,4 @@ export function toCustomerInput(values: CustomerFormValues): CustomerInput {
 export function hasErrors(errors: CustomerFormErrors): boolean {
   return Object.values(errors).some(Boolean);
 }
+

@@ -66,9 +66,9 @@ const useLogin = () => {
         }
       );
 
-      navigate("/admin", { replace: true });
+      navigate("/app", { replace: true });
     } catch (err) {
-      // Toasts are handled by notifications.promise.
+       console.log(err)
     } finally {
       setLoading(false);
     }

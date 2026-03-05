@@ -16,6 +16,29 @@ function assertValidInvitationEmail(email: string): string {
   return normalized;
 }
 
+function mapInvitationError(raw: string): string {
+  const normalized = raw.trim();
+  let message = normalized;
+
+  try {
+    const parsed = JSON.parse(normalized) as { error?: string; message?: string };
+    message = parsed.error ?? parsed.message ?? normalized;
+  } catch {
+    // Keep original message when response is not JSON
+  }
+
+  const lower = message.toLowerCase();
+  if (lower.includes("already been registered") || lower.includes("already registered")) {
+    return "Ya existe un usuario registrado con ese correo.";
+  }
+
+  if (lower.includes("already been invited")) {
+    return "Ese correo ya tiene una invitacion activa.";
+  }
+
+  return message || "No se pudo enviar el correo de invitacion al cliente.";
+}
+
 async function sendEmailInvitationRequest(payload: EmailInvitationPayload): Promise<void> {
   const response = await requestEmailInvitation(payload);
   if (!response.success) {
@@ -57,7 +80,7 @@ async function requestEmailInvitation(payload: EmailInvitationPayload): Promise<
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[customerInvitations] email_invitation_error", response.status, errorText);
-    throw new Error(errorText || "No se pudo enviar el correo de invitacion al cliente.");
+    throw new Error(mapInvitationError(errorText));
   }
 
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;

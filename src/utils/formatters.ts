@@ -1,4 +1,5 @@
 const PHONE_DIGITS_REGEX = /\D/g;
+const ID_CARD_DIGITS_REGEX = /\D/g;
 
 export function splitByComma(value: string): string[] {
   return value
@@ -34,6 +35,15 @@ export function formatPhonesTextInput(value: string): string {
   if (!hasTrailingComma) return normalized;
 
   return normalized ? `${normalized}, ` : "";
+}
+
+export function formatIdCardDigits(rawValue: string): string {
+  const digits = rawValue.replace(ID_CARD_DIGITS_REGEX, "").slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 10) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 10)}-${digits.slice(10)}`;
 }
 
 export function formatEmailsTextInput(value: string): string {

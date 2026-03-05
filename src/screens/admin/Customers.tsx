@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo} from "react";
 import { Building2, Home, Store, Users } from "lucide-react";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
@@ -8,9 +8,6 @@ import CustomerFilters from "../../components/CustomerFilters";
 import CustomerModal from "../../components/CustomerModal";
 import CustomerTable from "../../components/CustomerTable";
 import { useCustomers } from "../../hooks/useCustomers";
-import { notifications } from "../../services/notification.service";
-import type { Customer, CustomerInput } from "../../types/customer.types";
-import type { CustomerSubmitOptions } from "../../types/interfaces";
 
 export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
@@ -28,104 +25,32 @@ export default function Customers() {
     items,
     total,
     loading,
+    deleteTarget,
     submitting,
     error,
     query,
     totalPages,
+    stats,
+    isModalOpen,
+    selectedCustomer,
+    closeDeleteModal,
+    handleSubmit,
+    closeModal,
+    openCreateModal,
+    openDeleteModal,
+    openEditModal,
     refresh,
     setSearch,
     setType,
+    handleDelete,
     setPage,
-    createOne,
-    updateOne,
-    removeOne,
   } = useCustomers({
     companyId,
     invitedByUserId: authUser?.id,
     pageSize: 8,
   });
 
-  const [isModalOpen, setModalOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
-
-  const stats = useMemo(() => {
-    return items.reduce(
-      (acc, customer) => {
-        acc.total += 1;
-        if (customer.type === "hogar") acc.hogar += 1;
-        if (customer.type === "comercio") acc.comercio += 1;
-        if (customer.type === "empresa") acc.empresa += 1;
-        return acc;
-      },
-      { total: 0, hogar: 0, comercio: 0, empresa: 0 }
-    );
-  }, [items]);
-
-  const openCreateModal = () => {
-    setSelectedCustomer(null);
-    setModalOpen(true);
-  };
-
-  const openEditModal = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    if (submitting) return;
-    setModalOpen(false);
-    setSelectedCustomer(null);
-  };
-
-  const openDeleteModal = (customer: Customer) => {
-    setDeleteTarget(customer);
-  };
-
-  const closeDeleteModal = () => {
-    if (submitting) return;
-    setDeleteTarget(null);
-  };
-
-  const handleSubmit = async (payload: CustomerInput, options: CustomerSubmitOptions) => {
-    const isCreating = !selectedCustomer;
-
-    if (isCreating) {
-      setModalOpen(false);
-      setSelectedCustomer(null);
-    }
-
-    try {
-      if (selectedCustomer) {
-        await updateOne(selectedCustomer.id, payload);
-      } else {
-        await createOne(payload, options);
-      }
-
-      if (!isCreating) {
-        closeModal();
-      }
-    } catch (err) {
-      notifications.error({
-        title: "Operacion fallida",
-        description: err instanceof Error ? err.message : "No se pudo guardar el cliente.",
-      });
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-
-    try {
-      await removeOne(deleteTarget.id);
-      closeDeleteModal();
-    } catch (err) {
-      notifications.error({
-        title: "No se pudo eliminar",
-        description: err instanceof Error ? err.message : "Intenta nuevamente.",
-      });
-    }
-  };
+  
 
   return (
     <section className="space-y-5">

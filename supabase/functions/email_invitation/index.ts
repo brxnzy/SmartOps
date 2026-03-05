@@ -1,5 +1,7 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import type { EmailInvitationPayload } from "../../types/interfaces";
+import type { CallerRoleRow } from "../../types/interfaces";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,25 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface EmailInvitationPayload {
-  mode?: "invite_existing_customer" | "invite_new_customer" | "rollback_auth_user";
-  email: string;
-  redirectTo: string;
-  customerId?: string;
-  companyId: string;
-  invitedByUserId: string;
-  customerName?: string;
-  customerIdCard?: string | null;
-  customerType?: "hogar" | "comercio" | "empresa";
-  customerTaxId?: string;
-  customerPhone?: string | null;
-  authUserId?: string;
-}
-
-interface CallerRoleRow {
-  company_id: string;
-  roles: { name: string } | Array<{ name: string }> | null;
-}
 
 const INVITE_TIMEOUT_MS = 120_000;
 const STEP_TIMEOUT_MS = 20_000;

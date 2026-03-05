@@ -4,7 +4,6 @@ import type { CustomerType } from "../types/customer.types";
 import type { CustomerInput} from "../types/customer.types";
 
 export interface CustomerSubmitOptions {
-  sendInvitation: boolean;
   invitationEmail?: string;
 }
 
@@ -102,4 +101,25 @@ export interface FileInputProps extends React.ComponentProps<"input"> {
 
 export interface InputProps extends React.ComponentProps<"input"> {
   icon?: React.ReactNode;
+}
+
+
+export interface EmailInvitationPayload {
+  mode?: "invite_existing_customer" | "invite_new_customer" | "rollback_auth_user";
+  email: string;
+  redirectTo: string;
+  customerId?: string;
+  companyId: string;
+  invitedByUserId: string;
+  customerName?: string;
+  customerIdCard?: string | null;
+  customerType?: "hogar" | "comercio" | "empresa";
+  customerTaxId?: string;
+  customerPhone?: string | null;
+  authUserId?: string;
+}
+
+export interface CallerRoleRow {
+  company_id: string;
+  roles: { name: string } | Array<{ name: string }> | null;
 }
