@@ -8,11 +8,18 @@ const corsHeaders = {
 };
 
 interface EmailInvitationPayload {
+  mode?: "invite_existing_customer" | "invite_new_customer" | "rollback_auth_user";
   email: string;
   redirectTo: string;
-  customerId: string;
+  customerId?: string;
   companyId: string;
   invitedByUserId: string;
+  customerName?: string;
+  customerIdCard?: string | null;
+  customerType?: "hogar" | "comercio" | "empresa";
+  customerTaxId?: string;
+  customerPhone?: string | null;
+  authUserId?: string;
 }
 
 interface CallerRoleRow {
@@ -104,16 +111,29 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(401, { error: "Invalid access token" });
     }
 
-    const { email, redirectTo, customerId, companyId, invitedByUserId } =
+    const {
+      mode,
+      email,
+      redirectTo,
+      customerId,
+      companyId,
+      invitedByUserId,
+      customerName,
+      customerIdCard,
+      customerType,
+      customerTaxId,
+      customerPhone,
+      authUserId,
+    } =
       (await req.json()) as EmailInvitationPayload;
 
     console.log(
       `[email_invitation] request_id=${requestId} payload email=${email} customerId=${customerId} companyId=${companyId}`
     );
 
-    if (!email || !redirectTo || !customerId || !companyId || !invitedByUserId) {
+    if (!companyId || !invitedByUserId) {
       return jsonResponse(400, {
-        error: "email, redirectTo, customerId, companyId and invitedByUserId are required.",
+        error: "companyId and invitedByUserId are required.",
       });
     }
 
@@ -145,25 +165,70 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(403, { error: "Solo un admin de la compania puede enviar invitaciones." });
     }
 
-    const { data: customerData, error: customerError } = await withTimeout(
-      "db.fetchCustomer",
-      adminClient
-        .from("customers")
-        .select("id, name, id_card, phone, tax_id, type")
-        .eq("id", customerId)
-        .eq("company_id", companyId)
-        .maybeSingle<{
-          id: string;
-          name: string;
-          id_card: string | null;
-          phone: string | null;
-          tax_id: string | null;
-          type: string;
-        }>(),
-      requestId
-    );
-    if (customerError || !customerData) {
-      return jsonResponse(400, { error: customerError?.message || "Customer not found." });
+    if (mode === "rollback_auth_user") {
+      if (!authUserId) {
+        return jsonResponse(400, { error: "authUserId es requerido para rollback." });
+      }
+
+      const { error: deleteError } = await withTimeout(
+        "auth.deleteUser",
+        adminClient.auth.admin.deleteUser(authUserId),
+        requestId
+      );
+
+      if (deleteError) {
+        return jsonResponse(400, { error: deleteError.message });
+      }
+
+      return jsonResponse(200, { success: true });
+    }
+
+    if (!email || !redirectTo) {
+      return jsonResponse(400, {
+        error: "email y redirectTo son requeridos.",
+      });
+    }
+
+    const isInviteNewCustomer = mode === "invite_new_customer";
+
+    let customerResolvedName = customerName ?? "";
+    let customerResolvedIdCard: string | null = customerIdCard ?? null;
+    let customerResolvedType = "hogar";
+    let customerResolvedTaxId: string | null = null;
+    let customerResolvedPhone: string | null = null;
+
+    if (!isInviteNewCustomer) {
+      if (!customerId) {
+        return jsonResponse(400, { error: "customerId es requerido para invitar cliente existente." });
+      }
+
+      const { data: customerData, error: customerError } = await withTimeout(
+        "db.fetchCustomer",
+        adminClient
+          .from("customers")
+          .select("user_id, phone, tax_id, type, users:user_id!inner(name, id_card)")
+          .eq("user_id", customerId)
+          .maybeSingle<{
+            user_id: string;
+            phone: string | null;
+            tax_id: string | null;
+            type: string;
+            users: {
+              name: string;
+              id_card: string | null;
+            } | null;
+          }>(),
+        requestId
+      );
+      if (customerError || !customerData) {
+        return jsonResponse(400, { error: customerError?.message || "Customer not found." });
+      }
+
+      customerResolvedName = customerData.users?.name ?? "";
+      customerResolvedIdCard = customerData.users?.id_card ?? null;
+      customerResolvedType = customerData.type;
+      customerResolvedTaxId = customerData.tax_id ?? null;
+      customerResolvedPhone = customerData.phone ?? null;
     }
 
     const { data: companyData, error: companyError } = await withTimeout(
@@ -186,12 +251,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const metadata = {
-      name: customerData.name,
-      idCard: customerData.id_card ?? "",
-      customer_id: customerId,
-      customer_type: customerData.type,
-      customer_tax_id: customerData.tax_id ?? "",
-      customer_phone: customerData.phone ?? "",
+      name: customerResolvedName,
+      idCard: customerResolvedIdCard ?? "",
+      customer_id: customerId ?? "",
+      customer_type: customerResolvedType,
+      customer_tax_id: customerResolvedTaxId ?? "",
+      customer_phone: customerResolvedPhone ?? "",
       company_id: companyId,
       company_name: companyData.name ?? "",
       company_address: companyData.address ?? "",
@@ -205,7 +270,7 @@ Deno.serve(async (req: Request) => {
     const auditTokenHash = crypto.randomUUID().replaceAll("-", "");
 
     const normalizedEmail = email.trim().toLowerCase();
-    const { error: inviteError } = await withTimeout(
+    const { data: inviteData, error: inviteError } = await withTimeout(
       "auth.inviteUserByEmail",
       adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
         redirectTo,
@@ -218,6 +283,12 @@ Deno.serve(async (req: Request) => {
     if (inviteError) {
       const message = inviteError.message.toLowerCase();
       if (message.includes("already registered") || message.includes("already been invited")) {
+        if (isInviteNewCustomer) {
+          return jsonResponse(409, {
+            error: "El correo ya esta registrado o ya tiene una invitacion activa.",
+          });
+        }
+
         console.warn(
           `[email_invitation] request_id=${requestId} already_invited_or_registered email=${normalizedEmail}`
         );
@@ -229,25 +300,101 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: inviteError.message });
     }
 
-    const { error: auditError } = await adminClient
-      .from("customer_invitations")
-      .insert({
-        customer_id: customerId,
-        company_id: companyId,
-        email: normalizedEmail,
-        token_hash: auditTokenHash,
-        invited_by: callerUserId,
-        expires_at: expiresAt,
-      });
+    if (isInviteNewCustomer) {
+      const createdAuthUserId = inviteData.user?.id;
+      if (!createdAuthUserId) {
+        return jsonResponse(500, { error: "No se recibio user.id al invitar." });
+      }
 
-    if (auditError) {
-      console.warn(
-        `[email_invitation] request_id=${requestId} audit_insert_error=${auditError.message}`
-      );
+      try {
+        const { data: customerRoleData, error: customerRoleError } = await withTimeout(
+          "db.fetchCustomerRole",
+          adminClient.from("roles").select("id").eq("name", "customer").maybeSingle<{ id: string }>(),
+          requestId
+        );
+
+        if (customerRoleError || !customerRoleData?.id) {
+          throw new Error(customerRoleError?.message || "No se encontro el rol customer.");
+        }
+
+        const { error: userInsertError } = await withTimeout(
+          "db.insertUser",
+          adminClient.from("users").insert({
+            id: createdAuthUserId,
+            name: customerResolvedName,
+            id_card: customerResolvedIdCard ?? null,
+          }),
+          requestId
+        );
+        if (userInsertError) throw new Error(userInsertError.message);
+
+        const { error: customerInsertError } = await withTimeout(
+          "db.insertCustomer",
+          adminClient.from("customers").insert({
+            user_id: createdAuthUserId,
+            phone: customerPhone ?? null,
+            tax_id: customerTaxId ?? "NO_APLICA",
+            type: customerType ?? "hogar",
+          }),
+          requestId
+        );
+        if (customerInsertError) throw new Error(customerInsertError.message);
+
+        const { error: roleInsertError } = await withTimeout(
+          "db.insertCustomerRole",
+          adminClient.from("user_roles").insert({
+            user_id: createdAuthUserId,
+            role_id: customerRoleData.id,
+            company_id: companyId,
+          }),
+          requestId
+        );
+        if (roleInsertError) throw new Error(roleInsertError.message);
+
+        return jsonResponse(200, {
+          success: true,
+          authUserId: createdAuthUserId,
+          customer: {
+            id: createdAuthUserId,
+            companyId,
+            name: customerResolvedName,
+            idCard: customerResolvedIdCard ?? null,
+            phone: customerPhone ?? null,
+            taxId: customerTaxId ?? "NO_APLICA",
+            type: customerType ?? "hogar",
+            createdAt: new Date().toISOString(),
+          },
+        });
+      } catch (createError) {
+        await withTimeout("auth.deleteUser.rollback", adminClient.auth.admin.deleteUser(createdAuthUserId), requestId);
+        throw createError;
+      }
+    }
+
+    if (customerId) {
+      const { error: auditError } = await adminClient
+        .from("customer_invitations")
+        .insert({
+          customer_id: customerId,
+          company_id: companyId,
+          email: normalizedEmail,
+          token_hash: auditTokenHash,
+          invited_by: callerUserId,
+          expires_at: expiresAt,
+        });
+
+      if (auditError) {
+        console.warn(
+          `[email_invitation] request_id=${requestId} audit_insert_error=${auditError.message}`
+        );
+      }
     }
 
     console.log(`[email_invitation] request_id=${requestId} invite_sent_ok email=${email}`);
-    return jsonResponse(200, { success: true });
+    return jsonResponse(200, {
+      success: true,
+      authUserId: inviteData.user?.id ?? null,
+    });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Timeout:")) {
       const step = error.message.replace("Timeout:", "");

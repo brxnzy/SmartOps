@@ -41,7 +41,6 @@ export default function Customers() {
     removeOne,
   } = useCustomers({
     companyId,
-    companyName: companyProfile?.name,
     invitedByUserId: authUser?.id,
     pageSize: 8,
   });
@@ -89,6 +88,13 @@ export default function Customers() {
   };
 
   const handleSubmit = async (payload: CustomerInput, options: CustomerSubmitOptions) => {
+    const isCreating = !selectedCustomer;
+
+    if (isCreating) {
+      setModalOpen(false);
+      setSelectedCustomer(null);
+    }
+
     try {
       if (selectedCustomer) {
         await updateOne(selectedCustomer.id, payload);
@@ -96,7 +102,9 @@ export default function Customers() {
         await createOne(payload, options);
       }
 
-      closeModal();
+      if (!isCreating) {
+        closeModal();
+      }
     } catch (err) {
       notifications.error({
         title: "Operacion fallida",

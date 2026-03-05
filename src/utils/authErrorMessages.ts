@@ -1,8 +1,4 @@
-interface ErrorLike {
-  code?: unknown;
-  message?: unknown;
-}
-
+import type { ErrorLike } from "../types/interfaces";
 const CODE_MESSAGES: Record<string, string> = {
   invalid_credentials: "Credenciales invalidas.",
   email_not_confirmed: "Debes confirmar tu correo antes de iniciar sesion.",

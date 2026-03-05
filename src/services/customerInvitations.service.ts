@@ -1,23 +1,7 @@
 import { supabase } from "../libs/supabase";
-interface CreateInvitationInput {
-  companyId: string;
-  companyName: string;
-  customerId: string;
-  customerName: string;
-  invitationEmail: string;
-  invitedByUserId: string;
-  appBaseUrl: string;
-}
-
-interface EmailInvitationPayload {
-  email: string;
-  redirectTo: string;
-  customerId: string;
-  companyId: string;
-  invitedByUserId: string;
-  customerName: string;
-  companyName: string;
-}
+import type { Customer } from "../types/customer.types";
+import type { CreateInvitationInput } from "../types/interfaces";
+import type { EmailInvitationPayload } from "../types/interfaces";
 
 function normalizeInvitationEmail(email: string): string {
   const normalized = email.trim().toLowerCase();
@@ -33,6 +17,13 @@ function assertValidInvitationEmail(email: string): string {
 }
 
 async function sendEmailInvitationRequest(payload: EmailInvitationPayload): Promise<void> {
+  const response = await requestEmailInvitation(payload);
+  if (!response.success) {
+    throw new Error("No se pudo enviar el correo de invitacion al cliente.");
+  }
+}
+
+async function requestEmailInvitation(payload: EmailInvitationPayload): Promise<Record<string, unknown>> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   const functionUrl =
@@ -68,6 +59,9 @@ async function sendEmailInvitationRequest(payload: EmailInvitationPayload): Prom
     console.error("[customerInvitations] email_invitation_error", response.status, errorText);
     throw new Error(errorText || "No se pudo enviar el correo de invitacion al cliente.");
   }
+
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return data;
 }
 
 export async function createAndSendCustomerInvitation({
@@ -83,6 +77,7 @@ export async function createAndSendCustomerInvitation({
   const redirectTo = `${appBaseUrl.replace(/\/$/, "")}/update-password`;
 
   await sendEmailInvitationRequest({
+    mode: "invite_existing_customer",
     email,
     redirectTo,
     customerId,
@@ -90,6 +85,91 @@ export async function createAndSendCustomerInvitation({
     invitedByUserId,
     customerName,
     companyName,
+  });
+}
+
+export async function inviteCustomerAuthUser(input: {
+  companyId: string;
+  invitedByUserId: string;
+  appBaseUrl: string;
+  invitationEmail: string;
+  customerName: string;
+  customerIdCard?: string | null;
+  customerType: "hogar" | "comercio" | "empresa";
+  customerTaxId: string;
+  customerPhone?: string | null;
+}): Promise<string> {
+  const email = assertValidInvitationEmail(input.invitationEmail);
+  const redirectTo = `${input.appBaseUrl.replace(/\/$/, "")}/update-password`;
+
+  const response = await requestEmailInvitation({
+    mode: "invite_new_customer",
+    email,
+    redirectTo,
+    companyId: input.companyId,
+    invitedByUserId: input.invitedByUserId,
+    customerName: input.customerName,
+    customerIdCard: input.customerIdCard ?? null,
+    customerType: input.customerType,
+    customerTaxId: input.customerTaxId,
+    customerPhone: input.customerPhone ?? null,
+  });
+
+  const authUserId = response.authUserId;
+  if (typeof authUserId !== "string" || !authUserId) {
+    throw new Error("No se recibio el authUserId de la invitacion.");
+  }
+
+  return authUserId;
+}
+
+export async function createCustomerViaInvitation(input: {
+  companyId: string;
+  invitedByUserId: string;
+  appBaseUrl: string;
+  invitationEmail: string;
+  customerName: string;
+  customerIdCard?: string | null;
+  customerType: "hogar" | "comercio" | "empresa";
+  customerTaxId: string;
+  customerPhone?: string | null;
+}): Promise<Customer> {
+  const email = assertValidInvitationEmail(input.invitationEmail);
+  const redirectTo = `${input.appBaseUrl.replace(/\/$/, "")}/update-password`;
+
+  const response = await requestEmailInvitation({
+    mode: "invite_new_customer",
+    email,
+    redirectTo,
+    companyId: input.companyId,
+    invitedByUserId: input.invitedByUserId,
+    customerName: input.customerName,
+    customerIdCard: input.customerIdCard ?? null,
+    customerType: input.customerType,
+    customerTaxId: input.customerTaxId,
+    customerPhone: input.customerPhone ?? null,
+  });
+
+  const customer = response.customer as Customer | undefined;
+  if (!customer?.id) {
+    throw new Error("No se pudo crear el cliente invitado.");
+  }
+
+  return customer;
+}
+
+export async function rollbackInvitedAuthUser(input: {
+  authUserId: string;
+  companyId: string;
+  invitedByUserId: string;
+}): Promise<void> {
+  await requestEmailInvitation({
+    mode: "rollback_auth_user",
+    email: "rollback@local.invalid",
+    redirectTo: "http://localhost/rollback",
+    companyId: input.companyId,
+    invitedByUserId: input.invitedByUserId,
+    authUserId: input.authUserId,
   });
 }
 

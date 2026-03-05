@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifications } from "../services/notification.service";
 import {
   createCustomer,
+  createCustomerWithInvitation,
   deleteCustomer,
   listCustomers,
   updateCustomer,
 } from "../services/customers.service";
-import {
-  createAndSendCustomerInvitation,
-} from "../services/customerInvitations.service";
 import type {
   Customer,
   CustomerInput,
@@ -21,7 +19,6 @@ type CustomerFilterType = CustomerType | "all";
 
 interface UseCustomersOptions {
   companyId: string | null;
-  companyName?: string | null;
   invitedByUserId?: string | null;
   pageSize?: number;
 }
@@ -35,7 +32,6 @@ interface CustomerQueryState {
 
 export function useCustomers({
   companyId,
-  companyName,
   invitedByUserId,
   pageSize = 10,
 }: UseCustomersOptions) {
@@ -114,8 +110,6 @@ export function useCustomers({
 
       setSubmitting(true);
       try {
-        const createdCustomer = await createCustomer(companyId, input);
-
         if (options?.sendInvitation) {
           if (!invitedByUserId) {
             throw new Error("No se encontro usuario autenticado para registrar la invitacion.");
@@ -125,25 +119,13 @@ export function useCustomers({
             throw new Error("Debes indicar el email para enviar la invitacion.");
           }
 
-          try {
-            await createAndSendCustomerInvitation({
-              companyId,
-              companyName: companyName ?? "tu compania",
-              customerId: createdCustomer.id,
-              customerName: createdCustomer.name,
-              invitationEmail: options.invitationEmail,
-              invitedByUserId,
-              appBaseUrl: window.location.origin,
-            });
-          } catch (invitationError) {
-            notifications.warning({
-              title: "Cliente creado, invitacion pendiente",
-              description:
-                invitationError instanceof Error
-                  ? invitationError.message
-                  : "No se pudo enviar la invitacion. Puedes reenviarla luego.",
-            });
-          }
+          await createCustomerWithInvitation(companyId, input, {
+            invitationEmail: options.invitationEmail,
+            invitedByUserId,
+            appBaseUrl: window.location.origin,
+          });
+        } else {
+          await createCustomer(companyId, input);
         }
 
         notifications.success({
@@ -157,7 +139,7 @@ export function useCustomers({
         setSubmitting(false);
       }
     },
-    [companyId, companyName, fetchCustomers, invitedByUserId]
+    [companyId, fetchCustomers, invitedByUserId]
   );
 
   const updateOne = useCallback(

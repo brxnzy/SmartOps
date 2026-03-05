@@ -1,10 +1,5 @@
 import { supabase } from "../libs/supabase";
-
-type RolePermissionRow = {
-  permissions: {
-    code: string;
-  } | null;
-};
+import type { RolePermissionRow } from "../types/types";
 
 export async function getPermissionsByRoleId(roleId: string): Promise<string[]> {
   const { data, error } = await supabase

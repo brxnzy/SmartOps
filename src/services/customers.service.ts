@@ -1,5 +1,8 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import {
+  createCustomerViaInvitation,
+} from "./customerInvitations.service";
 import type {
   Customer,
   CustomerInput,
@@ -7,48 +10,17 @@ import type {
   CustomersResult,
 } from "../types/customer.types";
 
-type CustomerRow = {
-  id: string;
-  company_id: string;
-  name: string;
-  id_card: string | null;
-  phone: string | null;
-  tax_id: string;
-  type: Customer["type"];
-  created_at: string;
-};
-
-const BASE_SELECT = "id, company_id, name, id_card, phone, tax_id, type, created_at";
-
-function toDomain(row: CustomerRow): Customer {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    name: row.name,
-    idCard: row.id_card,
-    phone: row.phone,
-    taxId: row.tax_id,
-    type: row.type,
-    createdAt: row.created_at,
-  };
-}
-
-function toDatabasePayload(input: CustomerInput, companyId: string) {
-  return {
-    company_id: companyId,
-    name: input.name,
-    id_card: input.idCard,
-    phone: input.phone,
-    tax_id: input.taxId,
-    type: input.type,
-  };
-}
+let cachedCustomerRoleId: string | null = null;
 
 function buildErrorMessage(error: PostgrestError | null, fallback: string): string {
   if (!error) return fallback;
 
   if (error.code === "23505") {
     return "Ya existe un cliente con ese documento fiscal en esta compania.";
+  }
+
+  if (error.code === "23503") {
+    return "Relacion invalida: verifica que el usuario exista en Auth y que la compania/rol sean validos.";
   }
 
   return error.message || fallback;
@@ -58,57 +30,224 @@ function sanitizeSearch(value: string): string {
   return value.replace(/[(),]/g, " ").trim();
 }
 
+async function getCustomerRoleId(): Promise<string> {
+  if (cachedCustomerRoleId) return cachedCustomerRoleId;
+
+  const { data, error } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("name", "customer")
+    .maybeSingle<{ id: string }>();
+
+  if (error || !data?.id) {
+    throw new Error(error?.message || "No se encontro el rol customer.");
+  }
+
+  cachedCustomerRoleId = data.id;
+  return data.id;
+}
+
+function mapCustomers(
+  companyId: string,
+  users: Array<{ id: string; name: string; id_card: string | null }>,
+  customers: Array<{
+    user_id: string;
+    phone: string | null;
+    tax_id: string;
+    type: Customer["type"];
+    created_at: string | null;
+  }>
+): Customer[] {
+  const usersById = new Map(users.map((user) => [user.id, user]));
+
+  return customers
+    .map((customer) => {
+      const user = usersById.get(customer.user_id);
+      if (!user) return null;
+
+      return {
+        id: customer.user_id,
+        companyId,
+        name: user.name,
+        idCard: user.id_card,
+        phone: customer.phone,
+        taxId: customer.tax_id,
+        type: customer.type,
+        createdAt: customer.created_at ?? new Date().toISOString(),
+      } satisfies Customer;
+    })
+    .filter((item): item is Customer => Boolean(item));
+}
+
 export async function listCustomers(
   companyId: string,
   query: CustomersQuery
 ): Promise<CustomersResult> {
-  const from = (query.page - 1) * query.pageSize;
-  const to = from + query.pageSize - 1;
+  const customerRoleId = await getCustomerRoleId();
 
-  let request = supabase
-    .from("customers")
-    .select(BASE_SELECT, { count: "exact" })
+  const { data: roleRows, error: rolesError } = await supabase
+    .from("user_roles")
+    .select("user_id")
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .eq("role_id", customerRoleId)
+    .returns<Array<{ user_id: string | null }>>();
 
-  const safeSearch = query.search ? sanitizeSearch(query.search) : "";
-  if (safeSearch) {
-    request = request.or(
-      `name.ilike.%${safeSearch}%,tax_id.ilike.%${safeSearch}%,id_card.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`
-    );
+  if (rolesError) {
+    throw new Error(buildErrorMessage(rolesError, "No se pudo cargar la lista de clientes."));
   }
+
+  const userIds = (roleRows ?? [])
+    .map((row) => row.user_id)
+    .filter((value): value is string => Boolean(value));
+
+  if (userIds.length === 0) {
+    return { items: [], total: 0 };
+  }
+
+  const [customersResponse, usersResponse] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("user_id, phone, tax_id, type, created_at")
+      .in("user_id", userIds)
+      .returns<
+        Array<{
+          user_id: string;
+          phone: string | null;
+          tax_id: string;
+          type: Customer["type"];
+          created_at: string | null;
+        }>
+      >(),
+    supabase
+      .from("users")
+      .select("id, name, id_card")
+      .in("id", userIds)
+      .returns<Array<{ id: string; name: string; id_card: string | null }>>(),
+  ]);
+
+  if (customersResponse.error) {
+    throw new Error(buildErrorMessage(customersResponse.error, "No se pudo cargar la lista de clientes."));
+  }
+
+  if (usersResponse.error) {
+    throw new Error(buildErrorMessage(usersResponse.error, "No se pudo cargar la lista de clientes."));
+  }
+
+  let mapped = mapCustomers(companyId, usersResponse.data ?? [], customersResponse.data ?? []);
 
   if (query.type) {
-    request = request.eq("type", query.type);
+    mapped = mapped.filter((item) => item.type === query.type);
   }
 
-  const { data, error, count } = await request.returns<CustomerRow[]>();
-
-  if (error) {
-    throw new Error(buildErrorMessage(error, "No se pudo cargar la lista de clientes."));
+  const safeSearch = query.search ? sanitizeSearch(query.search).toLowerCase() : "";
+  if (safeSearch) {
+    mapped = mapped.filter((item) => {
+      const searchable = [
+        item.name,
+        item.idCard ?? "",
+        item.phone ?? "",
+        item.taxId,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(safeSearch);
+    });
   }
+
+  mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const from = (query.page - 1) * query.pageSize;
+  const paginated = mapped.slice(from, from + query.pageSize);
 
   return {
-    items: (data ?? []).map(toDomain),
-    total: count ?? 0,
+    items: paginated,
+    total: mapped.length,
   };
 }
 
 export async function createCustomer(companyId: string, input: CustomerInput): Promise<Customer> {
-  const payload = toDatabasePayload(input, companyId);
+  const customerRoleId = await getCustomerRoleId();
 
-  const { data, error } = await supabase
-    .from("customers")
-    .insert(payload)
-    .select(BASE_SELECT)
-    .single<CustomerRow>();
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .insert({
+      name: input.name,
+      id_card: input.idCard,
+    })
+    .select("id, name, id_card")
+    .single<{ id: string; name: string; id_card: string | null }>();
 
-  if (error) {
-    throw new Error(buildErrorMessage(error, "No se pudo crear el cliente."));
+  if (userError || !userRow) {
+    throw new Error(buildErrorMessage(userError, "No se pudo crear el perfil del cliente."));
   }
 
-  return toDomain(data);
+  const userId = userRow.id;
+
+  const { data: customerRow, error: customerError } = await supabase
+    .from("customers")
+    .insert({
+      user_id: userId,
+      phone: input.phone,
+      tax_id: input.taxId,
+      type: input.type,
+    })
+    .select("user_id, phone, tax_id, type, created_at")
+    .single<{
+      user_id: string;
+      phone: string | null;
+      tax_id: string;
+      type: Customer["type"];
+      created_at: string | null;
+    }>();
+
+  if (customerError || !customerRow) {
+    await supabase.from("users").delete().eq("id", userId);
+    throw new Error(buildErrorMessage(customerError, "No se pudo crear el registro de cliente."));
+  }
+
+  const { error: roleError } = await supabase.from("user_roles").insert({
+    user_id: userId,
+    role_id: customerRoleId,
+    company_id: companyId,
+  });
+
+  if (roleError) {
+    await supabase.from("users").delete().eq("id", userId);
+    throw new Error(buildErrorMessage(roleError, "No se pudo asignar el rol customer."));
+  }
+
+  return {
+    id: userId,
+    companyId,
+    name: userRow.name,
+    idCard: userRow.id_card,
+    phone: customerRow.phone,
+    taxId: customerRow.tax_id,
+    type: customerRow.type,
+    createdAt: customerRow.created_at ?? new Date().toISOString(),
+  };
+}
+
+export async function createCustomerWithInvitation(
+  companyId: string,
+  input: CustomerInput,
+  invitation: {
+    invitationEmail: string;
+    invitedByUserId: string;
+    appBaseUrl: string;
+  }
+): Promise<Customer> {
+  return createCustomerViaInvitation({
+    companyId,
+    invitedByUserId: invitation.invitedByUserId,
+    appBaseUrl: invitation.appBaseUrl,
+    invitationEmail: invitation.invitationEmail,
+    customerName: input.name,
+    customerIdCard: input.idCard,
+    customerType: input.type,
+    customerTaxId: input.taxId,
+    customerPhone: input.phone,
+  });
 }
 
 export async function updateCustomer(
@@ -116,27 +255,100 @@ export async function updateCustomer(
   customerId: string,
   input: CustomerInput
 ): Promise<Customer> {
-  const { data, error } = await supabase
-    .from("customers")
-    .update(toDatabasePayload(input, companyId))
-    .eq("company_id", companyId)
-    .eq("id", customerId)
-    .select(BASE_SELECT)
-    .single<CustomerRow>();
+  const customerRoleId = await getCustomerRoleId();
 
-  if (error) {
-    throw new Error(buildErrorMessage(error, "No se pudo actualizar el cliente."));
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      name: input.name,
+      id_card: input.idCard,
+    })
+    .eq("id", customerId);
+
+  if (userUpdateError) {
+    throw new Error(buildErrorMessage(userUpdateError, "No se pudo actualizar el perfil del cliente."));
   }
 
-  return toDomain(data);
+  const { data: customerData, error: customerUpdateError } = await supabase
+    .from("customers")
+    .update({
+      phone: input.phone,
+      tax_id: input.taxId,
+      type: input.type,
+    })
+    .eq("user_id", customerId)
+    .select("user_id, phone, tax_id, type, created_at")
+    .single<{
+      user_id: string;
+      phone: string | null;
+      tax_id: string;
+      type: Customer["type"];
+      created_at: string | null;
+    }>();
+
+  if (customerUpdateError || !customerData) {
+    throw new Error(buildErrorMessage(customerUpdateError, "No se pudo actualizar los datos del cliente."));
+  }
+
+  const { data: existingRole, error: roleCheckError } = await supabase
+    .from("user_roles")
+    .select("id")
+    .eq("user_id", customerId)
+    .eq("company_id", companyId)
+    .eq("role_id", customerRoleId)
+    .maybeSingle<{ id: string }>();
+
+  if (roleCheckError) {
+    throw new Error(buildErrorMessage(roleCheckError, "No se pudo validar el rol customer."));
+  }
+
+  if (!existingRole?.id) {
+    const { error: roleInsertError } = await supabase.from("user_roles").insert({
+      user_id: customerId,
+      role_id: customerRoleId,
+      company_id: companyId,
+    });
+
+    if (roleInsertError) {
+      throw new Error(buildErrorMessage(roleInsertError, "No se pudo asegurar el rol customer."));
+    }
+  }
+
+  const { data: userRow, error: userFetchError } = await supabase
+    .from("users")
+    .select("id, name, id_card")
+    .eq("id", customerId)
+    .single<{ id: string; name: string; id_card: string | null }>();
+
+  if (userFetchError || !userRow) {
+    throw new Error(buildErrorMessage(userFetchError, "No se pudo cargar el cliente actualizado."));
+  }
+
+  return {
+    id: customerId,
+    companyId,
+    name: userRow.name,
+    idCard: userRow.id_card,
+    phone: customerData.phone,
+    taxId: customerData.tax_id,
+    type: customerData.type,
+    createdAt: customerData.created_at ?? new Date().toISOString(),
+  };
 }
 
 export async function deleteCustomer(companyId: string, customerId: string): Promise<void> {
-  const { error } = await supabase
-    .from("customers")
-    .delete()
+  const { error: relationError } = await supabase
+    .from("user_roles")
+    .select("id")
+    .eq("user_id", customerId)
     .eq("company_id", companyId)
-    .eq("id", customerId);
+    .maybeSingle<{ id: string }>();
+
+  if (relationError) {
+    throw new Error(buildErrorMessage(relationError, "No se pudo validar la compania del cliente."));
+  }
+
+  const { error } = await supabase.from("users").delete().eq("id", customerId);
 
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el cliente."));

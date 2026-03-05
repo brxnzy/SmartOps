@@ -1,11 +1,7 @@
 import { supabase } from "../libs/supabase";
 import type { UserProfile } from "../types/User";
+import type { UserRow } from "../types/types";
 
-type UserRow = {
-  id: string;
-  name: string;
-  id_card: string | null;
-};
 
 export async function getUserProfileById(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
