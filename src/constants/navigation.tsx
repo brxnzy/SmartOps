@@ -59,3 +59,5 @@ export const DEFAULT_ADMIN_ROUTES: DefaultAdminRoute[] = SIDEBAR_ITEMS.flatMap((
   return [{ to: item.to, permission: item.permission }];
 });
 
+
+export default SIDEBAR_ITEMS;

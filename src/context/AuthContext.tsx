@@ -10,7 +10,8 @@ import { notifications } from "../services/notification.service";
 import type { AuthContextType } from "../types/auth";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const normalizePermissionCode = (code: string) => code.trim().toLowerCase();
+const normalizePermissionCode = (code?: string) =>
+  code?.trim().toLowerCase() ?? "";
 
 export default AuthContext;
 

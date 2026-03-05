@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { SIDEBAR_ITEMS } from "../constants/navigation";
+import SIDEBAR_ITEMS from "../constants/navigation";
 import useAuth from "./useAuth";
 
 const useSidebar = () => {
@@ -39,10 +39,6 @@ const useSidebar = () => {
 
     return paths;
   }, [visibleSidebarItems]);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;

@@ -1,20 +1,28 @@
 import { useEffect, useRef } from "react";
-import { CircleUserRound, LogOut } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, CircleUserRound, LogOut, Menu, X } from "lucide-react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
-import SIDEBAR_ITEMS from "../constants/navigation";
-import { useAuth } from "../hooks/useAuth";
+import useSidebar from "../hooks/useSidebar";
 import { notifications } from "../services/notification.service";
 
 export default function Sidebar() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
+  const {
+    mobileOpen,
+    userProfile,
+    roleProfile,
+    companyProfile,
+    visibleSidebarItems,
+    activePaths,
+    closeSidebar,
+    toggleSidebar,
+    isGroupOpen,
+    toggleGroup,
+    handleLogout,
+  } = useSidebar();
   const prevPathRef = useRef(location.pathname);
   const transitionTimeoutRef = useRef<number | null>(null);
   const routeToastIdRef = useRef<string | null>(null);
-
-  const visibleSidebarItems = SIDEBAR_ITEMS.filter((item) => canAccess(item.permission));
 
   useEffect(() => {
     const previousPath = prevPathRef.current;
@@ -57,14 +65,21 @@ export default function Sidebar() {
     []
   );
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  };
-
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-100">
-      <aside className="flex h-full min-h-0 w-full max-w-75 shrink-0 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm">
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden"
+          onClick={closeSidebar}
+          aria-label="Cerrar menu"
+        />
+      ) : null}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex h-full min-h-0 w-72 shrink-0 flex-col border-r border-slate-200 bg-slate-50 px-6 py-8 shadow-sm transition-transform duration-200 lg:static lg:w-full lg:max-w-75 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div className="mb-8 flex items-center gap-3">
           <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
           <div className="min-w-0">
@@ -76,24 +91,73 @@ export default function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto">
-          {visibleSidebarItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-4 rounded-xl px-3 py-3 text-left text-md font-medium transition ${
-                  isActive
-                    ? "bg-white text-blue-500 "
-                    : "text-slate-500 hover:bg-white hover:text-slate-900"
-                }`
-              }
-            >
-              <span>
-                {item.icon}
-              </span>
-              <span>{item.name}</span>
-            </NavLink>
-          ))}
+          {visibleSidebarItems.map((item) => {
+            if (item.children?.length) {
+              const childPaths = item.children.map((child) => child.to);
+              const groupKey = item.name;
+              const open = isGroupOpen(groupKey, childPaths);
+
+              return (
+                <div key={item.name} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(groupKey, childPaths)}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-md font-medium text-slate-500 transition hover:bg-white hover:text-slate-900"
+                  >
+                    <span className="flex items-center gap-4">
+                      <span>{item.icon}</span>
+                      <span>{item.name}</span>
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform ${open ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {open ? (
+                    <div className="ml-4 space-y-1 border-l border-slate-200 pl-3">
+                      {item.children.map((child) => (
+                        <NavLink
+                          key={child.name}
+                          to={child.to}
+                          onClick={closeSidebar}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                              isActive
+                                ? "bg-white text-blue-500"
+                                : "text-slate-500 hover:bg-white hover:text-slate-900"
+                            }`
+                          }
+                        >
+                          {child.icon ? <span>{child.icon}</span> : null}
+                          <span>{child.name}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (!item.to) return null;
+
+            return (
+              <NavLink
+                key={item.name}
+                to={item.to}
+                onClick={closeSidebar}
+                className={({ isActive }) =>
+                  `flex items-center gap-4 rounded-xl px-3 py-3 text-left text-md font-medium transition ${
+                    isActive
+                      ? "bg-white text-blue-500 "
+                      : "text-slate-500 hover:bg-white hover:text-slate-900"
+                  }`
+                }
+              >
+                <span>{item.icon}</span>
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })}
 
           {visibleSidebarItems.length === 0 || activePaths.size === 0 ? (
             <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
@@ -132,7 +196,6 @@ export default function Sidebar() {
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <img src={logo} alt="SmartOps logo" className="h-12 w-auto object-contain" />
-
         </div>
         <Outlet />
       </main>
