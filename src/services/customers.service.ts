@@ -11,32 +11,25 @@ type CustomerRow = {
   id: string;
   company_id: string;
   name: string;
+  id_card: string | null;
+  phone: string | null;
   tax_id: string;
-  phones: string[];
-  emails: string[];
-  address: string;
-  primary_contact: string;
   type: Customer["type"];
   created_at: string;
-  updated_at: string;
 };
 
-const BASE_SELECT =
-  "id, company_id, name, tax_id, phones, emails, address, primary_contact, type, created_at, updated_at";
+const BASE_SELECT = "id, company_id, name, id_card, phone, tax_id, type, created_at";
 
 function toDomain(row: CustomerRow): Customer {
   return {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
+    idCard: row.id_card,
+    phone: row.phone,
     taxId: row.tax_id,
-    phones: row.phones,
-    emails: row.emails,
-    address: row.address,
-    primaryContact: row.primary_contact,
     type: row.type,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
@@ -44,11 +37,9 @@ function toDatabasePayload(input: CustomerInput, companyId: string) {
   return {
     company_id: companyId,
     name: input.name,
+    id_card: input.idCard,
+    phone: input.phone,
     tax_id: input.taxId,
-    phones: input.phones,
-    emails: input.emails,
-    address: input.address,
-    primary_contact: input.primaryContact,
     type: input.type,
   };
 }
@@ -78,14 +69,13 @@ export async function listCustomers(
     .from("customers")
     .select(BASE_SELECT, { count: "exact" })
     .eq("company_id", companyId)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .range(from, to);
 
   const safeSearch = query.search ? sanitizeSearch(query.search) : "";
   if (safeSearch) {
     request = request.or(
-      `name.ilike.%${safeSearch}%,tax_id.ilike.%${safeSearch}%,primary_contact.ilike.%${safeSearch}%`
+      `name.ilike.%${safeSearch}%,tax_id.ilike.%${safeSearch}%,id_card.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`
     );
   }
 
@@ -105,10 +95,7 @@ export async function listCustomers(
   };
 }
 
-export async function createCustomer(
-  companyId: string,
-  input: CustomerInput
-): Promise<Customer> {
+export async function createCustomer(companyId: string, input: CustomerInput): Promise<Customer> {
   const payload = toDatabasePayload(input, companyId);
 
   const { data, error } = await supabase
@@ -134,7 +121,6 @@ export async function updateCustomer(
     .update(toDatabasePayload(input, companyId))
     .eq("company_id", companyId)
     .eq("id", customerId)
-    .is("deleted_at", null)
     .select(BASE_SELECT)
     .single<CustomerRow>();
 
@@ -148,10 +134,9 @@ export async function updateCustomer(
 export async function deleteCustomer(companyId: string, customerId: string): Promise<void> {
   const { error } = await supabase
     .from("customers")
-    .update({ deleted_at: new Date().toISOString() })
+    .delete()
     .eq("company_id", companyId)
-    .eq("id", customerId)
-    .is("deleted_at", null);
+    .eq("id", customerId);
 
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el cliente."));

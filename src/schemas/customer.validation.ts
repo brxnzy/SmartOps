@@ -1,60 +1,42 @@
 import type { CustomerFormValues, CustomerInput } from "../types/customer.types";
-import { formatPhoneDigits, splitByComma } from "../utils/formatters";
+import { formatPhoneDigits } from "../utils/formatters";
 
 export type CustomerFormErrors = Partial<Record<keyof CustomerFormValues, string>>;
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RD_PHONE_REGEX = /^\d{3}-\d{3}-\d{4}$/;
-
-function normalizePhones(phones: string[]): string[] {
-  return phones.map((phone) => formatPhoneDigits(phone)).filter(Boolean);
-}
-
-function normalizeEmails(emails: string[]): string[] {
-  return emails.map((email) => email.trim().toLowerCase()).filter(Boolean);
-}
 
 export function validateCustomerForm(values: CustomerFormValues): CustomerFormErrors {
   const errors: CustomerFormErrors = {};
 
-  if (!values.name.trim()) errors.name = "La razon social es obligatoria.";
-  if (!values.taxId.trim()) errors.taxId = "El documento fiscal es obligatorio.";
-  if (!values.address.trim()) errors.address = "La direccion es obligatoria.";
-  if (!values.primaryContact.trim()) {
-    errors.primaryContact = "El contacto principal es obligatorio.";
+  if (!values.name.trim()) {
+    errors.name = "El nombre es obligatorio.";
   }
 
-  const phones = splitByComma(values.phones);
-  if (phones.length === 0) {
-    errors.phones = "Agrega al menos un telefono.";
-  } else {
-    const invalidPhone = phones.find((phone) => !RD_PHONE_REGEX.test(formatPhoneDigits(phone)));
-    if (invalidPhone) {
-      errors.phones = "Cada telefono debe tener 10 digitos (ej: 809-555-0101).";
-    }
+  if (values.type === "hogar" && !values.idCard.trim()) {
+    errors.idCard = "La cedula es obligatoria para clientes hogar.";
   }
 
-  const emails = splitByComma(values.emails);
-  if (emails.length === 0) {
-    errors.emails = "Agrega al menos un email.";
-  } else {
-    const invalidEmail = emails.find((email) => !EMAIL_REGEX.test(email));
-    if (invalidEmail) {
-      errors.emails = `Email invalido: ${invalidEmail}`;
-    }
+  if (values.type !== "hogar" && !values.taxId.trim()) {
+    errors.taxId = "El documento fiscal es obligatorio para comercio/empresa.";
+  }
+
+  const normalizedPhone = formatPhoneDigits(values.phone);
+  if (values.phone.trim() && !RD_PHONE_REGEX.test(normalizedPhone)) {
+    errors.phone = "El telefono debe tener 10 digitos (ej: 809-555-0101).";
   }
 
   return errors;
 }
 
 export function toCustomerInput(values: CustomerFormValues): CustomerInput {
+  const normalizedPhone = formatPhoneDigits(values.phone);
+  const taxId = values.type === "hogar" ? values.taxId.trim() || "NO_APLICA" : values.taxId.trim();
+
   return {
     name: values.name.trim(),
-    taxId: values.taxId.trim(),
-    phones: normalizePhones(splitByComma(values.phones)),
-    emails: normalizeEmails(splitByComma(values.emails)),
-    address: values.address.trim(),
-    primaryContact: values.primaryContact.trim(),
+    idCard: values.idCard.trim() || null,
+    phone: normalizedPhone || null,
+    taxId,
     type: values.type,
   };
 }

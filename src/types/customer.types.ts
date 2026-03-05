@@ -4,23 +4,18 @@ export interface Customer {
   id: string;
   companyId: string;
   name: string;
+  idCard: string | null;
+  phone: string | null;
   taxId: string;
-  phones: string[];
-  emails: string[];
-  address: string;
-  primaryContact: string;
   type: CustomerType;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface CustomerInput {
   name: string;
+  idCard: string | null;
+  phone: string | null;
   taxId: string;
-  phones: string[];
-  emails: string[];
-  address: string;
-  primaryContact: string;
   type: CustomerType;
 }
 
@@ -38,10 +33,8 @@ export interface CustomersResult {
 
 export interface CustomerFormValues {
   name: string;
+  idCard: string;
+  phone: string;
   taxId: string;
-  phones: string;
-  emails: string;
-  address: string;
-  primaryContact: string;
   type: CustomerType;
 }

@@ -6,17 +6,23 @@ import {
   listCustomers,
   updateCustomer,
 } from "../services/customers.service";
+import {
+  createAndSendCustomerInvitation,
+} from "../services/customerInvitations.service";
 import type {
   Customer,
   CustomerInput,
   CustomerType,
   CustomersResult,
 } from "../types/customer.types";
+import type { CustomerSubmitOptions } from "../types/interfaces";
 
 type CustomerFilterType = CustomerType | "all";
 
 interface UseCustomersOptions {
   companyId: string | null;
+  companyName?: string | null;
+  invitedByUserId?: string | null;
   pageSize?: number;
 }
 
@@ -27,7 +33,12 @@ interface CustomerQueryState {
   type: CustomerFilterType;
 }
 
-export function useCustomers({ companyId, pageSize = 10 }: UseCustomersOptions) {
+export function useCustomers({
+  companyId,
+  companyName,
+  invitedByUserId,
+  pageSize = 10,
+}: UseCustomersOptions) {
   const [items, setItems] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -98,22 +109,55 @@ export function useCustomers({ companyId, pageSize = 10 }: UseCustomersOptions) 
   }, []);
 
   const createOne = useCallback(
-    async (input: CustomerInput) => {
+    async (input: CustomerInput, options?: CustomerSubmitOptions) => {
       if (!companyId) throw new Error("No se encontro compania para crear clientes.");
 
       setSubmitting(true);
       try {
-        await createCustomer(companyId, input);
+        const createdCustomer = await createCustomer(companyId, input);
+
+        if (options?.sendInvitation) {
+          if (!invitedByUserId) {
+            throw new Error("No se encontro usuario autenticado para registrar la invitacion.");
+          }
+
+          if (!options.invitationEmail) {
+            throw new Error("Debes indicar el email para enviar la invitacion.");
+          }
+
+          try {
+            await createAndSendCustomerInvitation({
+              companyId,
+              companyName: companyName ?? "tu compania",
+              customerId: createdCustomer.id,
+              customerName: createdCustomer.name,
+              invitationEmail: options.invitationEmail,
+              invitedByUserId,
+              appBaseUrl: window.location.origin,
+            });
+          } catch (invitationError) {
+            notifications.warning({
+              title: "Cliente creado, invitacion pendiente",
+              description:
+                invitationError instanceof Error
+                  ? invitationError.message
+                  : "No se pudo enviar la invitacion. Puedes reenviarla luego.",
+            });
+          }
+        }
+
         notifications.success({
           title: "Cliente creado",
-          description: "El cliente fue registrado correctamente.",
+          description: options?.sendInvitation
+            ? "Cliente creado e invitacion enviada correctamente."
+            : "El cliente fue registrado correctamente.",
         });
         await fetchCustomers();
       } finally {
         setSubmitting(false);
       }
     },
-    [companyId, fetchCustomers]
+    [companyId, companyName, fetchCustomers, invitedByUserId]
   );
 
   const updateOne = useCallback(
@@ -123,6 +167,7 @@ export function useCustomers({ companyId, pageSize = 10 }: UseCustomersOptions) 
       setSubmitting(true);
       try {
         await updateCustomer(companyId, customerId, input);
+
         notifications.success({
           title: "Cliente actualizado",
           description: "Los datos del cliente fueron actualizados.",

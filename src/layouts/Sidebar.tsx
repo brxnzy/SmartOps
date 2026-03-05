@@ -103,13 +103,12 @@ export default function Sidebar() {
         </nav>
 
         <div className="mt-auto space-y-4 pt-8">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Cuenta activa</p>
+          <div className="rounded-2xl  text-sm">
             <div className="mt-2 flex items-center gap-2 text-slate-800">
-              <CircleUserRound size={18} className="text-slate-500" />
-              <p className="truncate font-semibold">{userProfile?.name ?? "Usuario"}</p>
+              <CircleUserRound size={40} className="text-slate-500" />
+              <p className="truncate font-semibold text-md">{userProfile?.name ?? "Usuario"} | {roleProfile?.name ?? "Sin rol"}</p>
             </div>
-            <p className="mt-1 truncate text-xs text-slate-500">{roleProfile?.name ?? "Sin rol"}</p>
+            <p className="mt-1 truncate text-xs text-slate-500"></p>
           </div>
 
           <button

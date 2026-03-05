@@ -1,58 +1,48 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Building2, Contact2, Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
+import { Building2, IdCard, Mail, Phone, ShieldCheck } from "lucide-react";
 import Button from "./Button";
 import Field from "./Field";
 import Input from "./Input";
-import {
-  hasErrors,
-  toCustomerInput,
-  validateCustomerForm,
-} from "../schemas/customer.validation";
-import type {
-  Customer,
-  CustomerFormValues,
-} from "../types/customer.types";
-import { formatEmailsTextInput, formatPhonesTextInput } from "../utils/formatters";
+import { hasErrors, toCustomerInput, validateCustomerForm } from "../schemas/customer.validation";
+import type { Customer, CustomerFormValues } from "../types/customer.types";
+import { formatPhoneDigits } from "../utils/formatters";
 import type { CustomerFormProps } from "../types/interfaces";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function getInitialValues(customer?: Customer | null): CustomerFormValues {
   if (!customer) {
     return {
       name: "",
+      idCard: "",
+      phone: "",
       taxId: "",
-      phones: "",
-      emails: "",
-      address: "",
-      primaryContact: "",
       type: "hogar",
     };
   }
 
   return {
     name: customer.name,
-    taxId: customer.taxId,
-    phones: customer.phones.join(", "),
-    emails: customer.emails.join(", "),
-    address: customer.address,
-    primaryContact: customer.primaryContact,
+    idCard: customer.idCard ?? "",
+    phone: customer.phone ?? "",
+    taxId: customer.type === "hogar" ? "" : customer.taxId ?? "",
     type: customer.type,
   };
 }
 
 export default function CustomerForm({ initialData, submitting, onCancel, onSubmit }: CustomerFormProps) {
   const [values, setValues] = useState<CustomerFormValues>(() => getInitialValues(initialData));
+  const [sendInvitation, setSendInvitation] = useState(true);
+  const [invitationEmail, setInvitationEmail] = useState("");
+  const [invitationEmailError, setInvitationEmailError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerFormValues, string>>>({});
 
-  const formTitle = useMemo(
-    () => (initialData ? "Editar cliente" : "Nuevo cliente"),
-    [initialData]
-  );
+  const formTitle = useMemo(() => (initialData ? "Editar cliente" : "Nuevo cliente"), [initialData]);
 
   const formSubtitle = initialData
-    ? "Actualiza datos de contacto y clasificacion del cliente."
-    : "Registra el cliente para comenzar a gestionar operaciones.";
+    ? "Actualiza los datos base del cliente."
+    : "Registra un cliente y opcionalmente envia su invitacion de acceso.";
 
   const updateField = <K extends keyof CustomerFormValues>(field: K, value: CustomerFormValues[K]) => {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -71,8 +61,20 @@ export default function CustomerForm({ initialData, submitting, onCancel, onSubm
       return;
     }
 
+    if (!initialData && sendInvitation) {
+      const email = invitationEmail.trim().toLowerCase();
+      if (!email || !EMAIL_REGEX.test(email)) {
+        setInvitationEmailError("Debes indicar un email valido para enviar invitacion.");
+        return;
+      }
+      setInvitationEmailError(null);
+    }
+
     const payload = toCustomerInput(values);
-    await onSubmit(payload);
+    await onSubmit(payload, {
+      sendInvitation: Boolean(!initialData && sendInvitation),
+      invitationEmail: !initialData && sendInvitation ? invitationEmail.trim().toLowerCase() : undefined,
+    });
   };
 
   return (
@@ -83,70 +85,27 @@ export default function CustomerForm({ initialData, submitting, onCancel, onSubm
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Nombre o razon social">
+        <Field label="Nombre">
           <Input
             value={values.name}
             onChange={(event) => updateField("name", event.target.value)}
-            placeholder="Ej: Ferreteria Centro"
+            placeholder="Ej: Juan Perez"
             icon={<Building2 size={16} />}
             disabled={submitting}
           />
           {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
         </Field>
 
-        <Field label="Documento fiscal">
-          <Input
-            value={values.taxId}
-            onChange={(event) => updateField("taxId", event.target.value.toUpperCase())}
-            placeholder="Ej: 101-12345-6"
-            icon={<ShieldCheck size={16} />}
-            disabled={submitting}
-          />
-          {errors.taxId && <p className="text-xs text-red-600">{errors.taxId}</p>}
-        </Field>
-
-        <Field label="Telefonos (separados por coma)">
-          <Input
-            value={values.phones}
-            onChange={(event) => updateField("phones", formatPhonesTextInput(event.target.value))}
-            placeholder="Ej: 8095550101, 8291234567"
-            icon={<Phone size={16} />}
-            inputMode="numeric"
-            autoComplete="tel"
-            disabled={submitting}
-          />
-          <p className="text-xs text-slate-500">Formato automatico RD: 809-555-0101</p>
-          {errors.phones && <p className="text-xs text-red-600">{errors.phones}</p>}
-        </Field>
-
-        <Field label="Emails (separados por coma)">
-          <Input
-            value={values.emails}
-            onChange={(event) => updateField("emails", formatEmailsTextInput(event.target.value))}
-            placeholder="Ej: compras@empresa.com, admin@empresa.com"
-            icon={<Mail size={16} />}
-            autoComplete="email"
-            disabled={submitting}
-          />
-          <p className="text-xs text-slate-500">Se normalizan en minusculas automaticamente.</p>
-          {errors.emails && <p className="text-xs text-red-600">{errors.emails}</p>}
-        </Field>
-
-        <Field label="Contacto principal">
-          <Input
-            value={values.primaryContact}
-            onChange={(event) => updateField("primaryContact", event.target.value)}
-            placeholder="Ej: Juan Perez"
-            icon={<Contact2 size={16} />}
-            disabled={submitting}
-          />
-          {errors.primaryContact && <p className="text-xs text-red-600">{errors.primaryContact}</p>}
-        </Field>
-
         <Field label="Tipo de cliente">
           <select
             value={values.type}
-            onChange={(event) => updateField("type", event.target.value as CustomerFormValues["type"])}
+            onChange={(event) => {
+              const nextType = event.target.value as CustomerFormValues["type"];
+              updateField("type", nextType);
+              if (nextType === "hogar") {
+                updateField("taxId", "");
+              }
+            }}
             disabled={submitting}
             className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
           >
@@ -155,24 +114,79 @@ export default function CustomerForm({ initialData, submitting, onCancel, onSubm
             <option value="empresa">Empresa</option>
           </select>
         </Field>
+
+        <Field label="Cedula (id_card)">
+          <Input
+            value={values.idCard}
+            onChange={(event) => updateField("idCard", event.target.value)}
+            placeholder="Ej: 40212345678"
+            icon={<IdCard size={16} />}
+            disabled={submitting}
+          />
+          {errors.idCard && <p className="text-xs text-red-600">{errors.idCard}</p>}
+        </Field>
+
+        <Field label="Telefono">
+          <Input
+            value={values.phone}
+            onChange={(event) => updateField("phone", formatPhoneDigits(event.target.value))}
+            placeholder="Ej: 809-555-0101"
+            icon={<Phone size={16} />}
+            inputMode="numeric"
+            autoComplete="tel"
+            disabled={submitting}
+          />
+          {errors.phone && <p className="text-xs text-red-600">{errors.phone}</p>}
+        </Field>
+
+        <Field label="Documento fiscal (tax_id)">
+          <Input
+            value={values.taxId}
+            onChange={(event) => updateField("taxId", event.target.value.toUpperCase())}
+            placeholder={values.type === "hogar" ? "No requerido para hogar" : "Ej: 101-12345-6"}
+            icon={<ShieldCheck size={16} />}
+            disabled={submitting || values.type === "hogar"}
+          />
+          {values.type === "hogar" && (
+            <p className="text-xs text-slate-500">Para clientes hogar no se exige documento fiscal.</p>
+          )}
+          {errors.taxId && <p className="text-xs text-red-600">{errors.taxId}</p>}
+        </Field>
       </div>
 
-      <Field label="Direccion">
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-3 text-gray-400">
-            <MapPin size={16} />
-          </span>
-          <textarea
-            value={values.address}
-            onChange={(event) => updateField("address", event.target.value)}
-            disabled={submitting}
-            placeholder="Direccion completa"
-            rows={3}
-            className="w-full rounded-xl border-2 border-slate-300 bg-white py-3 pr-3 pl-10 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-          />
+      {!initialData && (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={sendInvitation}
+              onChange={(event) => setSendInvitation(event.target.checked)}
+              disabled={submitting}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-700">
+              Enviar invitacion por email para que configure contrasena e inicie sesion.
+            </span>
+          </label>
+
+          {sendInvitation && (
+            <Field label="Email de invitacion">
+              <Input
+                value={invitationEmail}
+                onChange={(event) => {
+                  setInvitationEmail(event.target.value);
+                  setInvitationEmailError(null);
+                }}
+                placeholder="cliente@correo.com"
+                icon={<Mail size={16} />}
+                autoComplete="email"
+                disabled={submitting}
+              />
+              {invitationEmailError && <p className="text-xs text-red-600">{invitationEmailError}</p>}
+            </Field>
+          )}
         </div>
-        {errors.address && <p className="text-xs text-red-600">{errors.address}</p>}
-      </Field>
+      )}
 
       <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-4">
         <Button

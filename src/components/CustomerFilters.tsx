@@ -23,7 +23,7 @@ export default function CustomerFilters({
         <Input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Buscar por nombre, documento o contacto"
+          placeholder="Buscar por nombre, tax id, cedula o telefono"
           icon={<Search size={16} />}
           disabled={disabled}
         />

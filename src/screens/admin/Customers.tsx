@@ -10,9 +10,10 @@ import CustomerTable from "../../components/CustomerTable";
 import { useCustomers } from "../../hooks/useCustomers";
 import { notifications } from "../../services/notification.service";
 import type { Customer, CustomerInput } from "../../types/customer.types";
+import type { CustomerSubmitOptions } from "../../types/interfaces";
 
 export default function Customers() {
-  const { companyProfile, canAccess } = useAuth();
+  const { authUser, companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const canWrite = useMemo(() => {
     return (
@@ -38,7 +39,12 @@ export default function Customers() {
     createOne,
     updateOne,
     removeOne,
-  } = useCustomers({ companyId, pageSize: 8 });
+  } = useCustomers({
+    companyId,
+    companyName: companyProfile?.name,
+    invitedByUserId: authUser?.id,
+    pageSize: 8,
+  });
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -82,12 +88,12 @@ export default function Customers() {
     setDeleteTarget(null);
   };
 
-  const handleSubmit = async (payload: CustomerInput) => {
+  const handleSubmit = async (payload: CustomerInput, options: CustomerSubmitOptions) => {
     try {
       if (selectedCustomer) {
         await updateOne(selectedCustomer.id, payload);
       } else {
-        await createOne(payload);
+        await createOne(payload, options);
       }
 
       closeModal();

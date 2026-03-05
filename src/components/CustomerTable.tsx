@@ -34,14 +34,13 @@ export default function CustomerTable({
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] table-auto">
+        <table className="w-full min-w-245 table-auto">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3">Documento</th>
-              <th className="px-4 py-3">Contacto</th>
-              <th className="px-4 py-3">Telefonos</th>
-              <th className="px-4 py-3">Emails</th>
+              <th className="px-4 py-3">Cedula</th>
+              <th className="px-4 py-3">Telefono</th>
+              <th className="px-4 py-3">Tax ID</th>
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
@@ -51,12 +50,11 @@ export default function CustomerTable({
               <tr key={customer.id} className="hover:bg-slate-50/80">
                 <td className="px-4 py-3">
                   <p className="font-semibold text-slate-900">{customer.name}</p>
-                  <p className="text-xs text-slate-500">{customer.address}</p>
+                  <p className="text-xs text-slate-500">{new Date(customer.createdAt).toLocaleDateString()}</p>
                 </td>
+                <td className="px-4 py-3">{customer.idCard ?? "N/A"}</td>
+                <td className="px-4 py-3">{customer.phone ?? "N/A"}</td>
                 <td className="px-4 py-3 font-medium">{customer.taxId}</td>
-                <td className="px-4 py-3">{customer.primaryContact}</td>
-                <td className="px-4 py-3">{customer.phones.join(", ")}</td>
-                <td className="px-4 py-3">{customer.emails.join(", ")}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${typeClassName(customer.type)}`}
