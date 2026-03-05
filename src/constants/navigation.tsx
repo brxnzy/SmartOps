@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { LayoutDashboard, UserCheck2} from "lucide-react";
+import { Cpu, LayoutDashboard, UserCheck2} from "lucide-react";
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -15,6 +15,12 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
     to: "/admin/customers",
     permission: PERMISSIONS.customersRead,
     icon: <UserCheck2 className="w-5 h-5" />,
+  },
+  {
+    name: "Dispositivos",
+    to: "/admin/devices",
+    permission: PERMISSIONS.devicesRead,
+    icon: <Cpu className="w-5 h-5" />,
   },
 ];
 
