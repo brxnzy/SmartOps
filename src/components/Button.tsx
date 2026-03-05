@@ -1,9 +1,6 @@
 import React from "react";
+import type { ButtonProps } from "../types/interfaces";
 
-interface ButtonProps extends React.ComponentProps<"button"> {
-  icon?: React.ReactNode;
-  fullWidth?: boolean;
-}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ icon, fullWidth = false, className = "", children, ...props }, ref) => {

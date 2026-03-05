@@ -3,7 +3,6 @@ import type { CompanyProfile } from "../types/Company";
 import type { RoleProfile } from "../types/Role";
 import type { UserRoleRow } from "../types/types";
 
-
 export async function getUserCompanyAndRole(userId: string): Promise<{
   companyProfile: CompanyProfile | null;
   roleProfile: RoleProfile | null;

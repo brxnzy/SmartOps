@@ -2,7 +2,7 @@ import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
 import { Cpu,HardDrive, LayoutDashboard, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
 
-export const SIDEBAR_ITEMS: SidebarItem[] = [
+const SIDEBAR_ITEMS: SidebarItem[] = [
   {
     name: "Dashboard",
     to: "/admin/dashboard",
@@ -49,6 +49,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   },
 ];
 
+
 export const DEFAULT_ADMIN_ROUTES: DefaultAdminRoute[] = SIDEBAR_ITEMS.flatMap((item) => {
   if (item.children?.length) {
     return item.children.map(({ to, permission }) => ({ to, permission }));
@@ -57,3 +58,4 @@ export const DEFAULT_ADMIN_ROUTES: DefaultAdminRoute[] = SIDEBAR_ITEMS.flatMap((
   if (!item.to) return [];
   return [{ to: item.to, permission: item.permission }];
 });
+

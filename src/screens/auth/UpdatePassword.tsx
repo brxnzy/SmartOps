@@ -5,6 +5,8 @@ import { LockKeyhole, Lock } from "lucide-react";
 
 export default function UpdatePassword() {
   const {
+  checkingAccess,
+  hasPasswordAccess,
   password,
   confirm,
   submitting,
@@ -15,6 +17,35 @@ export default function UpdatePassword() {
   handleSubmit,
   } = useUpdatePassword()
 
+
+  if (checkingAccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="rounded-xl border border-gray-200 bg-white px-6 py-4 text-sm text-gray-600 shadow-sm">
+          Validando enlace de invitacion...
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasPasswordAccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Enlace no valido</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Este enlace de configuracion expiro o ya fue usado. Solicita una nueva invitacion.
+          </p>
+          <a
+            href="/login"
+            className="mt-4 inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Ir a login
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">

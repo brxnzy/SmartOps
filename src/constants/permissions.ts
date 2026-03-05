@@ -1,5 +1,5 @@
 export const PERMISSIONS = {
-  dashboardRead: "dashboard:read",
+  dashboardRead: "dashboard.read",
   customersRead: "customers:read",
   devicesRead: "devices.read",
   rolesRead: "roles.read",
