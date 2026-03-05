@@ -1,4 +1,5 @@
 import Button from "../../../components/Button";
+import ConfirmModal from "../../../components/ConfirmModal";
 import Field from "../../../components/Field";
 import Input from "../../../components/Input";
 import Modal from "../../../components/Modal";
@@ -6,23 +7,28 @@ import useSettingsBrands from "../../../hooks/useSettingsBrands";
 
 export default function SettingsBrands() {
   const {
-    brands,
     loading,
     submitting,
     isModalOpen,
     editingBrand,
+    brandToDelete,
     brandName,
+    searchTerm,
+    filteredBrands,
     hasChanges,
     companyId,
     canCreate,
     canUpdate,
     canDelete,
     setBrandName,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteBrand,
+    cancelDeleteBrand,
+    confirmDeleteBrand,
   } = useSettingsBrands();
 
   return (
@@ -45,15 +51,22 @@ export default function SettingsBrands() {
         )}
       </header>
 
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        maxLength={120}
+        placeholder="Buscar marcas..."
+      />
+
       <div className="space-y-3">
-        {!loading && brands.length === 0 && (
+        {!loading && filteredBrands.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            No hay marcas disponibles.
+            No hay marcas disponibles para la busqueda.
           </div>
         )}
 
         {!loading &&
-          brands.map((brand) => (
+          filteredBrands.map((brand) => (
             <article
               key={brand.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -78,7 +91,7 @@ export default function SettingsBrands() {
                   {canDelete && (
                     <Button
                       type="button"
-                      onClick={() => handleDelete(brand)}
+                      onClick={() => askDeleteBrand(brand)}
                       disabled={submitting}
                       className="border-red-300 text-red-700 hover:bg-red-50"
                     >
@@ -127,6 +140,15 @@ export default function SettingsBrands() {
           </Field>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={Boolean(brandToDelete)}
+        title="Eliminar marca"
+        message={`Deseas eliminar la marca ${brandToDelete?.name ?? "(sin nombre)"}?`}
+        loading={submitting}
+        onCancel={cancelDeleteBrand}
+        onConfirm={confirmDeleteBrand}
+      />
     </section>
   );
 }

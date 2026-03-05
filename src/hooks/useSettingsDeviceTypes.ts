@@ -17,8 +17,10 @@ const useSettingsDeviceTypes = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDeviceType, setEditingDeviceType] = useState<DeviceType | null>(null);
+  const [deviceTypeToDelete, setDeviceTypeToDelete] = useState<DeviceType | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const companyId = companyProfile?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.settingsDeviceTypesCreate);
@@ -56,6 +58,17 @@ const useSettingsDeviceTypes = () => {
       cleanDescription !== (editingDeviceType.description ?? "").trim()
     );
   }, [description, editingDeviceType, name]);
+
+  const filteredDeviceTypes = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return deviceTypes;
+
+    return deviceTypes.filter(
+      (deviceType) =>
+        deviceType.name.toLowerCase().includes(query) ||
+        (deviceType.description ?? "").toLowerCase().includes(query)
+    );
+  }, [deviceTypes, searchTerm]);
 
   const openCreateModal = () => {
     setEditingDeviceType(null);
@@ -138,14 +151,22 @@ const useSettingsDeviceTypes = () => {
     }
   };
 
-  const handleDelete = async (deviceType: DeviceType) => {
-    const accepted = window.confirm(`Eliminar el tipo de dispositivo ${deviceType.name}?`);
-    if (!accepted) return;
+  const askDeleteDeviceType = (deviceType: DeviceType) => {
+    setDeviceTypeToDelete(deviceType);
+  };
 
+  const cancelDeleteDeviceType = () => {
+    if (submitting) return;
+    setDeviceTypeToDelete(null);
+  };
+
+  const confirmDeleteDeviceType = async () => {
+    if (!deviceTypeToDelete) return;
     setSubmitting(true);
     try {
-      await deleteDeviceType(deviceType.id);
-      setDeviceTypes((current) => current.filter((item) => item.id !== deviceType.id));
+      await deleteDeviceType(deviceTypeToDelete.id);
+      setDeviceTypes((current) => current.filter((item) => item.id !== deviceTypeToDelete.id));
+      setDeviceTypeToDelete(null);
       notifications.success({
         title: "Tipo de dispositivo eliminado",
         description: "El tipo de dispositivo fue eliminado.",
@@ -169,6 +190,9 @@ const useSettingsDeviceTypes = () => {
     editingDeviceType,
     name,
     description,
+    searchTerm,
+    deviceTypeToDelete,
+    filteredDeviceTypes,
     hasChanges,
     companyId,
     canCreate,
@@ -176,11 +200,14 @@ const useSettingsDeviceTypes = () => {
     canDelete,
     setName,
     setDescription,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteDeviceType,
+    cancelDeleteDeviceType,
+    confirmDeleteDeviceType,
   };
 };
 

@@ -66,3 +66,15 @@ export type BrandRow = {
   company_id: string;
   created_at: string | null;
 };
+
+export type DeviceRow = {
+  id: string;
+  name: string;
+  model: string;
+  price: number | string;
+  protocol_id: string;
+  device_type_id: number;
+  company_id: string;
+  created_at: string | null;
+  brand_id: string;
+};

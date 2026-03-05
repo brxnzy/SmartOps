@@ -17,7 +17,9 @@ const useSettingsProtocols = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProtocol, setEditingProtocol] = useState<Protocol | null>(null);
+  const [protocolToDelete, setProtocolToDelete] = useState<Protocol | null>(null);
   const [protocolName, setProtocolName] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const companyId = companyProfile?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.settingsProtocolsCreate);
@@ -48,6 +50,13 @@ const useSettingsProtocols = () => {
     if (!editingProtocol) return Boolean(protocolName.trim());
     return protocolName.trim() !== (editingProtocol.name ?? "").trim();
   }, [editingProtocol, protocolName]);
+
+  const filteredProtocols = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return protocols;
+
+    return protocols.filter((protocol) => (protocol.name ?? "").toLowerCase().includes(query));
+  }, [protocols, searchTerm]);
 
   const openCreateModal = () => {
     setEditingProtocol(null);
@@ -128,14 +137,22 @@ const useSettingsProtocols = () => {
     }
   };
 
-  const handleDelete = async (protocol: Protocol) => {
-    const accepted = window.confirm(`Eliminar el protocolo ${protocol.name ?? "(sin nombre)"}?`);
-    if (!accepted) return;
+  const askDeleteProtocol = (protocol: Protocol) => {
+    setProtocolToDelete(protocol);
+  };
 
+  const cancelDeleteProtocol = () => {
+    if (submitting) return;
+    setProtocolToDelete(null);
+  };
+
+  const confirmDeleteProtocol = async () => {
+    if (!protocolToDelete) return;
     setSubmitting(true);
     try {
-      await deleteProtocol(protocol.id);
-      setProtocols((current) => current.filter((item) => item.id !== protocol.id));
+      await deleteProtocol(protocolToDelete.id);
+      setProtocols((current) => current.filter((item) => item.id !== protocolToDelete.id));
+      setProtocolToDelete(null);
       notifications.success({
         title: "Protocolo eliminado",
         description: "El protocolo fue eliminado.",
@@ -158,17 +175,23 @@ const useSettingsProtocols = () => {
     isModalOpen,
     editingProtocol,
     protocolName,
+    searchTerm,
+    protocolToDelete,
+    filteredProtocols,
     hasChanges,
     companyId,
     canCreate,
     canUpdate,
     canDelete,
     setProtocolName,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteProtocol,
+    cancelDeleteProtocol,
+    confirmDeleteProtocol,
   };
 };
 

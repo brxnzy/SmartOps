@@ -1,16 +1,19 @@
 import { supabase } from "../libs/supabase";
 import type {
   Brand,
+  Device,
+  CreateDevicePayload,
   CreateDeviceTypePayload,
   CreateBrandPayload,
   CreateProtocolPayload,
   DeviceType,
   Protocol,
+  UpdateDevicePayload,
   UpdateBrandPayload,
   UpdateDeviceTypePayload,
   UpdateProtocolPayload,
 } from "../types/Device";
-import type { BrandRow, DeviceTypeRow, ProtocolRow } from "../types/types";
+import type { BrandRow, DeviceRow, DeviceTypeRow, ProtocolRow } from "../types/types";
 
 function mapProtocol(row: ProtocolRow): Protocol {
   return {
@@ -37,6 +40,20 @@ function mapBrand(row: BrandRow): Brand {
     name: row.name,
     companyId: row.company_id,
     createdAt: row.created_at,
+  };
+}
+
+function mapDevice(row: DeviceRow): Device {
+  return {
+    id: row.id,
+    name: row.name,
+    model: row.model,
+    price: Number(row.price),
+    protocolId: row.protocol_id,
+    deviceTypeId: row.device_type_id,
+    companyId: row.company_id,
+    createdAt: row.created_at,
+    brandId: row.brand_id,
   };
 }
 
@@ -189,5 +206,65 @@ export async function updateBrand(payload: UpdateBrandPayload): Promise<Brand> {
 
 export async function deleteBrand(brandId: string): Promise<void> {
   const { error } = await supabase.from("brands").delete().eq("id", brandId);
+  if (error) throw error;
+}
+
+export async function getDevicesByCompany(companyId: string | null): Promise<Device[]> {
+  if (!companyId) return [];
+
+  const { data, error } = await supabase
+    .from("devices")
+    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .returns<DeviceRow[]>();
+
+  if (error) throw error;
+
+  return (data ?? []).map(mapDevice);
+}
+
+export async function createDevice(payload: CreateDevicePayload): Promise<Device> {
+  const { data, error } = await supabase
+    .from("devices")
+    .insert({
+      name: payload.name,
+      model: payload.model,
+      price: payload.price,
+      protocol_id: payload.protocolId,
+      device_type_id: payload.deviceTypeId,
+      company_id: payload.companyId,
+      brand_id: payload.brandId,
+    })
+    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .single<DeviceRow>();
+
+  if (error) throw error;
+
+  return mapDevice(data);
+}
+
+export async function updateDevice(payload: UpdateDevicePayload): Promise<Device> {
+  const { data, error } = await supabase
+    .from("devices")
+    .update({
+      name: payload.name,
+      model: payload.model,
+      price: payload.price,
+      protocol_id: payload.protocolId,
+      device_type_id: payload.deviceTypeId,
+      brand_id: payload.brandId,
+    })
+    .eq("id", payload.id)
+    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .single<DeviceRow>();
+
+  if (error) throw error;
+
+  return mapDevice(data);
+}
+
+export async function deleteDevice(deviceId: string): Promise<void> {
+  const { error } = await supabase.from("devices").delete().eq("id", deviceId);
   if (error) throw error;
 }

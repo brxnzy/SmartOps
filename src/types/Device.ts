@@ -51,3 +51,35 @@ export interface UpdateBrandPayload {
   id: string;
   name: string;
 }
+
+export interface Device {
+  id: string;
+  name: string;
+  model: string;
+  price: number;
+  protocolId: string;
+  deviceTypeId: number;
+  companyId: string;
+  createdAt: string | null;
+  brandId: string;
+}
+
+export interface CreateDevicePayload {
+  name: string;
+  model: string;
+  price: number;
+  protocolId: string;
+  deviceTypeId: number;
+  companyId: string;
+  brandId: string;
+}
+
+export interface UpdateDevicePayload {
+  id: string;
+  name: string;
+  model: string;
+  price: number;
+  protocolId: string;
+  deviceTypeId: number;
+  brandId: string;
+}

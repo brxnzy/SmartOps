@@ -39,6 +39,8 @@ const useRoles = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [newRoleName, setNewRoleName] = useState("");
   const [editingName, setEditingName] = useState("");
   const [editingPermissionCodes, setEditingPermissionCodes] = useState<string[]>([]);
@@ -188,6 +190,12 @@ const useRoles = () => {
     return hasNameChanges || hasPermissionChanges;
   }, [editingInitialName, editingInitialPermissionCodes, editingName, editingPermissionCodes, editingRoleId]);
 
+  const filteredRoles = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return roles;
+    return roles.filter((role) => role.name.toLowerCase().includes(query));
+  }, [roles, searchTerm]);
+
   const handleUpdateRole = useCallback(
     async (roleId: string) => {
       if (roleId !== editingRoleId) return;
@@ -261,22 +269,30 @@ const useRoles = () => {
     ]
   );
 
-  const handleDeleteRole = useCallback(async (role: Role) => {
-    const accepted = window.confirm(`Eliminar el rol ${role.name}?`);
-    if (!accepted) return;
+  const askDeleteRole = useCallback((role: Role) => {
+    setRoleToDelete(role);
+  }, []);
 
+  const cancelDeleteRole = useCallback(() => {
+    if (submitting) return;
+    setRoleToDelete(null);
+  }, [submitting]);
+
+  const confirmDeleteRole = useCallback(async () => {
+    if (!roleToDelete) return;
     setSubmitting(true);
     try {
-      await deleteRole(role.id);
-      setRoles((current) => current.filter((item) => item.id !== role.id));
+      await deleteRole(roleToDelete.id);
+      setRoles((current) => current.filter((item) => item.id !== roleToDelete.id));
       setRolePermissions((current) => {
         const next = { ...current };
-        delete next[role.id];
+        delete next[roleToDelete.id];
         return next;
       });
+      setRoleToDelete(null);
       notifications.success({
         title: "Rol eliminado",
-        description: `El rol ${role.name} fue eliminado.`,
+        description: `El rol ${roleToDelete.name} fue eliminado.`,
       });
     } catch (error) {
       notifications.error({
@@ -287,7 +303,7 @@ const useRoles = () => {
     } finally {
       setSubmitting(false);
     }
-  }, []);
+  }, [roleToDelete]);
 
   return {
     roles,
@@ -296,22 +312,28 @@ const useRoles = () => {
     loading,
     submitting,
     editingRoleId,
+    roleToDelete,
+    searchTerm,
     newRoleName,
     editingName,
     editingPermissionCodes,
     hasEditingChanges,
+    filteredRoles,
     companyId,
     canCreateRole,
     canUpdateRole,
     canDeleteRole,
     setNewRoleName,
+    setSearchTerm,
     setEditingName,
     handleCreateRole,
     startEdit,
     cancelEdit,
     toggleEditingPermission,
     handleUpdateRole,
-    handleDeleteRole,
+    askDeleteRole,
+    cancelDeleteRole,
+    confirmDeleteRole,
     loadRoles,
   };
 };

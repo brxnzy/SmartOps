@@ -1,4 +1,5 @@
 import Button from "../../../components/Button";
+import ConfirmModal from "../../../components/ConfirmModal";
 import Field from "../../../components/Field";
 import Input from "../../../components/Input";
 import Modal from "../../../components/Modal";
@@ -6,23 +7,28 @@ import useSettingsProtocols from "../../../hooks/useSettingsProtocols";
 
 export default function SettingsProtocols() {
   const {
-    protocols,
     loading,
     submitting,
     isModalOpen,
     editingProtocol,
     protocolName,
+    searchTerm,
+    protocolToDelete,
+    filteredProtocols,
     hasChanges,
     companyId,
     canCreate,
     canUpdate,
     canDelete,
     setProtocolName,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteProtocol,
+    cancelDeleteProtocol,
+    confirmDeleteProtocol,
   } = useSettingsProtocols();
 
   return (
@@ -45,15 +51,22 @@ export default function SettingsProtocols() {
         )}
       </header>
 
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        maxLength={120}
+        placeholder="Buscar protocolos..."
+      />
+
       <div className="space-y-3">
-        {!loading && protocols.length === 0 && (
+        {!loading && filteredProtocols.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            No hay protocolos disponibles.
+            No hay protocolos disponibles para la busqueda.
           </div>
         )}
 
         {!loading &&
-          protocols.map((protocol) => (
+          filteredProtocols.map((protocol) => (
             <article
               key={protocol.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -80,7 +93,7 @@ export default function SettingsProtocols() {
                   {canDelete && (
                     <Button
                       type="button"
-                      onClick={() => handleDelete(protocol)}
+                      onClick={() => askDeleteProtocol(protocol)}
                       disabled={submitting}
                       className="border-red-300 text-red-700 hover:bg-red-50"
                     >
@@ -129,6 +142,15 @@ export default function SettingsProtocols() {
           </Field>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={Boolean(protocolToDelete)}
+        title="Eliminar protocolo"
+        message={`Deseas eliminar el protocolo ${protocolToDelete?.name ?? "(sin nombre)"}?`}
+        loading={submitting}
+        onCancel={cancelDeleteProtocol}
+        onConfirm={confirmDeleteProtocol}
+      />
     </section>
   );
 }

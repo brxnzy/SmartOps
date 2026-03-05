@@ -12,7 +12,9 @@ const useSettingsBrands = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
+  const [brandToDelete, setBrandToDelete] = useState<Brand | null>(null);
   const [brandName, setBrandName] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const companyId = companyProfile?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.settingsBrandsCreate);
@@ -43,6 +45,13 @@ const useSettingsBrands = () => {
     if (!editingBrand) return Boolean(brandName.trim());
     return brandName.trim() !== editingBrand.name.trim();
   }, [brandName, editingBrand]);
+
+  const filteredBrands = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return brands;
+
+    return brands.filter((brand) => brand.name.toLowerCase().includes(query));
+  }, [brands, searchTerm]);
 
   const openCreateModal = () => {
     setEditingBrand(null);
@@ -117,14 +126,22 @@ const useSettingsBrands = () => {
     }
   };
 
-  const handleDelete = async (brand: Brand) => {
-    const accepted = window.confirm(`Eliminar la marca ${brand.name}?`);
-    if (!accepted) return;
+  const askDeleteBrand = (brand: Brand) => {
+    setBrandToDelete(brand);
+  };
 
+  const cancelDeleteBrand = () => {
+    if (submitting) return;
+    setBrandToDelete(null);
+  };
+
+  const confirmDeleteBrand = async () => {
+    if (!brandToDelete) return;
     setSubmitting(true);
     try {
-      await deleteBrand(brand.id);
-      setBrands((current) => current.filter((item) => item.id !== brand.id));
+      await deleteBrand(brandToDelete.id);
+      setBrands((current) => current.filter((item) => item.id !== brandToDelete.id));
+      setBrandToDelete(null);
       notifications.success({
         title: "Marca eliminada",
         description: "La marca fue eliminada.",
@@ -146,18 +163,24 @@ const useSettingsBrands = () => {
     submitting,
     isModalOpen,
     editingBrand,
+    brandToDelete,
     brandName,
+    searchTerm,
+    filteredBrands,
     hasChanges,
     companyId,
     canCreate,
     canUpdate,
     canDelete,
     setBrandName,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteBrand,
+    cancelDeleteBrand,
+    confirmDeleteBrand,
   };
 };
 

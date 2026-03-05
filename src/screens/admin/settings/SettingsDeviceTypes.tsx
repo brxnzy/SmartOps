@@ -1,4 +1,5 @@
 import Button from "../../../components/Button";
+import ConfirmModal from "../../../components/ConfirmModal";
 import Field from "../../../components/Field";
 import Input from "../../../components/Input";
 import Modal from "../../../components/Modal";
@@ -6,13 +7,15 @@ import useSettingsDeviceTypes from "../../../hooks/useSettingsDeviceTypes";
 
 export default function SettingsDeviceTypes() {
   const {
-    deviceTypes,
     loading,
     submitting,
     isModalOpen,
     editingDeviceType,
     name,
     description,
+    searchTerm,
+    deviceTypeToDelete,
+    filteredDeviceTypes,
     hasChanges,
     companyId,
     canCreate,
@@ -20,11 +23,14 @@ export default function SettingsDeviceTypes() {
     canDelete,
     setName,
     setDescription,
+    setSearchTerm,
     openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
-    handleDelete,
+    askDeleteDeviceType,
+    cancelDeleteDeviceType,
+    confirmDeleteDeviceType,
   } = useSettingsDeviceTypes();
 
   return (
@@ -47,15 +53,22 @@ export default function SettingsDeviceTypes() {
         )}
       </header>
 
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        maxLength={120}
+        placeholder="Buscar tipos de dispositivos..."
+      />
+
       <div className="space-y-3">
-        {!loading && deviceTypes.length === 0 && (
+        {!loading && filteredDeviceTypes.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            No hay tipos de dispositivos disponibles.
+            No hay tipos de dispositivos para la busqueda.
           </div>
         )}
 
         {!loading &&
-          deviceTypes.map((deviceType) => (
+          filteredDeviceTypes.map((deviceType) => (
             <article
               key={deviceType.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -83,7 +96,7 @@ export default function SettingsDeviceTypes() {
                   {canDelete && (
                     <Button
                       type="button"
-                      onClick={() => handleDelete(deviceType)}
+                      onClick={() => askDeleteDeviceType(deviceType)}
                       disabled={submitting}
                       className="border-red-300 text-red-700 hover:bg-red-50"
                     >
@@ -141,6 +154,15 @@ export default function SettingsDeviceTypes() {
           </Field>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={Boolean(deviceTypeToDelete)}
+        title="Eliminar tipo de dispositivo"
+        message={`Deseas eliminar el tipo de dispositivo ${deviceTypeToDelete?.name ?? "(sin nombre)"}?`}
+        loading={submitting}
+        onCancel={cancelDeleteDeviceType}
+        onConfirm={confirmDeleteDeviceType}
+      />
     </section>
   );
 }
