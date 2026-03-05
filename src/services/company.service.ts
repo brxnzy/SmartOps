@@ -1,22 +1,8 @@
 import { supabase } from "../libs/supabase";
 import type { CompanyProfile } from "../types/Company";
 import type { RoleProfile } from "../types/Role";
+import type { UserRoleRow } from "../types/types";
 
-type UserRoleRow = {
-  company_id: string | null;
-  companies: {
-    id: string;
-    name: string;
-    address: string | null;
-    phone: string | null;
-    rnc: string | null;
-    logo_url: string | null;
-  } | null;
-  roles: {
-    id: string;
-    name: string;
-  } | null;
-};
 
 export async function getUserCompanyAndRole(userId: string): Promise<{
   companyProfile: CompanyProfile | null;
