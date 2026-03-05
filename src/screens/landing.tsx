@@ -2,7 +2,7 @@ import landingImg from "../assets/landing.svg";
 import logoImg from "../assets/logo.png";
 import { Link } from "react-router-dom";
 import { CircleUserRound } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
+import useAuth from "../hooks/useAuth";
 
 const Landing: React.FC = () => {
   const { authUser, userProfile } = useAuth();
