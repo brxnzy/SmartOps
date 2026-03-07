@@ -20,6 +20,7 @@ import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
+import UsersAdmin from "../screens/admin/Users";
 
 export default function AppRoutes() {
   return (
@@ -104,6 +105,14 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.rolesRead}>
               <Roles />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="users"
+          element={
+            <PermissionRoute permission={PERMISSIONS.usersRead}>
+              <UsersAdmin />
             </PermissionRoute>
           }
         />

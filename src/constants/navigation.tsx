@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Cpu,HardDrive, LayoutDashboard, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
+import { Cpu,HardDrive, LayoutDashboard, Settings, Shield, UserCheck2, UsersRound, Waypoints } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -9,7 +9,13 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     permission: PERMISSIONS.dashboardRead,  
     icon: <LayoutDashboard />,
   },
-
+  
+  {
+    name: "Usuarios",
+    to: "/admin/users",
+    permission: PERMISSIONS.usersRead,
+    icon: <UsersRound />,
+  },
   {
     name: "Clientes",
     to: "/admin/customers",
