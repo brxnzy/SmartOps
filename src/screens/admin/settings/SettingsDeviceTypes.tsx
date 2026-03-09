@@ -1,173 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import Button from "../../../components/Button";
+import ConfirmModal from "../../../components/ConfirmModal";
 import Field from "../../../components/Field";
 import Input from "../../../components/Input";
 import Modal from "../../../components/Modal";
-import { PERMISSIONS } from "../../../constants/permissions";
-import useAuth from "../../../hooks/useAuth";
-import {
-  createDeviceType,
-  deleteDeviceType,
-  getDeviceTypesByCompany,
-  updateDeviceType,
-} from "../../../services/device.service";
-import { notifications } from "../../../services/notification.service";
-import type { DeviceType } from "../../../types/Device";
+import useSettingsDeviceTypes from "../../../hooks/useSettingsDeviceTypes";
 
 export default function SettingsDeviceTypes() {
-  const { companyProfile, canAccess } = useAuth();
-  const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDeviceType, setEditingDeviceType] = useState<DeviceType | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  const companyId = companyProfile?.id ?? null;
-  const canCreate = canAccess(PERMISSIONS.settingsDeviceTypesCreate);
-  const canUpdate = canAccess(PERMISSIONS.settingsDeviceTypesUpdate);
-  const canDelete = canAccess(PERMISSIONS.settingsDeviceTypesDelete);
-
-  const loadDeviceTypes = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getDeviceTypesByCompany(companyId);
-      setDeviceTypes(data);
-    } catch (error) {
-      notifications.error({
-        title: "Error cargando tipos de dispositivos",
-        description: "No se pudieron obtener los tipos de dispositivos.",
-      });
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId]);
-
-  useEffect(() => {
-    loadDeviceTypes();
-  }, [loadDeviceTypes]);
-
-  const hasChanges = useMemo(() => {
-    const cleanName = name.trim();
-    const cleanDescription = description.trim();
-
-    if (!editingDeviceType) return Boolean(cleanName);
-
-    return (
-      cleanName !== editingDeviceType.name.trim() ||
-      cleanDescription !== (editingDeviceType.description ?? "").trim()
-    );
-  }, [description, editingDeviceType, name]);
-
-  const openCreateModal = () => {
-    setEditingDeviceType(null);
-    setName("");
-    setDescription("");
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (deviceType: DeviceType) => {
-    setEditingDeviceType(deviceType);
-    setName(deviceType.name);
-    setDescription(deviceType.description ?? "");
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    if (submitting) return;
-    setIsModalOpen(false);
-    setEditingDeviceType(null);
-    setName("");
-    setDescription("");
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const cleanName = name.trim();
-    const cleanDescription = description.trim();
-
-    if (!cleanName) return;
-    if (!companyId && !editingDeviceType) {
-      notifications.warning({
-        title: "Compania requerida",
-        description: "No se puede crear un tipo de dispositivo sin compania asignada.",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      if (editingDeviceType) {
-        const updated = await updateDeviceType({
-          id: editingDeviceType.id,
-          name: cleanName,
-          description: cleanDescription || null,
-        });
-
-        setDeviceTypes((current) =>
-          current.map((item) => (item.id === updated.id ? updated : item))
-        );
-
-        notifications.success({
-          title: "Tipo de dispositivo actualizado",
-          description: "Los cambios fueron guardados correctamente.",
-        });
-      } else {
-        const created = await createDeviceType({
-          name: cleanName,
-          description: cleanDescription || null,
-          companyId: companyId as string,
-        });
-
-        setDeviceTypes((current) =>
-          [...current, created].sort((a, b) => a.name.localeCompare(b.name))
-        );
-
-        notifications.success({
-          title: "Tipo de dispositivo creado",
-          description: "El tipo de dispositivo fue creado correctamente.",
-        });
-      }
-
-      closeModal();
-    } catch (error) {
-      notifications.error({
-        title: editingDeviceType
-          ? "Error actualizando tipo de dispositivo"
-          : "Error creando tipo de dispositivo",
-        description: "No se pudieron guardar los cambios.",
-      });
-      console.error(error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (deviceType: DeviceType) => {
-    const accepted = window.confirm(`Eliminar el tipo de dispositivo ${deviceType.name}?`);
-    if (!accepted) return;
-
-    setSubmitting(true);
-    try {
-      await deleteDeviceType(deviceType.id);
-      setDeviceTypes((current) => current.filter((item) => item.id !== deviceType.id));
-      notifications.success({
-        title: "Tipo de dispositivo eliminado",
-        description: "El tipo de dispositivo fue eliminado.",
-      });
-    } catch (error) {
-      notifications.error({
-        title: "Error eliminando tipo de dispositivo",
-        description: "No se pudo eliminar el tipo de dispositivo.",
-      });
-      console.error(error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    loading,
+    submitting,
+    isModalOpen,
+    editingDeviceType,
+    name,
+    description,
+    searchTerm,
+    deviceTypeToDelete,
+    filteredDeviceTypes,
+    hasChanges,
+    companyId,
+    canCreate,
+    canUpdate,
+    canDelete,
+    setName,
+    setDescription,
+    setSearchTerm,
+    openCreateModal,
+    openEditModal,
+    closeModal,
+    handleSubmit,
+    askDeleteDeviceType,
+    cancelDeleteDeviceType,
+    confirmDeleteDeviceType,
+  } = useSettingsDeviceTypes();
 
   return (
     <section className="space-y-6">
@@ -189,15 +53,22 @@ export default function SettingsDeviceTypes() {
         )}
       </header>
 
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        maxLength={120}
+        placeholder="Buscar tipos de dispositivos..."
+      />
+
       <div className="space-y-3">
-        {!loading && deviceTypes.length === 0 && (
+        {!loading && filteredDeviceTypes.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            No hay tipos de dispositivos disponibles.
+            No hay tipos de dispositivos para la busqueda.
           </div>
         )}
 
         {!loading &&
-          deviceTypes.map((deviceType) => (
+          filteredDeviceTypes.map((deviceType) => (
             <article
               key={deviceType.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -225,7 +96,7 @@ export default function SettingsDeviceTypes() {
                   {canDelete && (
                     <Button
                       type="button"
-                      onClick={() => handleDelete(deviceType)}
+                      onClick={() => askDeleteDeviceType(deviceType)}
                       disabled={submitting}
                       className="border-red-300 text-red-700 hover:bg-red-50"
                     >
@@ -283,6 +154,15 @@ export default function SettingsDeviceTypes() {
           </Field>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={Boolean(deviceTypeToDelete)}
+        title="Eliminar tipo de dispositivo"
+        message={`Deseas eliminar el tipo de dispositivo ${deviceTypeToDelete?.name ?? "(sin nombre)"}?`}
+        loading={submitting}
+        onCancel={cancelDeleteDeviceType}
+        onConfirm={confirmDeleteDeviceType}
+      />
     </section>
   );
 }
