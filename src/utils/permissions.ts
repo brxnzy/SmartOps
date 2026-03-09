@@ -3,6 +3,7 @@
   read: "Ver",
   update: "Editar",
   delete: "Eliminar",
+  disable: "Deshabilitar",
 };
 
 function toTitleCase(value: string): string {

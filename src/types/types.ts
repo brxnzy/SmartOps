@@ -1,3 +1,6 @@
+import type { Customer } from "./customer.types";
+
+
 export type RegisterInput = {
   name: string;
   email: string;
@@ -8,6 +11,7 @@ export type RegisterInput = {
   companyPhone: string;
   companyRnc: string;
 };
+
 
 export type UserRow = {
   id: string;
@@ -42,6 +46,25 @@ export type UserRoleRow = {
   roles: {
     id: string;
     name: string;
+  } | null;
+};
+
+
+export type CustomerRow = {
+  user_id: string;
+  company_id: string;
+  name: string;
+  id_card: string | null;
+  phone: string | null;
+  tax_id: string;
+  type: Customer["type"];
+  created_at: string;
+};
+
+
+export type RolePermissionRow = {
+  permissions: {
+    code: string;
   } | null;
 };
 

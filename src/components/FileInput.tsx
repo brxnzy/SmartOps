@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { UploadCloud, X } from "lucide-react";
-
-interface FileInputProps extends React.ComponentProps<"input"> {
-  label?: string;
-}
+import type { FileInputProps } from "../types/interfaces";
 
 const FileInput: React.FC<FileInputProps> = ({
   label,

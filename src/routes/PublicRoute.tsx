@@ -11,7 +11,7 @@ export default function PublicRoute({ children }: Props) {
   const { session, initializing } = useAuth();
 
   if (initializing) return <RouteLoading />;
-  if (session) return <Navigate to="/admin" replace />;
+  if (session) return <Navigate to="/app" replace />;
 
   return <>{children}</>;
 }

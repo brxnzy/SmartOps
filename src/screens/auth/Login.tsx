@@ -47,7 +47,7 @@ const Login: React.FC = () => {
                 to="/forgot-password"
                 className="text-sm text-blue-600 hover:underline"
               >
-                Olvidaste tu contraseña
+                Olvidaste tu contraseña?
               </Link>
             </div>
 

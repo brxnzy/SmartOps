@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
-import Sidebar from "../layouts/Sidebar";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
 import DeviceInventory from "../screens/admin/DeviceInventory";
@@ -13,6 +12,9 @@ import UpdatePassword from "../screens/auth/UpdatePassword";
 import VerifyEmail from "../screens/auth/VerifyEmail";
 import Landing from "../screens/landing";
 import AdminDefaultRoute from "./AdminDefaultRoute";
+import AdminAreaRoute from "./AdminAreaRoute";
+import AppEntryRoute from "./AppEntryRoute";
+import CustomerAreaRoute from "./CustomerAreaRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
@@ -20,6 +22,7 @@ import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
+import UsersAdmin from "../screens/admin/Users";
 
 export default function AppRoutes() {
   return (
@@ -27,6 +30,14 @@ export default function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/update-password" element={<UpdatePassword />} />
+      <Route
+        path="/app"
+        element={
+          <ProtectedRoute>
+            <AppEntryRoute />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/login"
@@ -59,7 +70,7 @@ export default function AppRoutes() {
         path="/admin"
         element={
           <ProtectedRoute>
-            <Sidebar />
+            <AdminAreaRoute />
           </ProtectedRoute>
         }
       >
@@ -107,6 +118,14 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="users"
+          element={
+            <PermissionRoute permission={PERMISSIONS.usersRead}>
+              <UsersAdmin />
+            </PermissionRoute>
+          }
+        />
 
         <Route
           path="protocols"
@@ -139,6 +158,15 @@ export default function AppRoutes() {
       </Route>
 
       <Route
+        path="/customer"
+        element={
+          <ProtectedRoute>
+            <CustomerAreaRoute />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/403"
         element={
           <ProtectedRoute>
@@ -147,7 +175,7 @@ export default function AppRoutes() {
         }
       />
 
-      <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/app" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

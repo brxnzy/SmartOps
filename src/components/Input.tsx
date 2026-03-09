@@ -1,6 +1,4 @@
-interface InputProps extends React.ComponentProps<"input"> {
-  icon?: React.ReactNode;
-}
+import type { InputProps } from "../types/interfaces";
 
 const Input: React.FC<InputProps> = ({
   className = "",
