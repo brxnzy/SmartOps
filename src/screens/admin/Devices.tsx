@@ -18,6 +18,7 @@ export default function Devices() {
     name,
     model,
     price,
+    quantity,
     searchTerm,
     protocolId,
     deviceTypeId,
@@ -34,6 +35,7 @@ export default function Devices() {
     setName,
     setModel,
     setPrice,
+    setQuantity,
     setSearchTerm,
     setProtocolId,
     setDeviceTypeId,
@@ -150,6 +152,7 @@ export default function Devices() {
                 !name.trim() ||
                 !model.trim() ||
                 !price.trim() ||
+                (!editingDevice && !quantity.trim()) ||
                 !protocolId ||
                 !deviceTypeId ||
                 !brandId ||
@@ -192,6 +195,19 @@ export default function Devices() {
                 placeholder="Ejemplo: 199.99"
               />
             </Field>
+
+            {!editingDevice && (
+              <Field label="Cantidad">
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={quantity}
+                  onChange={(event) => setQuantity(event.target.value)}
+                  placeholder="Ejemplo: 10"
+                />
+              </Field>
+            )}
           </div>
 
           <div className="space-y-3">

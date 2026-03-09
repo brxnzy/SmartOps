@@ -1,10 +1,11 @@
 export const PERMISSIONS = {
-  dashboardRead: "dashboard:read",
+  dashboardRead: "dashboard.read",
   customersRead: "customers:read",
   devicesRead: "devices.read",
   devicesCreate: "devices.create",
   devicesUpdate: "devices.update",
   devicesDelete: "devices.delete",
+
   rolesRead: "roles.read",
   rolesCreate: "roles.create",
   rolesUpdate: "roles.update",

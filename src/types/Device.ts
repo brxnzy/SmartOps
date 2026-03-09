@@ -83,3 +83,30 @@ export interface UpdateDevicePayload {
   deviceTypeId: number;
   brandId: string;
 }
+
+export interface DeviceInventory {
+  id: string;
+  deviceId: string;
+  quantity: number;
+  status: string | null;
+  lastUpdated: string | null;
+  device: {
+    id: string;
+    name: string;
+    model: string;
+    companyId: string | null;
+  } | null;
+}
+
+export interface CreateDeviceInventoryPayload {
+  deviceId: string;
+  quantity: number;
+  status: string | null;
+}
+
+export interface UpdateDeviceInventoryPayload {
+  id: string;
+  deviceId: string;
+  quantity: number;
+  status: string | null;
+}

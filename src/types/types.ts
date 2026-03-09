@@ -78,3 +78,19 @@ export type DeviceRow = {
   created_at: string | null;
   brand_id: string;
 };
+
+export type DeviceInventoryDeviceJoinRow = {
+  id: string;
+  name: string;
+  model: string;
+  company_id: string | null;
+};
+
+export type DeviceInventoryRow = {
+  id: string;
+  device_id: string;
+  quantity: number;
+  status: string | null;
+  last_updated: string | null;
+  device: DeviceInventoryDeviceJoinRow | null;
+};

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PERMISSIONS } from "../constants/permissions";
 import useAuth from "./useAuth";
 import {
+  createDeviceInventory,
   createDevice,
   deleteDevice,
   getBrandsByCompany,
@@ -27,6 +28,7 @@ const useDevices = () => {
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
   const [price, setPrice] = useState("");
+  const [quantity, setQuantity] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [protocolId, setProtocolId] = useState("");
   const [deviceTypeId, setDeviceTypeId] = useState("");
@@ -80,7 +82,6 @@ const useDevices = () => {
     () => new Map(brands.map((brand) => [brand.id, brand.name])),
     [brands]
   );
-
   const filteredDevices = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return devices;
@@ -104,6 +105,7 @@ const useDevices = () => {
     const cleanName = name.trim();
     const cleanModel = model.trim();
     const cleanPrice = Number(price);
+    const cleanQuantity = Number(quantity);
 
     if (!editingDevice) {
       return Boolean(
@@ -111,6 +113,9 @@ const useDevices = () => {
           cleanModel &&
           price.trim() &&
           !Number.isNaN(cleanPrice) &&
+          quantity.trim() &&
+          !Number.isNaN(cleanQuantity) &&
+          cleanQuantity >= 0 &&
           protocolId &&
           deviceTypeId &&
           brandId
@@ -125,13 +130,14 @@ const useDevices = () => {
       Number(deviceTypeId) !== editingDevice.deviceTypeId ||
       brandId !== editingDevice.brandId
     );
-  }, [brandId, deviceTypeId, editingDevice, model, name, price, protocolId]);
+  }, [brandId, deviceTypeId, editingDevice, model, name, price, protocolId, quantity]);
 
   const openCreateModal = () => {
     setEditingDevice(null);
     setName("");
     setModel("");
     setPrice("");
+    setQuantity("");
     setProtocolId("");
     setDeviceTypeId("");
     setBrandId("");
@@ -143,6 +149,7 @@ const useDevices = () => {
     setName(device.name);
     setModel(device.model);
     setPrice(String(device.price));
+    setQuantity("");
     setProtocolId(device.protocolId);
     setDeviceTypeId(String(device.deviceTypeId));
     setBrandId(device.brandId);
@@ -156,6 +163,7 @@ const useDevices = () => {
     setName("");
     setModel("");
     setPrice("");
+    setQuantity("");
     setProtocolId("");
     setDeviceTypeId("");
     setBrandId("");
@@ -167,11 +175,18 @@ const useDevices = () => {
     const cleanName = name.trim();
     const cleanModel = model.trim();
     const cleanPrice = Number(price);
+    const cleanQuantity = Number(quantity);
 
-    if (!cleanName || !cleanModel || !price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0) {
+    const invalidBaseFields =
+      !cleanName || !cleanModel || !price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0;
+    const invalidQuantity = !quantity.trim() || Number.isNaN(cleanQuantity) || cleanQuantity < 0;
+
+    if (invalidBaseFields || (!editingDevice && invalidQuantity)) {
       notifications.warning({
         title: "Datos invalidos",
-        description: "Nombre, modelo y precio valido son obligatorios.",
+        description: editingDevice
+          ? "Nombre, modelo y precio valido son obligatorios."
+          : "Nombre, modelo, precio y cantidad valida son obligatorios.",
       });
       return;
     }
@@ -220,6 +235,12 @@ const useDevices = () => {
           deviceTypeId: Number(deviceTypeId),
           companyId: companyId as string,
           brandId,
+        });
+
+        await createDeviceInventory({
+          deviceId: created.id,
+          quantity: cleanQuantity,
+          status: cleanQuantity > 0 ? "available" : "out_of_stock",
         });
 
         setDevices((current) => [created, ...current]);
@@ -287,6 +308,7 @@ const useDevices = () => {
     name,
     model,
     price,
+    quantity,
     searchTerm,
     protocolId,
     deviceTypeId,
@@ -303,6 +325,7 @@ const useDevices = () => {
     setName,
     setModel,
     setPrice,
+    setQuantity,
     setSearchTerm,
     setProtocolId,
     setDeviceTypeId,

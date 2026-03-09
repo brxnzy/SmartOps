@@ -1,19 +1,28 @@
 import { supabase } from "../libs/supabase";
 import type {
   Brand,
+  CreateDeviceInventoryPayload,
   Device,
+  DeviceInventory,
   CreateDevicePayload,
   CreateDeviceTypePayload,
   CreateBrandPayload,
   CreateProtocolPayload,
   DeviceType,
   Protocol,
+  UpdateDeviceInventoryPayload,
   UpdateDevicePayload,
   UpdateBrandPayload,
   UpdateDeviceTypePayload,
   UpdateProtocolPayload,
 } from "../types/Device";
-import type { BrandRow, DeviceRow, DeviceTypeRow, ProtocolRow } from "../types/types";
+import type {
+  BrandRow,
+  DeviceInventoryRow,
+  DeviceRow,
+  DeviceTypeRow,
+  ProtocolRow,
+} from "../types/types";
 
 function mapProtocol(row: ProtocolRow): Protocol {
   return {
@@ -54,6 +63,24 @@ function mapDevice(row: DeviceRow): Device {
     companyId: row.company_id,
     createdAt: row.created_at,
     brandId: row.brand_id,
+  };
+}
+
+function mapDeviceInventory(row: DeviceInventoryRow): DeviceInventory {
+  return {
+    id: row.id,
+    deviceId: row.device_id,
+    quantity: row.quantity,
+    status: row.status,
+    lastUpdated: row.last_updated,
+    device: row.device
+      ? {
+          id: row.device.id,
+          name: row.device.name,
+          model: row.device.model,
+          companyId: row.device.company_id,
+        }
+      : null,
   };
 }
 
@@ -266,5 +293,65 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
 
 export async function deleteDevice(deviceId: string): Promise<void> {
   const { error } = await supabase.from("devices").delete().eq("id", deviceId);
+  if (error) throw error;
+}
+
+export async function getDeviceInventoryByCompany(companyId: string | null): Promise<DeviceInventory[]> {
+  if (!companyId) return [];
+
+  const { data, error } = await supabase
+    .from("device_inventory")
+    .select(
+      "id, device_id, quantity, status, last_updated, device:devices!device_inventory_device_id_fkey!inner ( id, name, model, company_id )"
+    )
+    .eq("device.company_id", companyId)
+    .order("last_updated", { ascending: false })
+    .returns<DeviceInventoryRow[]>();
+
+  if (error) throw error;
+
+  return (data ?? []).map(mapDeviceInventory);
+}
+
+export async function createDeviceInventory(payload: CreateDeviceInventoryPayload): Promise<DeviceInventory> {
+  const { data, error } = await supabase
+    .from("device_inventory")
+    .insert({
+      device_id: payload.deviceId,
+      quantity: payload.quantity,
+      status: payload.status,
+    })
+    .select(
+      "id, device_id, quantity, status, last_updated, device:devices!device_inventory_device_id_fkey ( id, name, model, company_id )"
+    )
+    .single<DeviceInventoryRow>();
+
+  if (error) throw error;
+
+  return mapDeviceInventory(data);
+}
+
+export async function updateDeviceInventory(payload: UpdateDeviceInventoryPayload): Promise<DeviceInventory> {
+  const { data, error } = await supabase
+    .from("device_inventory")
+    .update({
+      device_id: payload.deviceId,
+      quantity: payload.quantity,
+      status: payload.status,
+      last_updated: new Date().toISOString(),
+    })
+    .eq("id", payload.id)
+    .select(
+      "id, device_id, quantity, status, last_updated, device:devices!device_inventory_device_id_fkey ( id, name, model, company_id )"
+    )
+    .single<DeviceInventoryRow>();
+
+  if (error) throw error;
+
+  return mapDeviceInventory(data);
+}
+
+export async function deleteDeviceInventory(inventoryId: string): Promise<void> {
+  const { error } = await supabase.from("device_inventory").delete().eq("id", inventoryId);
   if (error) throw error;
 }
