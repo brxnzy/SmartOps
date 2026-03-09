@@ -8,6 +8,19 @@ import type {
 } from "../types/userManagement.types";
 import { createUserViaInvitation } from "./userInvitations.service";
 
+interface CompanyUserStatus {
+  userId: string;
+  bannedUntil: string | null;
+  isDisabled: boolean;
+}
+
+interface UserStatusFunctionResponse {
+  statuses?: CompanyUserStatus[];
+  status?: CompanyUserStatus;
+  error?: string;
+  message?: string;
+}
+
 function buildErrorMessage(error: PostgrestError | null, fallback: string): string {
   if (!error) return fallback;
 
@@ -24,6 +37,60 @@ function buildErrorMessage(error: PostgrestError | null, fallback: string): stri
 
 function sanitizeSearch(value: string): string {
   return value.replace(/[(),]/g, " ").trim();
+}
+
+function mapUserStatusError(raw: string): string {
+  const normalized = raw.trim();
+  let message = normalized;
+
+  try {
+    const parsed = JSON.parse(normalized) as { error?: string; message?: string };
+    message = parsed.error ?? parsed.message ?? normalized;
+  } catch {
+    // Keep original message when response is not JSON.
+  }
+
+  return message || "No se pudo actualizar el estado del usuario.";
+}
+
+async function requestUserStatus(payload: Record<string, unknown>): Promise<UserStatusFunctionResponse> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  const functionUrl =
+    (import.meta.env.VITE_SUPABASE_USER_STATUS_URL as string | undefined) ??
+    `${supabaseUrl?.replace(/\/$/, "")}/functions/v1/user_status`;
+
+  if (!supabaseUrl || !supabaseAnonKey || !functionUrl) {
+    throw new Error("Faltan variables de entorno de Supabase para gestionar estado de usuarios.");
+  }
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw new Error(sessionError.message || "No se pudo validar la sesion actual.");
+  }
+
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Tu sesion expiro. Inicia sesion nuevamente.");
+  }
+
+  const response = await fetch(functionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[users.service] user_status_error", response.status, errorText);
+    throw new Error(mapUserStatusError(errorText));
+  }
+
+  return (await response.json().catch(() => ({}))) as UserStatusFunctionResponse;
 }
 
 function mapUserRows(
@@ -45,7 +112,7 @@ function mapUserRows(
   }>
 ): CompanyUser[] {
   return rows
-    .map((row) => {
+    .map((row): CompanyUser | null => {
       if (!row.user_id || !row.company_id || !row.role_id || !row.users || !row.roles) {
         return null;
       }
@@ -59,7 +126,9 @@ function mapUserRows(
         roleId: row.role_id,
         roleName: row.roles.name,
         createdAt: row.users.created_at,
-      } satisfies CompanyUser;
+        bannedUntil: null,
+        isDisabled: false,
+      };
     })
     .filter((item): item is CompanyUser => Boolean(item));
 }
@@ -116,6 +185,42 @@ export async function listUsers(companyId: string, query: CompanyUserQuery): Pro
   return {
     items,
     total: mapped.length,
+  };
+}
+
+export async function listCompanyUsersStatus(companyId: string): Promise<CompanyUserStatus[]> {
+  const response = await requestUserStatus({
+    mode: "list_company_users_status",
+    companyId,
+  });
+
+  return (response.statuses ?? []).map((status) => ({
+    userId: status.userId,
+    bannedUntil: status.bannedUntil ?? null,
+    isDisabled: Boolean(status.isDisabled),
+  }));
+}
+
+export async function setCompanyUserDisabledState(input: {
+  companyId: string;
+  targetUserId: string;
+  disabled: boolean;
+}): Promise<CompanyUserStatus> {
+  const response = await requestUserStatus({
+    mode: "set_user_disabled_state",
+    companyId: input.companyId,
+    targetUserId: input.targetUserId,
+    disabled: input.disabled,
+  });
+
+  if (!response.status?.userId) {
+    throw new Error("No se recibio confirmacion de estado del usuario.");
+  }
+
+  return {
+    userId: response.status.userId,
+    bannedUntil: response.status.bannedUntil ?? null,
+    isDisabled: Boolean(response.status.isDisabled),
   };
 }
 

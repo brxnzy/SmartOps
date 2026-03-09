@@ -57,6 +57,11 @@ export default function UserTable({
                       <BadgeCheck size={14} />
                       {user.roleName}
                     </span>
+                    {user.isDisabled && (
+                      <span className="ml-2 inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                        Deshabilitado
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {isSelf ? (
@@ -80,9 +85,13 @@ export default function UserTable({
                             type="button"
                             onClick={() => onDisable(user)}
                             disabled={disabled}
-                            className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                            className={
+                              user.isDisabled
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                            }
                           >
-                            Deshabilitar
+                            {user.isDisabled ? "Habilitar" : "Deshabilitar"}
                           </Button>
                         )}
                       </div>

@@ -7,6 +7,8 @@
   roleId: string;
   roleName: string;
   createdAt: string;
+  bannedUntil: string | null;
+  isDisabled: boolean;
 }
 
 export interface CompanyUserInput {

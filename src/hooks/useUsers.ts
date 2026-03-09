@@ -1,7 +1,13 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifications } from "../services/notification.service";
 import { getRolesByCompany } from "../services/role.service";
-import { createUserWithInvitation, listUsers, updateUserRole } from "../services/users.service";
+import {
+  createUserWithInvitation,
+  listCompanyUsersStatus,
+  listUsers,
+  setCompanyUserDisabledState,
+  updateUserRole,
+} from "../services/users.service";
 import type { Role } from "../types/Role";
 import type { CompanyUser, CompanyUserInput, CompanyUsersResult } from "../types/userManagement.types";
 
@@ -81,7 +87,27 @@ export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsers
         roleId: query.roleId === "all" ? undefined : query.roleId,
       });
 
-      setItems(result.items);
+      let mergedItems = result.items;
+
+      try {
+        const statuses = await listCompanyUsersStatus(companyId);
+        const statusByUserId = new Map(statuses.map((status) => [status.userId, status]));
+
+        mergedItems = result.items.map((item) => {
+          const status = statusByUserId.get(item.id);
+          if (!status) return item;
+
+          return {
+            ...item,
+            bannedUntil: status.bannedUntil,
+            isDisabled: status.isDisabled,
+          };
+        });
+      } catch (statusError) {
+        console.error(statusError);
+      }
+
+      setItems(mergedItems);
       setTotal(result.total);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error cargando usuarios.";
@@ -163,6 +189,35 @@ export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsers
     [companyId, fetchUsers]
   );
 
+  const toggleDisabledOne = useCallback(
+    async (user: CompanyUser) => {
+      if (!companyId) throw new Error("No se encontro compania para actualizar usuarios.");
+
+      const nextDisabledState = !user.isDisabled;
+
+      setSubmitting(true);
+      try {
+        await setCompanyUserDisabledState({
+          companyId,
+          targetUserId: user.id,
+          disabled: nextDisabledState,
+        });
+
+        notifications.success({
+          title: nextDisabledState ? "Usuario deshabilitado" : "Usuario habilitado",
+          description: nextDisabledState
+            ? "El usuario quedo bloqueado para iniciar sesion."
+            : "El usuario ya puede iniciar sesion nuevamente.",
+        });
+
+        await fetchUsers();
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [companyId, fetchUsers]
+  );
+
   const openCreateModal = () => {
     setSelectedUser(null);
     setModalOpen(true);
@@ -210,6 +265,7 @@ export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsers
     openEditModal,
     closeModal,
     handleSubmit,
+    toggleUserDisabled: toggleDisabledOne,
     refresh: fetchUsers,
     setSearch,
     setRoleId,

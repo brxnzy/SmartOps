@@ -33,6 +33,7 @@ export default function UsersAdmin() {
     openEditModal,
     closeModal,
     handleSubmit,
+    toggleUserDisabled,
     refresh,
     setSearch,
     setRoleId,
@@ -51,7 +52,7 @@ export default function UsersAdmin() {
     [items, total]
   );
 
-  const handleDisableClick = (user: CompanyUser) => {
+  const handleDisableClick = async (user: CompanyUser) => {
     if (user.id === authUser?.id) {
       notifications.warning({
         title: "Accion no permitida",
@@ -60,10 +61,14 @@ export default function UsersAdmin() {
       return;
     }
 
-    notifications.info({
-      title: "Proximamente",
-      description: `La deshabilitacion de ${user.name} se implementara luego.`,
-    });
+    try {
+      await toggleUserDisabled(user);
+    } catch (error) {
+      notifications.error({
+        title: "Operacion fallida",
+        description: error instanceof Error ? error.message : "No se pudo actualizar el estado del usuario.",
+      });
+    }
   };
 
   const handleEditClick = (user: CompanyUser) => {
