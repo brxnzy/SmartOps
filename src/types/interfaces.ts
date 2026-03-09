@@ -69,7 +69,7 @@ export interface CreateInvitationInput {
 }
 
 export interface EmailInvitationPayload {
-  mode?: "invite_existing_customer" | "invite_new_customer" | "rollback_auth_user";
+  mode?: "invite_existing_customer" | "invite_new_customer" | "invite_new_user" | "rollback_auth_user";
   email: string;
   redirectTo: string;
   customerId?: string;
@@ -80,6 +80,9 @@ export interface EmailInvitationPayload {
   customerType?: "hogar" | "comercio" | "empresa";
   customerTaxId?: string;
   customerPhone?: string | null;
+  userName?: string;
+  userIdCard?: string | null;
+  roleId?: string;
   companyName?: string;
   authUserId?: string;
 }
@@ -105,7 +108,7 @@ export interface InputProps extends React.ComponentProps<"input"> {
 
 
 export interface EmailInvitationPayload {
-  mode?: "invite_existing_customer" | "invite_new_customer" | "rollback_auth_user";
+  mode?: "invite_existing_customer" | "invite_new_customer" | "invite_new_user" | "rollback_auth_user";
   email: string;
   redirectTo: string;
   customerId?: string;
@@ -116,6 +119,9 @@ export interface EmailInvitationPayload {
   customerType?: "hogar" | "comercio" | "empresa";
   customerTaxId?: string;
   customerPhone?: string | null;
+  userName?: string;
+  userIdCard?: string | null;
+  roleId?: string;
   authUserId?: string;
 }
 

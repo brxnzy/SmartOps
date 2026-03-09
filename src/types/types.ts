@@ -68,13 +68,6 @@ export type RolePermissionRow = {
   } | null;
 };
 
-
-export type UserRow = {
-  id: string;
-  name: string;
-  id_card: string | null;
-}
-  
 export type ProtocolRow = {
   id: number;
   name: string | null;

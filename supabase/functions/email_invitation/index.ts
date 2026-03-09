@@ -106,6 +106,9 @@ Deno.serve(async (req: Request) => {
       customerType,
       customerTaxId,
       customerPhone,
+      userName,
+      userIdCard,
+      roleId,
       authUserId,
     } =
       (await req.json()) as EmailInvitationPayload;
@@ -173,6 +176,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const isInviteNewCustomer = mode === "invite_new_customer";
+    const isInviteNewUser = mode === "invite_new_user";
 
     let customerResolvedName = customerName ?? "";
     let customerResolvedIdCard: string | null = customerIdCard ?? null;
@@ -180,7 +184,7 @@ Deno.serve(async (req: Request) => {
     let customerResolvedTaxId: string | null = null;
     let customerResolvedPhone: string | null = null;
 
-    if (!isInviteNewCustomer) {
+    if (!isInviteNewCustomer && !isInviteNewUser) {
       if (!customerId) {
         return jsonResponse(400, { error: "customerId es requerido para invitar cliente existente." });
       }
@@ -212,6 +216,22 @@ Deno.serve(async (req: Request) => {
       customerResolvedType = customerData.type;
       customerResolvedTaxId = customerData.tax_id ?? null;
       customerResolvedPhone = customerData.phone ?? null;
+    }
+
+    if (isInviteNewUser) {
+      customerResolvedName = userName?.trim() ?? "";
+      customerResolvedIdCard = userIdCard ?? null;
+      customerResolvedType = "internal";
+      customerResolvedTaxId = null;
+      customerResolvedPhone = null;
+
+      if (!customerResolvedName) {
+        return jsonResponse(400, { error: "userName es requerido para invitar un usuario interno." });
+      }
+
+      if (!roleId) {
+        return jsonResponse(400, { error: "roleId es requerido para invitar un usuario interno." });
+      }
     }
 
     const { data: companyData, error: companyError } = await withTimeout(
@@ -266,7 +286,7 @@ Deno.serve(async (req: Request) => {
     if (inviteError) {
       const message = inviteError.message.toLowerCase();
       if (message.includes("already registered") || message.includes("already been invited")) {
-        if (isInviteNewCustomer) {
+        if (isInviteNewCustomer || isInviteNewUser) {
           return jsonResponse(409, {
             error: "El correo ya esta registrado o ya tiene una invitacion activa.",
           });
@@ -281,6 +301,77 @@ Deno.serve(async (req: Request) => {
         });
       }
       return jsonResponse(400, { error: inviteError.message });
+    }
+
+    if (isInviteNewUser) {
+      const createdAuthUserId = inviteData.user?.id;
+      if (!createdAuthUserId) {
+        return jsonResponse(500, { error: "No se recibio user.id al invitar." });
+      }
+
+      try {
+        const { data: roleData, error: roleError } = await withTimeout(
+          "db.fetchRole",
+          adminClient
+            .from("roles")
+            .select("id, name, company_id")
+            .eq("id", roleId!)
+            .maybeSingle<{ id: string; name: string; company_id: string | null }>(),
+          requestId
+        );
+
+        if (roleError || !roleData?.id) {
+          throw new Error(roleError?.message || "No se encontro el rol indicado.");
+        }
+
+        if (roleData.company_id && roleData.company_id !== companyId) {
+          throw new Error("El rol no pertenece a la compania seleccionada.");
+        }
+
+        const { error: userInsertError } = await withTimeout(
+          "db.insertUser",
+          adminClient.from("users").insert({
+            id: createdAuthUserId,
+            name: customerResolvedName,
+            id_card: customerResolvedIdCard ?? null,
+          }),
+          requestId
+        );
+        if (userInsertError) throw new Error(userInsertError.message);
+
+        const { data: insertedUserRole, error: roleInsertError } = await withTimeout(
+          "db.insertUserRole",
+          adminClient
+            .from("user_roles")
+            .insert({
+              user_id: createdAuthUserId,
+              role_id: roleData.id,
+              company_id: companyId,
+            })
+            .select("id")
+            .single<{ id: string }>(),
+          requestId
+        );
+        if (roleInsertError) throw new Error(roleInsertError.message);
+
+        return jsonResponse(200, {
+          success: true,
+          authUserId: createdAuthUserId,
+          user: {
+            id: createdAuthUserId,
+            userRoleId: insertedUserRole.id,
+            companyId,
+            name: customerResolvedName,
+            idCard: customerResolvedIdCard ?? null,
+            roleId: roleData.id,
+            roleName: roleData.name,
+            createdAt: new Date().toISOString(),
+          },
+        });
+      } catch (createError) {
+        await withTimeout("auth.deleteUser.rollback", adminClient.auth.admin.deleteUser(createdAuthUserId), requestId);
+        throw createError;
+      }
     }
 
     if (isInviteNewCustomer) {

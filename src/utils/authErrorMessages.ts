@@ -1,6 +1,7 @@
 import type { ErrorLike } from "../types/interfaces";
 const CODE_MESSAGES: Record<string, string> = {
   invalid_credentials: "Credenciales invalidas.",
+  user_banned: "El usuario esta desactivado. Contacte con el admin de su compania.",
   email_not_confirmed: "Debes confirmar tu correo antes de iniciar sesion.",
   email_address_invalid: "El correo electronico no es valido.",
   signup_disabled: "El registro de usuarios esta deshabilitado.",
@@ -16,6 +17,10 @@ const MESSAGE_PATTERNS: Array<{ pattern: RegExp; translated: string }> = [
   {
     pattern: /invalid login credentials/i,
     translated: "Correo o contrasena incorrectos.",
+  },
+  {
+    pattern: /user is banned|banned user|user banned/i,
+    translated: "El usuario esta desactivado. Contacte con el admin de su compania.",
   },
   {
     pattern: /user already registered/i,

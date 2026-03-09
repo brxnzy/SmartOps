@@ -102,7 +102,7 @@ export default function Sidebar() {
                   <button
                     type="button"
                     onClick={() => toggleGroup(groupKey, childPaths)}
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-md font-medium text-slate-500 transition hover:bg-white hover:text-slate-900"
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-md font-medium text-slate-500 transition  hover:text-blue-500"
                   >
                     <span className="flex items-center gap-4">
                       <span>{item.icon}</span>
@@ -123,8 +123,8 @@ export default function Sidebar() {
                           className={({ isActive }) =>
                             `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
                               isActive
-                                ? "bg-white text-blue-500"
-                                : "text-slate-500 hover:bg-white hover:text-slate-900"
+                                ? " text-blue-500"
+                                : "text-slate-500  hover:text-blue-500"
                             }`
                           }
                         >
@@ -148,8 +148,8 @@ export default function Sidebar() {
                 className={({ isActive }) =>
                   `flex items-center gap-4 rounded-xl px-3 py-3 text-left text-md font-medium transition ${
                     isActive
-                      ? "bg-white text-blue-500 "
-                      : "text-slate-500 hover:bg-white hover:text-slate-900"
+                      ? " text-blue-500 "
+                      : "text-slate-500  hover:text-blue-500"
                   }`
                 }
               >
@@ -185,7 +185,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
+      <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10">
         <div className="mb-4 flex items-center justify-between lg:hidden">
           <button
             type="button"
