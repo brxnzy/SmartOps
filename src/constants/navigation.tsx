@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, Cpu,HardDrive, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
+import { UsersRound,Building2, Cpu,HardDrive, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints, Truck } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -39,6 +39,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/devices",
         permission: PERMISSIONS.devicesRead,
         icon: <Cpu size={19} />,
+      },
+      {
+        name: "Proveedores",
+        to: "/admin/suppliers",
+        permission: PERMISSIONS.suppliersRead,
+        icon: <Truck size={19} />,
       },
     ],
   },

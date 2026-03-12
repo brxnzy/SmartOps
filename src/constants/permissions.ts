@@ -9,7 +9,10 @@ export const PERMISSIONS = {
   devicesCreate: "devices.create",
   devicesUpdate: "devices.update",
   devicesDelete: "devices.delete",
-
+  suppliersRead: "suppliers.read",
+  suppliersCreate: "suppliers.create",
+  suppliersUpdate: "suppliers.update",
+  suppliersDelete: "suppliers.delete",
   rolesRead: "roles.read",
   rolesCreate: "roles.create",
   rolesUpdate: "roles.update",
