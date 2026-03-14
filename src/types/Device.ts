@@ -1,12 +1,12 @@
 export interface Protocol {
-  id: number;
+  id: string;
   name: string | null;
   companyId: string | null;
   createdAt: string | null;
 }
 
 export interface DeviceType {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
   companyId: string | null;
@@ -19,7 +19,7 @@ export interface CreateProtocolPayload {
 }
 
 export interface UpdateProtocolPayload {
-  id: number;
+  id: string;
   name: string | null;
 }
 
@@ -30,7 +30,7 @@ export interface CreateDeviceTypePayload {
 }
 
 export interface UpdateDeviceTypePayload {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
 }
@@ -58,7 +58,7 @@ export interface Device {
   model: string;
   price: number;
   protocolId: string;
-  deviceTypeId: number;
+  deviceTypeId: string;
   companyId: string;
   createdAt: string | null;
   brandId: string;
@@ -69,7 +69,7 @@ export interface CreateDevicePayload {
   model: string;
   price: number;
   protocolId: string;
-  deviceTypeId: number;
+  deviceTypeId: string;
   companyId: string;
   brandId: string;
 }
@@ -80,7 +80,7 @@ export interface UpdateDevicePayload {
   model: string;
   price: number;
   protocolId: string;
-  deviceTypeId: number;
+  deviceTypeId: string;
   brandId: string;
 }
 

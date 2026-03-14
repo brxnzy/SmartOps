@@ -129,7 +129,7 @@ export async function updateProtocol(payload: UpdateProtocolPayload): Promise<Pr
   return mapProtocol(data);
 }
 
-export async function deleteProtocol(protocolId: number): Promise<void> {
+export async function deleteProtocol(protocolId: string): Promise<void> {
   const { error } = await supabase.from("protocols").delete().eq("id", protocolId);
   if (error) throw error;
 }
@@ -183,7 +183,7 @@ export async function updateDeviceType(payload: UpdateDeviceTypePayload): Promis
   return mapDeviceType(data);
 }
 
-export async function deleteDeviceType(deviceTypeId: number): Promise<void> {
+export async function deleteDeviceType(deviceTypeId: string): Promise<void> {
   const { error } = await supabase.from("device_types").delete().eq("id", deviceTypeId);
   if (error) throw error;
 }

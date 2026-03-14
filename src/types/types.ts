@@ -69,14 +69,14 @@ export type RolePermissionRow = {
 };
 
 export type ProtocolRow = {
-  id: number;
+  id: string;
   name: string | null;
   company_id: string | null;
   created_at: string | null;
 };
 
 export type DeviceTypeRow = {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
   company_id: string | null;
@@ -96,7 +96,7 @@ export type DeviceRow = {
   model: string;
   price: number | string;
   protocol_id: string;
-  device_type_id: number;
+  device_type_id: string;
   company_id: string;
   created_at: string | null;
   brand_id: string;

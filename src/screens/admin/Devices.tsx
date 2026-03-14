@@ -23,6 +23,7 @@ export default function Devices() {
     protocolId,
     deviceTypeId,
     brandId,
+    inventoryQuantityByDeviceId,
     hasChanges,
     filteredDevices,
     companyId,
@@ -90,7 +91,10 @@ export default function Devices() {
                 <div className="space-y-1">
                   <h2 className="text-base font-semibold text-slate-800">{device.name}</h2>
                   <p className="text-sm text-slate-600">Modelo: {device.model}</p>
-                  <p className="text-sm text-slate-600">Precio: USD {device.price.toFixed(2)}</p>
+                  <p className="text-sm text-slate-600">Precio: {device.price.toFixed(2)}</p>
+                  <p className="text-sm text-slate-600">
+                    Cantidad: {inventoryQuantityByDeviceId.get(device.id) ?? 0}
+                  </p>
                   <p className="text-sm text-slate-500">
                     Protocolo: {protocolNameById.get(device.protocolId) ?? "No definido"}
                   </p>
@@ -233,11 +237,11 @@ export default function Devices() {
                 className="block w-full py-3 px-3 bg-white border-2 border-gray-400 rounded-lg focus:border-blue-500 focus:ring-blue-300 focus:outline-none"
               >
                 <option value="">Selecciona un tipo</option>
-                {deviceTypes.map((deviceType) => (
-                  <option key={deviceType.id} value={String(deviceType.id)}>
-                    {deviceType.name}
-                  </option>
-                ))}
+                    {deviceTypes.map((deviceType) => (
+                      <option key={deviceType.id} value={deviceType.id}>
+                        {deviceType.name}
+                      </option>
+                    ))}
               </select>
             </Field>
 
