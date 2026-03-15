@@ -1,4 +1,4 @@
-import { Building2, Home, Store, UserPen } from "lucide-react";
+import { Building2, Eye, Home, Store, UserPen } from "lucide-react";
 import Button from "./Button";
 import type { Customer } from "../types/customer.types";
 import type { CustomerTableProps } from "../types/interfaces";
@@ -29,6 +29,7 @@ export default function CustomerTable({
   disabled = false,
   onEdit,
   onDelete,
+  onViewDetail,
   onPageChange,
 }: CustomerTableProps) {
   return (
@@ -65,6 +66,15 @@ export default function CustomerTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => onViewDetail(customer)}
+                      disabled={disabled}
+                      icon={<Eye size={14} />}
+                      className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    >
+                      Detalle 360
+                    </Button>
                     <Button
                       type="button"
                       onClick={() => onEdit(customer)}

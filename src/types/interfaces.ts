@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
 import type { CustomerInput} from "../types/customer.types";
+import type { Customer360BasicProfile, Customer360Kpis } from "./customerProfile360.types";
 
 export interface CustomerSubmitOptions {
   invitationEmail?: string;
@@ -49,6 +50,7 @@ export interface CustomerTableProps {
   disabled?: boolean;
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
+  onViewDetail: (customer: Customer) => void;
   onPageChange: (page: number) => void;
 }
 
@@ -128,4 +130,54 @@ export interface EmailInvitationPayload {
 export interface CallerRoleRow {
   company_id: string;
   roles: { name: string } | Array<{ name: string }> | null;
+}
+
+
+export interface KpiGridProps {
+  kpis: Customer360Kpis;
+}
+
+export interface EmptyStateProps {
+  text: string;
+}
+
+export interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: "sm" | "md" | "lg" | "xl";
+  subtitle?: string;
+  overlayClassName?: string;
+  backdropClassName?: string;
+  containerClassName?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
+  titleClassName?: string;
+  subtitleClassName?: string;
+  closeClassName?: string;
+  showCloseButton?: boolean;
+  hideHeader?: boolean;
+  header?: ReactNode;
+}
+
+
+export interface EditCustomerModalProps {
+  open: boolean;
+  onClose: () => void;
+  companyId: string | null;
+  customerId: string | undefined;
+  profile: Customer360BasicProfile;
+  onSaved: () => Promise<void>;
+}
+
+
+export interface QuoteModalProps {
+  open: boolean;
+  onClose: () => void;
+  companyId: string | null;
+  customerId: string | undefined;
+  onSaved: () => Promise<void>;
 }
