@@ -59,10 +59,16 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <HardDrive size={19} />,
       },
       {
+        name: "Mi cuenta",
+        to: "/admin/account",
+        icon: <User size={19} />,
+      },
+      {
         name: "Marcas",
         to: "/admin/brands",
         permission: PERMISSIONS.settingsBrandsRead,
         icon: <Building2 size={19} />,
+       }
       },
     ],
   },

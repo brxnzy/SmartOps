@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ChevronDown, CircleUserRound, LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, UserRound, X } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import useSidebar from "../hooks/useSidebar";
@@ -167,10 +167,20 @@ export default function Sidebar() {
         </nav>
 
         <div className="mt-auto space-y-4 pt-8">
-          <div className="rounded-2xl  text-sm">
-            <div className="mt-2 flex items-center gap-2 text-slate-800">
-              <CircleUserRound size={40} className="text-slate-500" />
-              <p className="truncate font-semibold text-md">{userProfile?.name ?? "Usuario"} | {roleProfile?.name ?? "Sin rol"}</p>
+          <div className="rounded-2xl text-sm">
+            <div className="mt-2 flex items-center gap-3 text-slate-800">
+              {userProfile?.photoUrl ? (
+                <img
+                  src={userProfile.photoUrl}
+                  alt={userProfile?.name ?? "Foto de perfil"}
+                  className="h-10 w-10 rounded-full object-cover border border-slate-200 bg-white"
+                />
+              ) : (
+                <UserRound size={40} className="text-slate-500" />
+              )}
+              <p className="truncate font-semibold text-md">
+                {userProfile?.name ?? "Usuario"} | {roleProfile?.name ?? "Sin rol"}
+              </p>
             </div>
             <p className="mt-1 truncate text-xs text-slate-500"></p>
           </div>

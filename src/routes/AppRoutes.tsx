@@ -23,6 +23,7 @@ import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import UsersAdmin from "../screens/admin/Users";
+import Account from "../screens/admin/Account";
 
 export default function AppRoutes() {
   return (
@@ -141,6 +142,14 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
               <SettingsDeviceTypes />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="account"
+          element={
+            <PermissionRoute permission={PERMISSIONS.accountUpdate}>
+              <Account />
             </PermissionRoute>
           }
         />

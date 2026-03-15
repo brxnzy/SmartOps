@@ -17,6 +17,7 @@ export type UserRow = {
   id: string;
   name: string;
   id_card: string | null;
+  photo_url?: string | null;
 };
 
 export type RoleRow = {

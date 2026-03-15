@@ -104,6 +104,7 @@ function mapUserRows(
       name: string;
       id_card: string | null;
       created_at: string;
+      photo_url: string | null;
     } | null;
     roles: {
       id: string;
@@ -123,6 +124,7 @@ function mapUserRows(
         companyId: row.company_id,
         name: row.users.name,
         idCard: row.users.id_card,
+        photoUrl: row.users.photo_url ?? null,
         roleId: row.role_id,
         roleName: row.roles.name,
         createdAt: row.users.created_at,
@@ -137,7 +139,7 @@ export async function listUsers(companyId: string, query: CompanyUserQuery): Pro
   const { data, error } = await supabase
     .from("user_roles")
     .select(
-      "id, user_id, company_id, role_id, users:user_id ( id, name, id_card, created_at ), roles:role_id ( id, name )"
+      "id, user_id, company_id, role_id, users:user_id ( id, name, id_card, created_at, photo_url ), roles:role_id ( id, name )"
     )
     .eq("company_id", companyId)
     .returns<
@@ -151,6 +153,7 @@ export async function listUsers(companyId: string, query: CompanyUserQuery): Pro
           name: string;
           id_card: string | null;
           created_at: string;
+          photo_url: string | null;
         } | null;
         roles: {
           id: string;
