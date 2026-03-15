@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import Button from "../../components/Button";
 import Checkbox from "../../components/Checkbox";
+import ConfirmModal from "../../components/ConfirmModal";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
@@ -15,22 +16,28 @@ export default function Roles() {
     loading,
     submitting,
     editingRoleId,
+    roleToDelete,
+    searchTerm,
     newRoleName,
     editingName,
     editingPermissionCodes,
     hasEditingChanges,
+    filteredRoles,
     companyId,
     canCreateRole,
     canUpdateRole,
     canDeleteRole,
     setNewRoleName,
     setEditingName,
+    setSearchTerm,
     handleCreateRole,
     startEdit,
     cancelEdit,
     toggleEditingPermission,
     handleUpdateRole,
-    handleDeleteRole,
+    askDeleteRole,
+    cancelDeleteRole,
+    confirmDeleteRole,
   } = useRoles();
 
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
@@ -87,15 +94,22 @@ export default function Roles() {
         )}
       </header>
 
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        maxLength={120}
+        placeholder="Buscar roles..."
+      />
+
       <div className="space-y-3">
-        {!loading && roles.length === 0 && (
+        {!loading && filteredRoles.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            No hay roles disponibles.
+            No hay roles disponibles para la busqueda.
           </div>
         )}
 
         {!loading &&
-          roles.map((role) => {
+          filteredRoles.map((role) => {
             const isEditing = editingRoleId === role.id;
             const isOpen = isEditing || expandedRoleId === role.id;
             const isGlobalAdmin = role.companyId === null && role.name.toLowerCase() === "admin";
@@ -140,7 +154,7 @@ export default function Roles() {
                     {canDeleteRole && !isEditing && !isGlobalAdmin && (
                       <Button
                         type="button"
-                        onClick={() => handleDeleteRole(role)}
+                        onClick={() => askDeleteRole(role)}
                         disabled={submitting}
                         className="border-red-300 text-red-700 hover:bg-red-50"
                       >
@@ -282,6 +296,15 @@ export default function Roles() {
           )}
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={Boolean(roleToDelete)}
+        title="Eliminar rol"
+        message={`Deseas eliminar el rol ${roleToDelete?.name ?? "(sin nombre)"}?`}
+        loading={submitting}
+        onCancel={cancelDeleteRole}
+        onConfirm={confirmDeleteRole}
+      />
     </section>
   );
 }
