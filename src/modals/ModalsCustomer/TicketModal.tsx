@@ -1,61 +1,30 @@
-import { useEffect, useState } from "react";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
-import { createCustomerTicket } from "../../services/customerProfile360.service";
-import { notifications } from "../../services/notification.service";
+import { useModalCustomer } from "../../hooks/useModalCustomer";
+import type { TicketModalProps } from "../../types/interfaces";
 
-interface TicketModalProps {
-  open: boolean;
-  onClose: () => void;
-  companyId: string | null;
-  customerId: string | undefined;
-  onSaved: () => Promise<void>;
-}
 
-export default function TicketModal({ open, onClose, companyId, customerId, onSaved }: TicketModalProps) {
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState("media");
-  const [submitting, setSubmitting] = useState(false);
+export default function TicketModal({ open, onClose, companyId, customerId, onSaved, profile }: TicketModalProps) {
+  const {
+    title,
+    submitting,
+    priority,
+    setPriority, 
+    setTitle,
+    handleCreateTicket,
+  } = useModalCustomer(
+    {
+    open,
+    onClose,
+    companyId,
+    customerId,
+    onSaved,
+    profile
+  })
+  
 
-  useEffect(() => {
-    if (!open) return;
-    setTitle("");
-    setPriority("media");
-  }, [open]);
-
-  const handleCreate = async () => {
-    if (!companyId || !customerId) return;
-    if (!title.trim()) {
-      notifications.warning({
-        title: "Titulo requerido",
-        description: "Debes escribir el titulo del ticket.",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await createCustomerTicket(companyId, customerId, {
-        title: title.trim(),
-        priority,
-      });
-      notifications.success({
-        title: "Ticket creado",
-        description: "El ticket se registro correctamente.",
-      });
-      onClose();
-      await onSaved();
-    } catch (err) {
-      notifications.error({
-        title: "No se pudo crear ticket",
-        description: err instanceof Error ? err.message : "Error inesperado.",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <Modal open={open} onClose={onClose} title="Nuevo ticket">
@@ -91,7 +60,7 @@ export default function TicketModal({ open, onClose, companyId, customerId, onSa
           </Button>
           <Button
             type="button"
-            onClick={() => void handleCreate()}
+            onClick={() => void handleCreateTicket()}
             disabled={submitting}
             className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
           >

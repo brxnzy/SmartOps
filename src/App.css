@@ -10,20 +10,20 @@ body {
 }
 
 .site-modal {
-  font-family: "DM Sans", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .site-modal-title {
-  font-family: "Playfair Display", serif;
+  font-family: var(--font-sans);
 }
 
 .site-cards,
 .site-detail {
-  font-family: "Mulish", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .site-card-title,
 .site-detail-title,
 .site-section-title {
-  font-family: "Syne", sans-serif;
+  font-family: var(--font-sans);
 }

@@ -1,5 +1,5 @@
 import type  { KpiGridProps } from "../types/interfaces";
-import { formatMoney } from "../screens/admin/customerProfile360/utils";
+import { formatMoney } from "../utils/utils";
 
 
 export default function KpiGrid({ kpis }: KpiGridProps) {

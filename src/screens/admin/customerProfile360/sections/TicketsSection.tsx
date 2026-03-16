@@ -1,10 +1,6 @@
 import { Ticket } from "lucide-react";
-import type { CustomerTicket } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-
-interface TicketsSectionProps {
-  tickets: CustomerTicket[];
-}
+import type { TicketsSectionProps } from "../../../../types/customerProfile360.types";
 
 export default function TicketsSection({ tickets }: TicketsSectionProps) {
   return (

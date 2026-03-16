@@ -13,6 +13,7 @@ import type {
   CustomerSite,
   CustomerSiteAttachment,
   CustomerSiteAttachmentAsset,
+  CustomerSiteZone,
   CustomerTechnicalVisit,
   CustomerTicket,
   CustomerTimelineEvent,
@@ -77,6 +78,16 @@ function mapSiteAttachments(rows: Array<Record<string, unknown>>): CustomerSiteA
     companyId: safeText(row.company_id, ""),
     fileName: safeText(row.file_name, "Adjunto"),
     filePath: safeText(row.file_path, ""),
+    createdAt: safeDate(row.created_at),
+  }));
+}
+
+function mapSiteZones(rows: Array<Record<string, unknown>>): CustomerSiteZone[] {
+  return rows.map((row, index) => ({
+    id: safeText(row.id, `zone-${index}`),
+    customerSiteId: safeText(row.customer_site_id, ""),
+    companyId: safeText(row.company_id, ""),
+    name: safeText(row.name, `Zona ${index + 1}`),
     createdAt: safeDate(row.created_at),
   }));
 }
@@ -734,6 +745,97 @@ export async function getCustomerSiteAttachmentAssets(
   );
 
   return assets;
+}
+
+export async function getCustomerSiteZones(
+  companyId: string,
+  siteId: string
+): Promise<CustomerSiteZone[]> {
+  const { data, error } = await supabase
+    .from("customer_site_zones")
+    .select("id, customer_site_id, company_id, name, created_at")
+    .eq("company_id", companyId)
+    .eq("customer_site_id", siteId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar las zonas del sitio.");
+  }
+
+  return mapSiteZones(data ?? []);
+}
+
+export async function createCustomerSiteZone(
+  companyId: string,
+  siteId: string,
+  name: string
+): Promise<CustomerSiteZone> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("El nombre de la zona es obligatorio.");
+  }
+
+  const { data, error } = await supabase
+    .from("customer_site_zones")
+    .insert({
+      company_id: companyId,
+      customer_site_id: siteId,
+      name: trimmed,
+    })
+    .select("id, customer_site_id, company_id, name, created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "No se pudo crear la zona.");
+  }
+
+  return mapSiteZones([data])[0];
+}
+
+export async function updateCustomerSiteZone(
+  companyId: string,
+  siteId: string,
+  zoneId: string,
+  name: string
+): Promise<CustomerSiteZone> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("El nombre de la zona es obligatorio.");
+  }
+
+  const { data, error } = await supabase
+    .from("customer_site_zones")
+    .update({
+      name: trimmed,
+    })
+    .eq("id", zoneId)
+    .eq("company_id", companyId)
+    .eq("customer_site_id", siteId)
+    .select("id, customer_site_id, company_id, name, created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "No se pudo actualizar la zona.");
+  }
+
+  return mapSiteZones([data])[0];
+}
+
+export async function deleteCustomerSiteZone(
+  companyId: string,
+  siteId: string,
+  zoneId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("customer_site_zones")
+    .delete()
+    .eq("id", zoneId)
+    .eq("company_id", companyId)
+    .eq("customer_site_id", siteId);
+
+  if (error) {
+    throw new Error(error.message || "No se pudo eliminar la zona.");
+  }
 }
 
 export async function uploadCustomerSiteAttachments(

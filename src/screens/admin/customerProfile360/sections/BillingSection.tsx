@@ -1,11 +1,8 @@
 import { ReceiptText } from "lucide-react";
-import type { CustomerBillingRecord } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-import { formatMoney } from "../utils";
+import { formatMoney } from "../../../../utils/utils";
+import type { BillingSectionProps } from "../../../../types/interfaces";
 
-interface BillingSectionProps {
-  billing: CustomerBillingRecord[];
-}
 
 export default function BillingSection({ billing }: BillingSectionProps) {
   return (

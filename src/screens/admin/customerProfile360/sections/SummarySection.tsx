@@ -1,12 +1,7 @@
 import { Building2, CalendarClock } from "lucide-react";
-import type { Customer360BasicProfile, CustomerTimelineEvent } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-import { formatDate } from "../utils";
-
-interface SummarySectionProps {
-  profile: Customer360BasicProfile;
-  timeline: CustomerTimelineEvent[];
-}
+import { formatDate } from "../../../../utils/utils";
+import type { SummarySectionProps } from "../../../../types/customerProfile360.types";
 
 export default function SummarySection({ profile, timeline }: SummarySectionProps) {
   return (

@@ -1,10 +1,7 @@
 import { BadgeDollarSign } from "lucide-react";
-import type { CustomerQuote } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
+import type { QuotesSectionProps } from "../../../../types/customerProfile360.types";
 
-interface QuotesSectionProps {
-  quotes: CustomerQuote[];
-}
 
 export default function QuotesSection({ quotes }: QuotesSectionProps) {
   return (

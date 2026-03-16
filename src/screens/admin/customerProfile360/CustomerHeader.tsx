@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import Button from "../../../components/Button";
 import type { Customer360BasicProfile, Customer360TabKey } from "../../../types/customerProfile360.types";
-import { formatDate, initialsFromName } from "./utils";
+import { formatDate, initialsFromName } from "../../../utils/utils";
 import EditCustomerModal from "../../../modals/ModalsCustomer/EditCustomerModal";
 import QuoteModal from "../../../modals/ModalsCustomer/QuoteModal";
 import TicketModal from "../../../modals/ModalsCustomer/TicketModal";
@@ -123,6 +123,7 @@ export default function CustomerHeader({
         onSaved={onRefresh}
       />
       <TicketModal
+        profile={profile}
         open={isTicketModalOpen}
         onClose={() => setTicketModalOpen(false)}
         companyId={companyId}
@@ -130,6 +131,7 @@ export default function CustomerHeader({
         onSaved={onRefresh}
       />
       <QuoteModal
+        profile={profile}
         open={isQuoteModalOpen}
         onClose={() => setQuoteModalOpen(false)}
         companyId={companyId}

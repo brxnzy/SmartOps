@@ -1,10 +1,6 @@
 import { Wrench } from "lucide-react";
-import type { CustomerTechnicalVisit } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-
-interface VisitsSectionProps {
-  visits: CustomerTechnicalVisit[];
-}
+import type { VisitsSectionProps } from "../../../../types/customerProfile360.types";
 
 export default function VisitsSection({ visits }: VisitsSectionProps) {
   return (

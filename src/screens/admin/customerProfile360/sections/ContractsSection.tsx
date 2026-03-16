@@ -1,11 +1,8 @@
 import { FileText } from "lucide-react";
-import type { CustomerContractPlan } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-import { formatDate, formatMoney } from "../utils";
+import { formatDate, formatMoney } from "../../../../utils/utils";
+import type { ContractsSectionProps } from "../../../../types/interfaces";
 
-interface ContractsSectionProps {
-  contracts: CustomerContractPlan[];
-}
 
 export default function ContractsSection({ contracts }: ContractsSectionProps) {
   return (

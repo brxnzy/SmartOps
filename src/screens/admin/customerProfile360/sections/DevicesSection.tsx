@@ -1,11 +1,8 @@
 import { HardDrive } from "lucide-react";
-import type { CustomerInstalledDevice } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-import { formatDate } from "../utils";
+import { formatDate } from "../../../../utils/utils";
+import type { DevicesSectionProps } from "../../../../types/customerProfile360.types";
 
-interface DevicesSectionProps {
-  devices: CustomerInstalledDevice[];
-}
 
 export default function DevicesSection({ devices }: DevicesSectionProps) {
   return (

@@ -1,24 +1,10 @@
 import { ChevronLeft, ChevronRight, FileText, MapPin, Paperclip } from "lucide-react";
 import Button from "../../../../components/Button";
 import Modal from "../../../../components/Modal";
-import type { CustomerSite, CustomerSiteAttachmentAsset } from "../../../../types/customerProfile360.types";
-import { formatDate } from "../utils";
+import { formatDate } from "../../../../utils/utils";
 import { isImageFileName } from "./utils";
+import type { SiteDetailModalProps } from "../../../../types/customerProfile360.types";
 
-interface SiteDetailModalProps {
-  open: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  site: CustomerSite | null;
-  installationsCount: number;
-  attachments: CustomerSiteAttachmentAsset[];
-  loading: boolean;
-  error: string | null;
-  activeIndex: number;
-  onPrev: () => void;
-  onNext: () => void;
-  onSelect: (index: number) => void;
-}
 
 export default function SiteDetailModal({
   open,
@@ -46,32 +32,40 @@ export default function SiteDetailModal({
       hideHeader
       overlayClassName="backdrop-blur-[8px]"
       backdropClassName="bg-slate-900/40"
-      containerClassName="border border-slate-200 bg-white text-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.15)]"
-      bodyClassName="site-detail p-0"
+      containerClassName="max-h-[85vh] overflow-hidden border border-slate-200 bg-white text-slate-900 shadow-[0_30px_90px_rgba(15,23,42,0.18)]"
+      bodyClassName="site-detail max-h-[85vh] overflow-y-auto bg-slate-50/60 p-0"
     >
       {site ? (
         <div className="site-detail">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
-                Detalle del sitio
-              </p>
-              <p className="mt-1 text-xs text-slate-500">Informacion general y adjuntos</p>
+          <div className="border-b border-slate-200 bg-linear-to-r from-slate-50 via-white to-slate-50 px-6 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-slate-500">
+                  Detalle del sitio
+                </p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">{site.name}</h3>
+                <div className="mt-2 flex items-start gap-2 text-sm text-slate-600">
+                  <MapPin size={14} className="mt-0.5 text-slate-400" />
+                  <span>{site.address}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={onClose}
+                  className="h-9 w-9 rounded-lg border border-blue-200 bg-blue-50 px-0 py-0 text-blue-700 shadow-none transition hover:bg-blue-100 hover:text-blue-800"
+                  aria-label="Cerrar"
+                >
+                  X
+                </Button>
+              </div>
             </div>
-            <Button
-              type="button"
-              onClick={onClose}
-              className="h-9 w-9 rounded-lg border border-slate-200 bg-white px-0 py-0 text-slate-500 shadow-none transition hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Cerrar"
-            >
-              X
-            </Button>
           </div>
 
           <div className="space-y-6 px-6 pb-6 pt-5">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-              <div className="space-y-3">
-                <div className="relative aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
+              <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="relative aspect-4/3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                   {loading ? (
                     <div className="flex h-full items-center justify-center text-sm text-slate-500">
                       Cargando adjuntos...
@@ -107,14 +101,14 @@ export default function SiteDetailModal({
                       <Button
                         type="button"
                         onClick={onPrev}
-                        className="h-9 w-9 rounded-lg border border-slate-200 bg-white/90 px-0 py-0 text-slate-600 shadow-none transition hover:bg-white hover:text-slate-900"
+                        className="h-9 w-9 rounded-full border border-blue-200 bg-blue-50/90 px-0 py-0 text-blue-700 shadow-none transition hover:bg-blue-100 hover:text-blue-800"
                       >
                         <ChevronLeft size={18} />
                       </Button>
                       <Button
                         type="button"
                         onClick={onNext}
-                        className="h-9 w-9 rounded-lg border border-slate-200 bg-white/90 px-0 py-0 text-slate-600 shadow-none transition hover:bg-white hover:text-slate-900"
+                        className="h-9 w-9 rounded-full border border-blue-200 bg-blue-50/90 px-0 py-0 text-blue-700 shadow-none transition hover:bg-blue-100 hover:text-blue-800"
                       >
                         <ChevronRight size={18} />
                       </Button>
@@ -132,92 +126,89 @@ export default function SiteDetailModal({
                     </span>
                   ) : null}
                 </div>
-              </div>
 
-              <div className="space-y-5">
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">{site.name}</h3>
-                  <div className="mt-2 flex items-start gap-2 text-sm text-slate-600">
-                    <MapPin size={14} className="mt-0.5 text-slate-400" />
-                    <span>{site.address}</span>
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium text-slate-500">
+                      Adjuntos
+                    </div>
+                    <span className="text-xs text-slate-400">{attachments.length} archivos</span>
                   </div>
+
+                  {error ? (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  ) : attachments.length === 0 ? (
+                    <p className="mt-3 text-sm text-slate-500">No hay adjuntos registrados.</p>
+                  ) : (
+                    <div className="mt-3">
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {attachments.map((attachment, index) => {
+                          const isActive = index === activeIndex;
+                          const isImage = isImageFileName(attachment.fileName);
+                          return (
+                            <Button
+                              key={attachment.id}
+                              type="button"
+                              onClick={() => onSelect(index)}
+                              className={`flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border px-0 py-0 text-[10px] font-semibold shadow-none transition ${
+                                isActive ? "border-slate-300 bg-slate-100" : "border-slate-200 bg-white"
+                              }`}
+                            >
+                              {isImage ? (
+                                <img
+                                  src={attachment.url}
+                                  alt={attachment.fileName}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center gap-1 px-2 text-slate-500">
+                                  <Paperclip size={14} />
+                                  <span className="truncate">{attachment.fileName}</span>
+                                </div>
+                              )}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </section>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                  <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Instalaciones
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-xs font-medium text-slate-500">
+                        Instalaciones
+                      </div>
+                      <div className="mt-1 text-lg font-semibold text-slate-900">
+                        {installationsCount}
+                      </div>
                     </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">{installationsCount}</div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-xs font-medium text-slate-500">
+                        Fecha
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {formatDate(site.createdAt)}
+                      </div>
+                    </div>
+                    
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Fecha
-                    </div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {formatDate(site.createdAt)}
-                    </div>
-                  </div>
-                </div>
-
+                </section>
                 <Button
                   type="button"
                   onClick={onEdit}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-none transition hover:bg-slate-800"
+                  className="h-10 w-full rounded-lg border border-blue-600 bg-blue-600 px-3 text-xs font-semibold text-white shadow-none transition hover:bg-blue-700"
                 >
                   Editar sitio
                 </Button>
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-4">
-              <div className="flex items-center justify-between">
-                <div className="site-section-title text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
-                  Adjuntos
-                </div>
-                <span className="text-xs text-slate-400">{attachments.length} archivos</span>
-              </div>
-
-              {error ? (
-                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {error}
-                </div>
-              ) : attachments.length === 0 ? (
-                <p className="mt-4 text-sm text-slate-500">No hay adjuntos registrados.</p>
-              ) : (
-                <div className="mt-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2">
-                    {attachments.map((attachment, index) => {
-                      const isActive = index === activeIndex;
-                      const isImage = isImageFileName(attachment.fileName);
-                      return (
-                        <Button
-                          key={attachment.id}
-                          type="button"
-                          onClick={() => onSelect(index)}
-                          className={`flex h-16 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border px-0 py-0 text-[10px] font-semibold shadow-none transition ${
-                            isActive ? "border-slate-300 bg-slate-100" : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          {isImage ? (
-                            <img
-                              src={attachment.url}
-                              alt={attachment.fileName}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center gap-1 px-2 text-slate-500">
-                              <Paperclip size={14} />
-                              <span className="truncate">{attachment.fileName}</span>
-                            </div>
-                          )}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       ) : (

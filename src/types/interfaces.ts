@@ -1,8 +1,8 @@
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode, RefObject } from "react";
 import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
 import type { CustomerInput} from "../types/customer.types";
-import type { Customer360BasicProfile, Customer360Kpis } from "./customerProfile360.types";
+import type { Customer360BasicProfile, Customer360Kpis, CustomerBillingRecord, CustomerContractPlan, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
 
 export interface CustomerSubmitOptions {
   invitationEmail?: string;
@@ -175,9 +175,94 @@ export interface EditCustomerModalProps {
 
 
 export interface QuoteModalProps {
+  profile: Customer360BasicProfile;
   open: boolean;
   onClose: () => void;
   companyId: string | null;
   customerId: string | undefined;
   onSaved: () => Promise<void>;
+}
+
+
+export interface TicketModalProps {
+  profile: Customer360BasicProfile;
+  open: boolean;
+  onClose: () => void;
+  companyId: string | null;
+  customerId: string | undefined;
+  onSaved: () => Promise<void>;
+}
+
+export interface BillingSectionProps {
+  billing: CustomerBillingRecord[];
+}
+
+export interface ContractsSectionProps {
+  contracts: CustomerContractPlan[];
+}
+
+
+export interface SiteDeleteModalProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  submitting: boolean;
+  siteName: string;
+}
+
+export interface SiteAttachmentPreview {
+  file: File;
+  previewUrl: string | null;
+  isImage: boolean;
+}
+
+export interface SiteModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  submitting: boolean;
+  values: SiteFormValues;
+  onChange: (values: SiteFormValues) => void;
+  isEdit: boolean;
+  attachments: SiteAttachmentPreview[];
+  onRemoveAttachment: (index: number) => void;
+  onAttachmentsChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  attachmentInputRef: RefObject<HTMLInputElement | null>;
+}
+
+export interface SiteZoneModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  submitting: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  siteName?: string;
+}
+
+export interface SiteZonesModalProps {
+  open: boolean;
+  onClose: () => void;
+  site: CustomerSite | null;
+  zones: CustomerSiteZone[];
+  loading: boolean;
+  error: string | null;
+  onUpdateZone: (zoneId: string, name: string) => Promise<void>;
+  onDeleteZone: (zoneId: string) => Promise<void>;
+  onAddZone?: () => void;
+}
+
+
+export interface SiteZonesPanelProps {
+  zones: CustomerSiteZone[];
+  loading: boolean;
+  error: string | null;
+  onUpdate: (zoneId: string, name: string) => Promise<void>;
+  onDelete: (zoneId: string) => Promise<void>;
+  onAddZone?: () => void;
+}
+
+export interface SiteFormValues {
+  name: string;
+  address: string;
 }

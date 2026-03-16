@@ -1,11 +1,8 @@
 import { MapPin } from "lucide-react";
-import type { CustomerInstallation } from "../../../../types/customerProfile360.types";
 import EmptyState from "../../../../components/EmptyState";
-import { formatDate } from "../utils";
+import { formatDate } from "../../../../utils/utils";
+import type { InstallationsSectionProps } from "../../../../types/customerProfile360.types";
 
-interface InstallationsSectionProps {
-  installations: CustomerInstallation[];
-}
 
 export default function InstallationsSection({ installations }: InstallationsSectionProps) {
   return (

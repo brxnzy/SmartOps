@@ -20,7 +20,7 @@ export interface Customer360BasicProfile {
   createdAt: string;
   invitationEmail: string | null;
   invitationStatus: "accepted" | "pending" | "expired" | "none";
-}
+} 
 
 export interface Customer360Kpis {
   installations: number;
@@ -48,6 +48,14 @@ export interface CustomerSite {
   address: string;
   city: string | null;
   status: string;
+  createdAt: string | null;
+}
+
+export interface CustomerSiteZone {
+  id: string;
+  customerSiteId: string;
+  companyId: string;
+  name: string;
   createdAt: string | null;
 }
 
@@ -178,3 +186,53 @@ export interface CreateCustomerInstallationInput {
 export interface UpdateCustomerInstallationInput extends CreateCustomerInstallationInput {
   installationId: string;
 }
+
+export interface DevicesSectionProps {
+  devices: CustomerInstalledDevice[];
+}
+
+export interface InstallationsSectionProps {
+  installations: CustomerInstallation[];
+}
+
+export interface QuotesSectionProps {
+  quotes: CustomerQuote[];
+}
+
+export interface SummarySectionProps {
+  profile: Customer360BasicProfile;
+  timeline: CustomerTimelineEvent[];
+}
+
+export interface TicketsSectionProps {
+  tickets: CustomerTicket[];
+}
+
+export interface VisitsSectionProps {
+  visits: CustomerTechnicalVisit[];
+}
+
+export interface SitesSectionProps {
+  companyId: string | null;
+  customerId: string | undefined;
+  sites: CustomerSite[];
+  installations: CustomerInstallation[];
+  onRefresh: () => Promise<void>;
+}
+
+export interface SiteDetailModalProps {
+  open: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onOpenZones?: () => void;
+  site: CustomerSite | null;
+  installationsCount: number;
+  attachments: CustomerSiteAttachmentAsset[];
+  loading: boolean;
+  error: string | null;
+  activeIndex: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onSelect: (index: number) => void;
+}
+
