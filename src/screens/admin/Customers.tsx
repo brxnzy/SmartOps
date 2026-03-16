@@ -1,5 +1,6 @@
 import { useMemo} from "react";
 import { Building2, Home, Store, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
@@ -11,6 +12,7 @@ import { useCustomers } from "../../hooks/useCustomers";
 
 export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
+  const navigate = useNavigate();
   const companyId = companyProfile?.id ?? null;
   const canWrite = useMemo(() => {
     return (
@@ -154,6 +156,7 @@ export default function Customers() {
           disabled={submitting || !canWrite}
           onEdit={openEditModal}
           onDelete={openDeleteModal}
+          onViewDetail={(customer) => navigate(`/admin/customers/${customer.id}/profile-360`)}
           onPageChange={setPage}
         />
       )}

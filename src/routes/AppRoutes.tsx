@@ -23,7 +23,9 @@ import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import UsersAdmin from "../screens/admin/Users";
+import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
+
 
 export default function AppRoutes() {
   return (
@@ -91,6 +93,15 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.customersRead}>
               <Customers />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="customers/:customerId/profile-360"
+          element={
+            <PermissionRoute permission={PERMISSIONS.customersRead}>
+              <CustomerProfile360 />
             </PermissionRoute>
           }
         />
