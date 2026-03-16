@@ -63,6 +63,7 @@ function mapDevice(row: DeviceRow): Device {
     companyId: row.company_id,
     createdAt: row.created_at,
     brandId: row.brand_id,
+    compatibility: row.compatibility,
   };
 }
 
@@ -241,7 +242,9 @@ export async function getDevicesByCompany(companyId: string | null): Promise<Dev
 
   const { data, error } = await supabase
     .from("devices")
-    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .select(
+      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+    )
     .eq("company_id", companyId)
     .order("created_at", { ascending: false })
     .returns<DeviceRow[]>();
@@ -262,8 +265,11 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
       device_type_id: payload.deviceTypeId,
       company_id: payload.companyId,
       brand_id: payload.brandId,
+      compatibility: payload.compatibility,
     })
-    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .select(
+      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+    )
     .single<DeviceRow>();
 
   if (error) throw error;
@@ -281,9 +287,12 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
       protocol_id: payload.protocolId,
       device_type_id: payload.deviceTypeId,
       brand_id: payload.brandId,
+      compatibility: payload.compatibility,
     })
     .eq("id", payload.id)
-    .select("id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id")
+    .select(
+      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+    )
     .single<DeviceRow>();
 
   if (error) throw error;

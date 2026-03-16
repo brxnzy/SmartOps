@@ -18,6 +18,7 @@ export default function Devices() {
     name,
     model,
     price,
+    compatibility,
     quantity,
     searchTerm,
     protocolId,
@@ -36,6 +37,7 @@ export default function Devices() {
     setName,
     setModel,
     setPrice,
+    setCompatibility,
     setQuantity,
     setSearchTerm,
     setProtocolId,
@@ -95,6 +97,11 @@ export default function Devices() {
                   <p className="text-sm text-slate-600">
                     Cantidad: {inventoryQuantityByDeviceId.get(device.id) ?? 0}
                   </p>
+                  {device.compatibility && (
+                    <p className="text-sm text-slate-600 break-words">
+                      Compatibilidad: {device.compatibility}
+                    </p>
+                  )}
                   <p className="text-sm text-slate-500">
                     Protocolo: {protocolNameById.get(device.protocolId) ?? "No definido"}
                   </p>
@@ -258,6 +265,19 @@ export default function Devices() {
                   </option>
                 ))}
               </select>
+            </Field>
+          </div>
+
+          <div className="space-y-3 lg:col-span-2">
+            <Field label="Compatibilidad">
+              <textarea
+                value={compatibility}
+                onChange={(event) => setCompatibility(event.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Ejemplo: Compatible con Zigbee 3.0, Alexa, Google Home..."
+                className="block w-full resize-none rounded-lg border-2 border-gray-400 bg-white px-3 py-3 text-sm text-slate-800 focus:border-blue-500 focus:ring-blue-300 focus:outline-none"
+              />
             </Field>
           </div>
         </form>

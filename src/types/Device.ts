@@ -62,6 +62,7 @@ export interface Device {
   companyId: string;
   createdAt: string | null;
   brandId: string;
+  compatibility: string | null;
 }
 
 export interface CreateDevicePayload {
@@ -72,6 +73,7 @@ export interface CreateDevicePayload {
   deviceTypeId: string;
   companyId: string;
   brandId: string;
+  compatibility: string | null;
 }
 
 export interface UpdateDevicePayload {
@@ -82,6 +84,7 @@ export interface UpdateDevicePayload {
   protocolId: string;
   deviceTypeId: string;
   brandId: string;
+  compatibility: string | null;
 }
 
 export interface DeviceInventory {

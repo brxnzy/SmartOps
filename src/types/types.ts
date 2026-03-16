@@ -100,6 +100,7 @@ export type DeviceRow = {
   company_id: string;
   created_at: string | null;
   brand_id: string;
+  compatibility: string | null;
 };
 
 export type DeviceInventoryDeviceJoinRow = {
