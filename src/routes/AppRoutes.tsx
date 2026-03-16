@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
+import DeviceInventory from "../screens/admin/DeviceInventory";
 import Devices from "../screens/admin/Devices";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
@@ -20,8 +21,11 @@ import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
+import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
+import Account from "../screens/admin/Account";
+
 
 export default function AppRoutes() {
   return (
@@ -109,6 +113,14 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="inventory/devices"
+          element={
+            <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
+              <DeviceInventory />
+            </PermissionRoute>
+          }
+        />
 
         <Route
           path="roles"
@@ -141,6 +153,23 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
               <SettingsDeviceTypes />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="account"
+          element={
+            <PermissionRoute permission={PERMISSIONS.accountUpdate}>
+              <Account />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="brands"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsBrandsRead}>
+              <SettingsBrands />
             </PermissionRoute>
           }
         />
