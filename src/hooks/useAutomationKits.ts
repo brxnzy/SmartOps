@@ -22,8 +22,8 @@ const useAutomationKits = () => {
   const [editingKit, setEditingKit] = useState<AutomationKit | null>(null);
   const [kitToDelete, setKitToDelete] = useState<AutomationKit | null>(null);
   const [name, setName] = useState("");
-  const [discountPercent, setDiscountPercent] = useState("0");
-  const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
   const [items, setItems] = useState<AutomationKitItemInput[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -64,7 +64,7 @@ const useAutomationKits = () => {
 
     return kits.filter((kit) => {
       const itemsText = kit.items.map((item) => `${item.deviceName} ${item.deviceModel}`).join(" ");
-      return `${kit.name} ${itemsText}`.toLowerCase().includes(query);
+      return `${kit.name} ${kit.description} ${itemsText}`.toLowerCase().includes(query);
     });
   }, [kits, searchTerm]);
 
@@ -72,12 +72,12 @@ const useAutomationKits = () => {
     () =>
       items.map((item) => {
         const device = deviceById.get(item.deviceId);
-        const price = Number(device?.price ?? 0);
+        const priceValue = Number(device?.price ?? 0);
         return {
           ...item,
           deviceName: device?.name ?? "Dispositivo",
           deviceModel: device?.model ?? "N/A",
-          unitPrice: Number.isNaN(price) ? 0 : price,
+          unitPrice: Number.isNaN(priceValue) ? 0 : priceValue,
         };
       }),
     [deviceById, items]
@@ -88,22 +88,18 @@ const useAutomationKits = () => {
     [normalizedItems]
   );
 
-  const discountValue = useMemo(() => {
-    const percent = Number(discountPercent);
-    if (Number.isNaN(percent) || percent <= 0) return 0;
-    return (subtotal * Math.min(percent, 100)) / 100;
-  }, [discountPercent, subtotal]);
-
-  const total = useMemo(() => Math.max(0, subtotal - discountValue), [discountValue, subtotal]);
-
   const hasChanges = useMemo(() => {
-    if (!name.trim() || items.length === 0) return false;
+    const cleanName = name.trim();
+    const cleanDescription = description.trim();
+    const cleanPrice = Number(price);
+
+    if (!cleanName || !cleanDescription || items.length === 0) return false;
+    if (!price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0) return false;
     if (!editingKit) return true;
 
-    const cleanDiscount = Number(discountPercent);
-    const currentDiscount = Number(editingKit.discountPercent ?? 0);
-    const sameName = name.trim() === editingKit.name.trim();
-    const sameDiscount = Number.isNaN(cleanDiscount) ? currentDiscount === 0 : cleanDiscount === currentDiscount;
+    const sameName = cleanName === editingKit.name.trim();
+    const sameDescription = cleanDescription === (editingKit.description ?? "").trim();
+    const samePrice = cleanPrice === Number(editingKit.price ?? 0);
     const sameItems =
       items.length === editingKit.items.length &&
       items.every((item) => {
@@ -111,14 +107,14 @@ const useAutomationKits = () => {
         return match && match.quantity === item.quantity;
       });
 
-    return !(sameName && sameDiscount && sameItems);
-  }, [discountPercent, editingKit, items, name]);
+    return !(sameName && sameDescription && samePrice && sameItems);
+  }, [description, editingKit, items, name, price]);
 
   const openCreateModal = () => {
     setEditingKit(null);
     setName("");
-    setDiscountPercent("0");
-    setSelectedDeviceId("");
+    setDescription("");
+    setPrice("");
     setItems([]);
     setIsModalOpen(true);
   };
@@ -126,8 +122,8 @@ const useAutomationKits = () => {
   const openEditModal = (kit: AutomationKit) => {
     setEditingKit(kit);
     setName(kit.name);
-    setDiscountPercent(String(kit.discountPercent ?? 0));
-    setSelectedDeviceId("");
+    setDescription(kit.description ?? "");
+    setPrice(String(kit.price ?? 0));
     setItems(kit.items.map((item) => ({ deviceId: item.deviceId, quantity: item.quantity })));
     setIsModalOpen(true);
   };
@@ -137,39 +133,13 @@ const useAutomationKits = () => {
     setIsModalOpen(false);
     setEditingKit(null);
     setName("");
-    setDiscountPercent("0");
-    setSelectedDeviceId("");
+    setDescription("");
+    setPrice("");
     setItems([]);
   };
 
-  const addItem = () => {
-    if (!selectedDeviceId) return;
-    setItems((current) => {
-      const existing = current.find((item) => item.deviceId === selectedDeviceId);
-      if (!existing) {
-        return [...current, { deviceId: selectedDeviceId, quantity: 1 }];
-      }
-      return current.map((item) =>
-        item.deviceId === selectedDeviceId ? { ...item, quantity: item.quantity + 1 } : item
-      );
-    });
-    setSelectedDeviceId("");
-  };
-
-  const incrementItem = (deviceId: string) => {
-    setItems((current) =>
-      current.map((item) => (item.deviceId === deviceId ? { ...item, quantity: item.quantity + 1 } : item))
-    );
-  };
-
-  const decrementItem = (deviceId: string) => {
-    setItems((current) =>
-      current
-        .map((item) =>
-          item.deviceId === deviceId ? { ...item, quantity: Math.max(0, item.quantity - 1) } : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
+  const setItemsBulk = (nextItems: AutomationKitItemInput[]) => {
+    setItems(nextItems);
   };
 
   const removeItem = (deviceId: string) => {
@@ -179,19 +149,22 @@ const useAutomationKits = () => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!name.trim() || items.length === 0) {
+    const cleanName = name.trim();
+    const cleanDescription = description.trim();
+    const cleanPrice = Number(price);
+
+    if (!cleanName || !cleanDescription || items.length === 0) {
       notifications.warning({
         title: "Datos incompletos",
-        description: "Indica el nombre del kit y agrega al menos un dispositivo.",
+        description: "Indica nombre, descripcion y agrega al menos un dispositivo.",
       });
       return;
     }
 
-    const cleanDiscount = Number(discountPercent);
-    if (Number.isNaN(cleanDiscount) || cleanDiscount < 0 || cleanDiscount > 100) {
+    if (!price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0) {
       notifications.warning({
-        title: "Descuento invalido",
-        description: "El descuento debe estar entre 0 y 100.",
+        title: "Precio invalido",
+        description: "Indica un precio valido para el kit.",
       });
       return;
     }
@@ -207,8 +180,9 @@ const useAutomationKits = () => {
     setSubmitting(true);
     try {
       const payload = {
-        name: name.trim(),
-        discountPercent: cleanDiscount,
+        name: cleanName,
+        description: cleanDescription,
+        price: cleanPrice,
         items,
       };
 
@@ -275,8 +249,8 @@ const useAutomationKits = () => {
     editingKit,
     kitToDelete,
     name,
-    discountPercent,
-    selectedDeviceId,
+    description,
+    price,
     items: normalizedItems,
     searchTerm,
     filteredKits,
@@ -286,20 +260,16 @@ const useAutomationKits = () => {
     canUpdate,
     canDelete,
     subtotal,
-    discountValue,
-    total,
     hasChanges,
     setName,
-    setDiscountPercent,
-    setSelectedDeviceId,
+    setDescription,
+    setPrice,
     setSearchTerm,
+    setItemsBulk,
+    removeItem,
     openCreateModal,
     openEditModal,
     closeModal,
-    addItem,
-    incrementItem,
-    decrementItem,
-    removeItem,
     handleSubmit,
     askDeleteKit,
     cancelDeleteKit,

@@ -1,5 +1,5 @@
 export interface AutomationKitItem {
-  id: string;
+  id: string | number;
   deviceId: string;
   deviceName: string;
   deviceModel: string;
@@ -9,9 +9,9 @@ export interface AutomationKitItem {
 
 export interface AutomationKit {
   id: string;
-  companyId: string;
   name: string;
-  discountPercent: number;
+  description: string;
+  price: number;
   createdAt: string;
   items: AutomationKitItem[];
 }
@@ -23,6 +23,7 @@ export interface AutomationKitItemInput {
 
 export interface AutomationKitInput {
   name: string;
-  discountPercent: number;
+  description: string;
+  price: number;
   items: AutomationKitItemInput[];
 }

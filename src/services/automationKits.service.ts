@@ -8,18 +8,18 @@ import type {
 } from "../types/automationKit.types";
 
 type AutomationKitItemRow = {
-  id: string;
-  kit_id: string;
-  device_id: string;
-  quantity: number;
+  id: number;
+  kit_id: string | null;
+  device_id: string | null;
+  quantity: number | null;
   device: { id: string; name: string; model: string; price: number | string } | null;
 };
 
 type AutomationKitRow = {
   id: string;
-  company_id: string;
   name: string;
-  discount_percent: number;
+  description: string;
+  price: number | string;
   created_at: string | null;
   items: AutomationKitItemRow[] | null;
 };
@@ -33,20 +33,20 @@ function mapItem(row: AutomationKitItemRow): AutomationKitItem {
   const price = Number(row.device?.price ?? 0);
   return {
     id: row.id,
-    deviceId: row.device_id,
+    deviceId: row.device_id ?? "",
     deviceName: row.device?.name ?? "Dispositivo",
     deviceModel: row.device?.model ?? "N/A",
     unitPrice: Number.isNaN(price) ? 0 : price,
-    quantity: row.quantity,
+    quantity: row.quantity ?? 0,
   };
 }
 
 function mapKit(row: AutomationKitRow): AutomationKit {
   return {
     id: row.id,
-    companyId: row.company_id,
     name: row.name,
-    discountPercent: Number(row.discount_percent ?? 0),
+    description: row.description ?? "",
+    price: Number(row.price ?? 0),
     createdAt: row.created_at ?? new Date().toISOString(),
     items: (row.items ?? []).map(mapItem),
   };
@@ -65,11 +65,10 @@ export async function getAutomationKitsByCompany(companyId: string | null): Prom
   if (!companyId) return [];
 
   const { data, error } = await supabase
-    .from("automation_kits")
+    .from("kits")
     .select(
-      "id, company_id, name, discount_percent, created_at, items:automation_kit_items ( id, kit_id, device_id, quantity, device:devices ( id, name, model, price ) )"
+      "id, name, description, price, created_at, items:kit_items ( id, kit_id, device_id, quantity, device:devices ( id, name, model, price ) )"
     )
-    .eq("company_id", companyId)
     .order("created_at", { ascending: false })
     .returns<AutomationKitRow[]>();
 
@@ -84,14 +83,18 @@ export async function createAutomationKit(
   companyId: string,
   input: AutomationKitInput
 ): Promise<AutomationKit> {
+  if (!companyId) {
+    throw new Error("Compania requerida para crear kits.");
+  }
+
   const { data: kitRow, error: kitError } = await supabase
-    .from("automation_kits")
+    .from("kits")
     .insert({
-      company_id: companyId,
       name: input.name,
-      discount_percent: input.discountPercent,
+      description: input.description,
+      price: input.price,
     })
-    .select("id, company_id, name, discount_percent, created_at")
+    .select("id, name, description, price, created_at")
     .single<Omit<AutomationKitRow, "items">>();
 
   if (kitError || !kitRow) {
@@ -100,7 +103,7 @@ export async function createAutomationKit(
 
   const itemsPayload = normalizeItems(input.items);
   const { data: itemsData, error: itemsError } = await supabase
-    .from("automation_kit_items")
+    .from("kit_items")
     .insert(
       itemsPayload.map((item) => ({
         kit_id: kitRow.id,
@@ -126,13 +129,14 @@ export async function updateAutomationKit(
   input: AutomationKitInput
 ): Promise<AutomationKit> {
   const { data: kitRow, error: kitError } = await supabase
-    .from("automation_kits")
+    .from("kits")
     .update({
       name: input.name,
-      discount_percent: input.discountPercent,
+      description: input.description,
+      price: input.price,
     })
     .eq("id", kitId)
-    .select("id, company_id, name, discount_percent, created_at")
+    .select("id, name, description, price, created_at")
     .single<Omit<AutomationKitRow, "items">>();
 
   if (kitError || !kitRow) {
@@ -140,7 +144,7 @@ export async function updateAutomationKit(
   }
 
   const { error: deleteError } = await supabase
-    .from("automation_kit_items")
+    .from("kit_items")
     .delete()
     .eq("kit_id", kitId);
 
@@ -150,7 +154,7 @@ export async function updateAutomationKit(
 
   const itemsPayload = normalizeItems(input.items);
   const { data: itemsData, error: itemsError } = await supabase
-    .from("automation_kit_items")
+    .from("kit_items")
     .insert(
       itemsPayload.map((item) => ({
         kit_id: kitId,
@@ -172,7 +176,7 @@ export async function updateAutomationKit(
 }
 
 export async function deleteAutomationKit(kitId: string): Promise<void> {
-  const { error } = await supabase.from("automation_kits").delete().eq("id", kitId);
+  const { error } = await supabase.from("kits").delete().eq("id", kitId);
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el kit."));
   }

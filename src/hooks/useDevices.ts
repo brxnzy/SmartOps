@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "../libs/supabase";
 import { PERMISSIONS } from "../constants/permissions";
 import useAuth from "./useAuth";
 import {
@@ -15,6 +16,14 @@ import {
 import { notifications } from "../services/notification.service";
 import type { Brand, Device, DeviceType, Protocol } from "../types/Device";
 import type { DeviceInventory } from "../types/Device";
+
+type DeviceInventoryRealtimeRow = {
+  id: string;
+  device_id: string;
+  quantity: number;
+  status: string | null;
+  last_updated: string | null;
+};
 
 const useDevices = () => {
   const { companyProfile, canAccess } = useAuth();
@@ -74,6 +83,46 @@ const useDevices = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!companyId) return;
+
+    const channel = supabase
+      .channel("device-inventory")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "device_inventory" },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldRow = payload.old as DeviceInventoryRealtimeRow | null;
+            if (!oldRow?.id) return;
+            setInventory((current) => current.filter((item) => item.id !== oldRow.id));
+            return;
+          }
+
+          const row = payload.new as DeviceInventoryRealtimeRow | null;
+          if (!row?.id || !row.device_id) return;
+
+          setInventory((current) => {
+            const next = current.filter((item) => item.id !== row.id);
+            next.push({
+              id: row.id,
+              deviceId: row.device_id,
+              quantity: row.quantity ?? 0,
+              status: row.status ?? null,
+              lastUpdated: row.last_updated ?? null,
+              device: null,
+            });
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [companyId]);
 
   const protocolNameById = useMemo(
     () => new Map(protocols.map((protocol) => [String(protocol.id), protocol.name ?? "(Sin nombre)"])),
