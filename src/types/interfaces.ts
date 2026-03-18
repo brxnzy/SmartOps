@@ -284,3 +284,24 @@ export interface AuditLogEntry {
     photo_url: string | null;
   } | null;
 }
+
+
+export interface UseCustomerProfile360Options {
+  companyId: string | null;
+  customerId: string | undefined;
+}
+
+export interface UseCustomersOptions {
+  companyId: string | null;
+  invitedByUserId?: string | null;
+  pageSize?: number;
+}
+
+export type CustomerFilterType = CustomerType | "all";
+
+export interface CustomerQueryState {
+  page: number;
+  pageSize: number;
+  search: string;
+  type: CustomerFilterType;
+}

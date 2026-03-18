@@ -84,6 +84,7 @@ const useSettingsLogs = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [entityFilter, setEntityFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
+  
 
   const loadLogs = useCallback(async () => {
     if (!companyId) {
