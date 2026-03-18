@@ -22,6 +22,7 @@ import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
+import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
@@ -170,6 +171,14 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsBrandsRead}>
               <SettingsBrands />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="checklist-templates"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsChecklistTemplatesRead}>
+              <SettingsChecklistTemplates />
             </PermissionRoute>
           }
         />

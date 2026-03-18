@@ -9,7 +9,6 @@ export const PERMISSIONS = {
   devicesCreate: "devices.create",
   devicesUpdate: "devices.update",
   devicesDelete: "devices.delete",
-
   rolesRead: "roles.read",
   rolesCreate: "roles.create",
   rolesUpdate: "roles.update",
@@ -26,6 +25,13 @@ export const PERMISSIONS = {
   settingsBrandsCreate: "settings.brands.create",
   settingsBrandsUpdate: "settings.brands.update",
   settingsBrandsDelete: "settings.brands.delete",
+  settingsChecklistTemplatesRead: "settings.checklist-templates.read",
+  settingsChecklistTemplatesCreate: "settings.checklist-templates.create",
+  settingsChecklistTemplatesUpdate: "settings.checklist-templates.update",
+  settingsChecklistTemplatesDelete: "settings.checklist-templates.delete",
+  settingsChecklistItemsCreate: "settings.checklist-items.create",
+  settingsChecklistItemsUpdate: "settings.checklist-items.update",
+  settingsChecklistItemsDelete: "settings.checklist-items.delete",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

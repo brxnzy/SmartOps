@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, Cpu,HardDrive, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
+import { Building2, Cpu,HardDrive, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints, Check } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -59,16 +59,22 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <HardDrive size={19} />,
       },
       {
-        name: "Mi cuenta",
-        to: "/admin/account",
-        icon: <User size={19} />
-      },
-      {
         name: "Marcas",
         to: "/admin/brands",
         permission: PERMISSIONS.settingsBrandsRead,
         icon: <Building2 size={19} />,
-       }
+       },
+      {
+        name: "Plantillas de checklist",
+        to: "/admin/checklist-templates",
+        permission: PERMISSIONS.settingsChecklistTemplatesRead,
+        icon: <Check size={19} />,
+       },
+      {
+        name: "Mi cuenta",
+        to: "/admin/account",
+        icon: <User size={19} />
+      },
     ],
   },
 ];

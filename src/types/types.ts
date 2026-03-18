@@ -91,6 +91,23 @@ export type BrandRow = {
   created_at: string | null;
 };
 
+export type ChecklistTemplateRow = {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ChecklistItemRow = {
+  id: string;
+  template_id: string;
+  text: string;
+  item_order: number | null;
+  created_at: string | null;
+};
+
 export type DeviceRow = {
   id: string;
   name: string;
