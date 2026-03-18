@@ -2,7 +2,7 @@ import type { ChangeEvent, ReactNode, RefObject } from "react";
 import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
 import type { CustomerInput} from "../types/customer.types";
-import type { Customer360BasicProfile, Customer360Kpis, CustomerBillingRecord, CustomerContractPlan, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
+import type { Customer360BasicProfile, Customer360Kpis, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
 
 export interface CustomerSubmitOptions {
   invitationEmail?: string;
@@ -174,32 +174,6 @@ export interface EditCustomerModalProps {
 }
 
 
-export interface QuoteModalProps {
-  profile: Customer360BasicProfile;
-  open: boolean;
-  onClose: () => void;
-  companyId: string | null;
-  customerId: string | undefined;
-  onSaved: () => Promise<void>;
-}
-
-
-export interface TicketModalProps {
-  profile: Customer360BasicProfile;
-  open: boolean;
-  onClose: () => void;
-  companyId: string | null;
-  customerId: string | undefined;
-  onSaved: () => Promise<void>;
-}
-
-export interface BillingSectionProps {
-  billing: CustomerBillingRecord[];
-}
-
-export interface ContractsSectionProps {
-  contracts: CustomerContractPlan[];
-}
 
 
 export interface SiteDeleteModalProps {
