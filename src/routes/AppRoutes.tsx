@@ -26,6 +26,8 @@ import SettingsChecklistTemplates from "../screens/admin/settings/SettingsCheckl
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
+import VisitsCalendar from "../screens/admin/VisitsCalendar";
+import Schedule from "../screens/admin/Schedule";
 
 
 export default function AppRoutes() {
@@ -131,6 +133,10 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route path="schedule" element={<Schedule />} />
+        <Route path="operaciones/visitas-tecnicas" element={<VisitsCalendar />} />
+
         <Route
           path="users"
           element={
