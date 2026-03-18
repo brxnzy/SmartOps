@@ -1,5 +1,6 @@
 ﻿import { supabase } from "../libs/supabase";
 import type { EmailInvitationPayload } from "../types/interfaces";
+import { logAuditEvent } from "./audit.service";
 import type { CompanyUser } from "../types/userManagement.types";
 
 function assertValidEmail(email: string): string {
@@ -101,6 +102,18 @@ export async function createUserViaInvitation(input: {
   if (!user?.id) {
     throw new Error("No se pudo crear el usuario invitado.");
   }
+
+  await logAuditEvent({
+    action: "create",
+    entity: "users",
+    entityId: user.id,
+    companyId: user.companyId,
+    newValues: {
+      name: user.name,
+      idCard: user.idCard,
+      roleId: user.roleId,
+    },
+  });
 
   return user;
 }

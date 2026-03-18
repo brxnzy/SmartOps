@@ -266,3 +266,21 @@ export interface SiteFormValues {
   name: string;
   address: string;
 }
+
+
+export interface AuditLogEntry {
+  id: string;
+  user_id: string | null;
+  company_id: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  created_at: string;
+  user: {
+    id: string;
+    name: string;
+    photo_url: string | null;
+  } | null;
+}

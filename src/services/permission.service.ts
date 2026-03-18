@@ -1,7 +1,16 @@
 ﻿import { supabase } from "../libs/supabase";
 import type { Permission } from "../types/Role";
+import { logAuditEvent } from "./audit.service";
 import type { RolePermissionByRoleId, RolePermissionByRoleRow } from "../types/types";
 
+async function getRoleCompanyId(roleId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("roles")
+    .select("company_id")
+    .eq("id", roleId)
+    .maybeSingle<{ company_id: string | null }>();
+  return data?.company_id ?? null;
+}
 
 
 export async function getAllPermissions(): Promise<Permission[]> {
@@ -61,7 +70,17 @@ export async function syncRolePermissions(roleId: string, permissionCodes: strin
 
   if (deleteError) throw deleteError;
 
-  if (uniqueCodes.length === 0) return;
+  if (uniqueCodes.length === 0) {
+    const companyId = await getRoleCompanyId(roleId);
+    await logAuditEvent({
+      action: "update",
+      entity: "roles_permissions",
+      entityId: roleId,
+      companyId,
+      newValues: { permissionCodes: [] },
+    });
+    return;
+  }
 
   const { data: permissions, error: permissionsError } = await supabase
     .from("permissions")
@@ -86,6 +105,15 @@ export async function syncRolePermissions(roleId: string, permissionCodes: strin
   const { error: insertError } = await supabase.from("roles_permissions").insert(rows);
 
   if (insertError) throw insertError;
+
+  const companyId = await getRoleCompanyId(roleId);
+  await logAuditEvent({
+    action: "update",
+    entity: "roles_permissions",
+    entityId: roleId,
+    companyId,
+    newValues: { permissionCodes: uniqueCodes },
+  });
 }
 
 export async function syncRolePermissionIds(roleId: string, permissionIds: string[]): Promise<void> {
@@ -98,7 +126,17 @@ export async function syncRolePermissionIds(roleId: string, permissionIds: strin
 
   if (deleteError) throw deleteError;
 
-  if (uniquePermissionIds.length === 0) return;
+  if (uniquePermissionIds.length === 0) {
+    const companyId = await getRoleCompanyId(roleId);
+    await logAuditEvent({
+      action: "update",
+      entity: "roles_permissions",
+      entityId: roleId,
+      companyId,
+      newValues: { permissionIds: [] },
+    });
+    return;
+  }
 
   const rows = uniquePermissionIds.map((permissionId) => ({
     role_id: roleId,
@@ -108,4 +146,13 @@ export async function syncRolePermissionIds(roleId: string, permissionIds: strin
   const { error: insertError } = await supabase.from("roles_permissions").insert(rows);
 
   if (insertError) throw insertError;
+
+  const companyId = await getRoleCompanyId(roleId);
+  await logAuditEvent({
+    action: "update",
+    entity: "roles_permissions",
+    entityId: roleId,
+    companyId,
+    newValues: { permissionIds: uniquePermissionIds },
+  });
 }

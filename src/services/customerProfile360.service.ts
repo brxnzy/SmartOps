@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   CreateCustomerInstallationInput,
   CreateCustomerQuoteInput,
@@ -594,6 +595,12 @@ export async function createCustomerTicket(
   if (error) {
     throw new Error(error.message || "No se pudo crear el ticket.");
   }
+  await logAuditEvent({
+    action: "create",
+    entity: "tickets",
+    companyId,
+    newValues: { name: title, code, customerId, priority: input.priority },
+  });
 }
 
 export async function createCustomerQuote(
@@ -624,6 +631,12 @@ export async function createCustomerQuote(
   if (error) {
     throw new Error(error.message || "No se pudo crear la cotizacion.");
   }
+  await logAuditEvent({
+    action: "create",
+    entity: "quotes",
+    companyId,
+    newValues: { name: title, code, customerId, amount: input.amount, currency },
+  });
 }
 
 export async function createCustomerSite(
@@ -653,8 +666,21 @@ export async function createCustomerSite(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo crear el sitio.");
   }
-
-  return mapSites([data])[0];
+  const created = mapSites([data])[0];
+  await logAuditEvent({
+    action: "create",
+    entity: "customer_sites",
+    entityId: created.id,
+    companyId,
+    newValues: {
+      name: created.name,
+      address: created.address,
+      city: created.city,
+      status: created.status,
+      customerId,
+    },
+  });
+  return created;
 }
 
 export async function updateCustomerSite(
@@ -683,6 +709,19 @@ export async function updateCustomerSite(
   if (error) {
     throw new Error(error.message || "No se pudo actualizar el sitio.");
   }
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_sites",
+    entityId: input.siteId,
+    companyId,
+    newValues: {
+      name,
+      address,
+      city: input.city?.trim() || null,
+      status: input.status?.trim().toLowerCase() || "active",
+      customerId,
+    },
+  });
 }
 
 export async function deleteCustomerSite(
@@ -700,6 +739,13 @@ export async function deleteCustomerSite(
   if (error) {
     throw new Error(error.message || "No se pudo eliminar el sitio.");
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customer_sites",
+    entityId: siteId,
+    companyId,
+    oldValues: { customerId },
+  });
 }
 
 export async function getCustomerSiteAttachments(
@@ -788,8 +834,18 @@ export async function createCustomerSiteZone(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo crear la zona.");
   }
-
-  return mapSiteZones([data])[0];
+  const created = mapSiteZones([data])[0];
+  await logAuditEvent({
+    action: "create",
+    entity: "customer_site_zones",
+    entityId: created.id,
+    companyId,
+    newValues: {
+      name: created.name,
+      siteId: created.customerSiteId,
+    },
+  });
+  return created;
 }
 
 export async function updateCustomerSiteZone(
@@ -817,8 +873,18 @@ export async function updateCustomerSiteZone(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo actualizar la zona.");
   }
-
-  return mapSiteZones([data])[0];
+  const updated = mapSiteZones([data])[0];
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_site_zones",
+    entityId: updated.id,
+    companyId,
+    newValues: {
+      name: updated.name,
+      siteId: updated.customerSiteId,
+    },
+  });
+  return updated;
 }
 
 export async function deleteCustomerSiteZone(
@@ -836,6 +902,13 @@ export async function deleteCustomerSiteZone(
   if (error) {
     throw new Error(error.message || "No se pudo eliminar la zona.");
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customer_site_zones",
+    entityId: zoneId,
+    companyId,
+    oldValues: { siteId },
+  });
 }
 
 export async function uploadCustomerSiteAttachments(
@@ -882,7 +955,19 @@ export async function uploadCustomerSiteAttachments(
       throw new Error(error?.message || "No se pudo registrar el adjunto.");
     }
 
-    created.push(...mapSiteAttachments([data]));
+    const mapped = mapSiteAttachments([data])[0];
+    await logAuditEvent({
+      action: "create",
+      entity: "customer_site_attachments",
+      entityId: mapped.id,
+      companyId,
+      newValues: {
+        name: mapped.fileName,
+        siteId: mapped.customerSiteId,
+        filePath: mapped.filePath,
+      },
+    });
+    created.push(mapped);
   }
 
   return created;
@@ -936,6 +1021,16 @@ export async function createCustomerInstallation(
   if (error) {
     throw new Error(error.message || "No se pudo crear la instalacion.");
   }
+  await logAuditEvent({
+    action: "create",
+    entity: "customer_installations",
+    companyId,
+    newValues: {
+      name,
+      siteId: input.siteId ?? null,
+      customerId,
+    },
+  });
 }
 
 export async function updateCustomerInstallation(
@@ -961,6 +1056,17 @@ export async function updateCustomerInstallation(
   if (error) {
     throw new Error(error.message || "No se pudo actualizar la instalacion.");
   }
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_installations",
+    entityId: input.installationId,
+    companyId,
+    newValues: {
+      name,
+      siteId: input.siteId ?? null,
+      customerId,
+    },
+  });
 }
 
 export async function deleteCustomerInstallation(
@@ -978,4 +1084,11 @@ export async function deleteCustomerInstallation(
   if (error) {
     throw new Error(error.message || "No se pudo eliminar la instalacion.");
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customer_installations",
+    entityId: installationId,
+    companyId,
+    oldValues: { customerId },
+  });
 }
