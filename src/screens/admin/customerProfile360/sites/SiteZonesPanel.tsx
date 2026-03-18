@@ -165,7 +165,7 @@ export default function SiteZonesPanel({
                         type="button"
                         onClick={() => void handleSaveEdit()}
                         disabled={isBusy || !editingName.trim() || isRowBusy}
-                        className="rounded-lg border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-none transition hover:bg-slate-800"
+                        className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-none transition hover:bg-blue-800"
                       >
                         <Check size={14} />
                         Guardar

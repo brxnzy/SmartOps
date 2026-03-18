@@ -132,7 +132,7 @@ export default function SitesSection({
                         <Button
                           type="button"
                           onClick={() => void openSiteDetailModal(site)}
-                          className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-none transition hover:bg-slate-800"
+                          className="rounded-full border border-slate-200 bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-none transition hover:bg-blue-700"
                         >
                           Ver detalle
                         </Button>
