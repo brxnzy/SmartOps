@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, ClipboardList, Cpu, HardDrive, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
+import { Building2, CalendarCheck, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -43,6 +43,24 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     ],
   },
   {
+    name: "Soporte",
+    icon: <LifeBuoy />,
+    children: [
+      {
+        name: "Tickets",
+        to: "/admin/tickets",
+        permission: PERMISSIONS.ticketsRead,
+        icon: <ClipboardList size={19} />,
+      },
+      {
+        name: "Visitas",
+        to: "/admin/visits",
+        permission: PERMISSIONS.visitsRead,
+        icon: <CalendarCheck size={19} />,
+      },
+    ],
+  },
+  {
     name: "Configuracion",
     icon: <Settings />,
     children: [
@@ -57,6 +75,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/devices-types",
         permission: PERMISSIONS.settingsDeviceTypesRead,
         icon: <HardDrive size={19} />,
+      },
+      {
+        name: "Categorias de tickets",
+        to: "/admin/ticket-categories",
+        permission: PERMISSIONS.settingsTicketCategoriesRead,
+        icon: <Tag size={19} />,
       },
       {
         name: "Mi cuenta",

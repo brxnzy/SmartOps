@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SIDEBAR_ITEMS from "../constants/navigation";
+import  CUSTOMER_SIDEBAR_ITEMS  from "../constants/customerNavigation";
 import useAuth from "./useAuth";
 
 const useSidebar = () => {
@@ -9,26 +10,29 @@ const useSidebar = () => {
   const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const isCustomer = roleProfile?.name?.trim().toLowerCase() === "customer";
 
-  const visibleSidebarItems = useMemo(
-    () =>
-      SIDEBAR_ITEMS.flatMap((item) => {
-        const visibleChildren = item.children?.filter(
-          (child) => !child.permission || canAccess(child.permission)
-        );
+  const visibleSidebarItems = useMemo(() => {
+    if (isCustomer) {
+      return CUSTOMER_SIDEBAR_ITEMS;
+    }
 
-        if (visibleChildren?.length) {
-          return [{ ...item, children: visibleChildren }];
-        }
+    return SIDEBAR_ITEMS.flatMap((item) => {
+      const visibleChildren = item.children?.filter(
+        (child) => !child.permission || canAccess(child.permission)
+      );
 
-        if (!item.children?.length && (!item.permission || canAccess(item.permission))) {
-          return [item];
-        }
+      if (visibleChildren?.length) {
+        return [{ ...item, children: visibleChildren }];
+      }
 
-        return [];
-      }),
-    [canAccess]
-  );
+      if (!item.children?.length && (!item.permission || canAccess(item.permission))) {
+        return [item];
+      }
+
+      return [];
+    });
+  }, [canAccess, isCustomer]);
   const activePaths = useMemo(() => {
     const paths = new Set<string>();
 
