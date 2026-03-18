@@ -1,11 +1,10 @@
 import type {
-  CustomerInstallation,
   CustomerSite,
   CustomerSiteAttachmentAsset,
   CustomerSiteZone,
   SitesSectionProps,
 } from "../types/customerProfile360.types";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { notifications } from "../services/notification.service";
 import {
   createCustomerSite,
@@ -30,7 +29,6 @@ const useSitesSection = ({
   companyId,
   customerId,
   sites,
-  installations,
   onRefresh,
 }: SitesSectionProps) => {
   const [isSiteModalOpen, setSiteModalOpen] = useState(false);
@@ -60,20 +58,6 @@ const useSitesSection = ({
   >({});
   const [siteCardPreviewLoading, setSiteCardPreviewLoading] = useState(false);
   const siteAttachmentsRef = useRef(siteAttachments);
-
-  const installationsBySite = useMemo(() => {
-    const map = new Map<string, CustomerInstallation[]>();
-    installations.forEach((installation) => {
-      if (!installation.siteId) return;
-      const current = map.get(installation.siteId);
-      if (current) {
-        current.push(installation);
-        return;
-      }
-      map.set(installation.siteId, [installation]);
-    });
-    return map;
-  }, [installations]);
 
   const openCreateSiteModal = () => {
     setSelectedSite(null);
@@ -493,10 +477,7 @@ const useSitesSection = ({
     }
   };
 
-  const selectedSiteInstallations = selectedSite ? installationsBySite.get(selectedSite.id) ?? [] : [];
-
   return {
-    installationsBySite,
     siteCardPreviews,
     siteCardPreviewLoading,
     isSiteModalOpen,
@@ -539,7 +520,6 @@ const useSitesSection = ({
     handleCreateSiteZone,
     handleUpdateSiteZone,
     handleDeleteSiteZone,
-    selectedSiteInstallations,
   };
 };
 

@@ -1,23 +1,13 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
-  CreateCustomerInstallationInput,
-  CreateCustomerQuoteInput,
   CreateCustomerSiteInput,
-  CreateCustomerTicketInput,
-  CustomerBillingRecord,
-  CustomerContractPlan,
-  CustomerInstalledDevice,
-  CustomerInstallation,
   CustomerProfile360Data,
-  CustomerQuote,
   CustomerSite,
   CustomerSiteAttachment,
   CustomerSiteAttachmentAsset,
   CustomerSiteZone,
-  CustomerTechnicalVisit,
-  CustomerTicket,
   CustomerTimelineEvent,
-  UpdateCustomerInstallationInput,
   UpdateCustomerSiteInput,
 } from "../types/customerProfile360.types";
 
@@ -32,15 +22,6 @@ function safeNullableText(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function safeNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
 function safeDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value ? value : null;
@@ -49,11 +30,6 @@ function safeDate(value: unknown): string | null {
 function normalizeStatus(value: unknown, fallback = "Sin estado"): string {
   const normalized = safeText(value, fallback);
   return normalized;
-}
-
-function normalizeCode(prefix: string, rawId: unknown): string {
-  const base = safeText(rawId, "n/a").replaceAll("-", "").toUpperCase();
-  return `${prefix}-${base.slice(0, 6)}`;
 }
 
 function sanitizeFileName(value: string): string {
@@ -92,117 +68,11 @@ function mapSiteZones(rows: Array<Record<string, unknown>>): CustomerSiteZone[] 
   }));
 }
 
-function mapInstallations(rows: Array<Record<string, unknown>>): CustomerInstallation[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `installation-${index}`),
-    siteId: safeNullableText(row.site_id),
-    name: safeText(row.name, `Instalacion ${index + 1}`),
-    siteName: safeNullableText(row.site_name),
-    workDescription: safeNullableText(row.work_description),
-    status: normalizeStatus(row.status, "Activa"),
-    createdAt: safeDate(row.created_at),
-  }));
-}
-
-function mapDevices(rows: Array<Record<string, unknown>>): CustomerInstalledDevice[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `device-${index}`),
-    name: safeText(row.name, `Dispositivo ${index + 1}`),
-    serial: safeNullableText(row.serial),
-    status: normalizeStatus(row.status, "Operativo"),
-    installationName: safeNullableText(row.installation_name),
-    createdAt: safeDate(row.created_at),
-  }));
-}
-
-function mapContracts(rows: Array<Record<string, unknown>>): CustomerContractPlan[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `contract-${index}`),
-    planName: safeText(row.plan_name, `Plan ${index + 1}`),
-    status: normalizeStatus(row.status, "Activo"),
-    amount: safeNumber(row.amount),
-    currency: safeNullableText(row.currency),
-    startDate: safeDate(row.start_date),
-    endDate: safeDate(row.end_date),
-  }));
-}
-
-function mapBilling(
-  invoiceRows: Array<Record<string, unknown>>,
-  paymentRows: Array<Record<string, unknown>>
-): CustomerBillingRecord[] {
-  const invoices = invoiceRows.map((row, index) => ({
-    id: safeText(row.id, `invoice-${index}`),
-    reference: safeText(row.number, normalizeCode("INV", row.id)),
-    kind: "invoice" as const,
-    status: normalizeStatus(row.status, "Pendiente"),
-    amount: safeNumber(row.amount),
-    currency: safeNullableText(row.currency),
-    issuedAt: safeDate(row.issued_at ?? row.created_at),
-    dueAt: safeDate(row.due_at),
-    paidAt: safeDate(row.paid_at),
-  }));
-
-  const payments = paymentRows.map((row, index) => ({
-    id: safeText(row.id, `payment-${index}`),
-    reference: safeText(row.reference, normalizeCode("PAY", row.id)),
-    kind: "payment" as const,
-    status: normalizeStatus(row.status, "Aplicado"),
-    amount: safeNumber(row.amount),
-    currency: safeNullableText(row.currency),
-    issuedAt: safeDate(row.created_at),
-    dueAt: null,
-    paidAt: safeDate(row.paid_at ?? row.created_at),
-  }));
-
-  return [...invoices, ...payments];
-}
-
-function mapTickets(rows: Array<Record<string, unknown>>): CustomerTicket[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `ticket-${index}`),
-    code: safeText(row.code, normalizeCode("TK", row.id)),
-    title: safeText(row.title, `Ticket ${index + 1}`),
-    status: normalizeStatus(row.status, "Abierto"),
-    priority: safeText(row.priority, "Media"),
-    openedAt: safeDate(row.created_at),
-    closedAt: safeDate(row.closed_at),
-  }));
-}
-
-function mapQuotes(rows: Array<Record<string, unknown>>): CustomerQuote[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `quote-${index}`),
-    code: safeText(row.code, normalizeCode("QT", row.id)),
-    title: safeText(row.title, `Cotizacion ${index + 1}`),
-    status: normalizeStatus(row.status, "Pendiente"),
-    amount: safeNumber(row.amount),
-    currency: safeNullableText(row.currency),
-    createdAt: safeDate(row.created_at),
-  }));
-}
-
-function mapVisits(rows: Array<Record<string, unknown>>): CustomerTechnicalVisit[] {
-  return rows.map((row, index) => ({
-    id: safeText(row.id, `visit-${index}`),
-    title: safeText(row.title, `Visita ${index + 1}`),
-    status: normalizeStatus(row.status, "Completada"),
-    technicianName: safeNullableText(row.technician_name),
-    scheduledAt: safeDate(row.scheduled_at ?? row.created_at),
-    finishedAt: safeDate(row.finished_at),
-  }));
-}
-
 function toTimelineEvents(data: {
   createdAt: string;
   invitationStatus: string;
   invitationEmail: string | null;
   sites: CustomerSite[];
-  installations: CustomerInstallation[];
-  contracts: CustomerContractPlan[];
-  tickets: CustomerTicket[];
-  quotes: CustomerQuote[];
-  visits: CustomerTechnicalVisit[];
 }): CustomerTimelineEvent[] {
   const events: CustomerTimelineEvent[] = [
     {
@@ -233,66 +103,6 @@ function toTimelineEvents(data: {
         title: `Sitio: ${item.name}`,
         description: `${item.status} - ${item.address}`,
         at: item.createdAt as string,
-      }))
-  );
-
-  events.push(
-    ...data.installations
-      .filter((item) => item.createdAt)
-      .map((item) => ({
-        id: `installation-${item.id}`,
-        type: "installation",
-        title: `Instalacion: ${item.name}`,
-        description: `${item.status}${item.siteName ? ` - ${item.siteName}` : ""}`,
-        at: item.createdAt as string,
-      }))
-  );
-
-  events.push(
-    ...data.contracts
-      .filter((item) => item.startDate)
-      .map((item) => ({
-        id: `contract-${item.id}`,
-        type: "contract",
-        title: `Contrato/plan: ${item.planName}`,
-        description: `Estado: ${item.status}`,
-        at: item.startDate as string,
-      }))
-  );
-
-  events.push(
-    ...data.tickets
-      .filter((item) => item.openedAt)
-      .map((item) => ({
-        id: `ticket-${item.id}`,
-        type: "ticket",
-        title: `${item.code} - ${item.title}`,
-        description: `Prioridad ${item.priority}. Estado ${item.status}.`,
-        at: item.openedAt as string,
-      }))
-  );
-
-  events.push(
-    ...data.quotes
-      .filter((item) => item.createdAt)
-      .map((item) => ({
-        id: `quote-${item.id}`,
-        type: "quote",
-        title: `Cotizacion ${item.code}`,
-        description: `${item.title} - ${item.status}`,
-        at: item.createdAt as string,
-      }))
-  );
-
-  events.push(
-    ...data.visits
-      .filter((item) => item.scheduledAt)
-      .map((item) => ({
-        id: `visit-${item.id}`,
-        type: "visit",
-        title: `Visita tecnica: ${item.title}`,
-        description: `Estado: ${item.status}`,
-        at: item.scheduledAt as string,
       }))
   );
 
@@ -390,14 +200,6 @@ export async function getCustomerProfile360(
 
   const [
     siteResponse,
-    installationResponse,
-    deviceResponse,
-    contractResponse,
-    invoiceResponse,
-    paymentResponse,
-    ticketResponse,
-    quoteResponse,
-    visitResponse,
   ] = await Promise.all([
     supabase
       .from("customer_sites")
@@ -405,111 +207,17 @@ export async function getCustomerProfile360(
       .eq("company_id", companyId)
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("customer_installations")
-      .select("id, name, work_description, status, created_at, customer_sites(name)")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("customer_devices")
-      .select("id, name, serial, status, created_at, customer_installations(name)")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("customer_contracts")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("invoices")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("issued_at", { ascending: false, nullsFirst: false }),
-    supabase
-      .from("payments")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("tickets")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("quotes")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("technical_visits")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("customer_id", customerId)
-      .order("scheduled_at", { ascending: false, nullsFirst: false }),
   ]);
 
-  if (
-    siteResponse.error ||
-    installationResponse.error ||
-    deviceResponse.error ||
-    contractResponse.error ||
-    invoiceResponse.error ||
-    paymentResponse.error ||
-    ticketResponse.error ||
-    quoteResponse.error ||
-    visitResponse.error
-  ) {
+  if (siteResponse.error) {
     const firstError =
-      siteResponse.error ||
-      installationResponse.error ||
-      deviceResponse.error ||
-      contractResponse.error ||
-      invoiceResponse.error ||
-      paymentResponse.error ||
-      ticketResponse.error ||
-      quoteResponse.error ||
-      visitResponse.error;
+      siteResponse.error;
     throw new Error(
       `${firstError?.message ?? "No se pudo cargar Perfil 360."} Ejecuta la migracion de Perfil 360 en Supabase.`
     );
   }
 
   const sites = mapSites((siteResponse.data ?? []) as Array<Record<string, unknown>>);
-  const installations = mapInstallations(
-    ((installationResponse.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      ...row,
-      site_name: Array.isArray(row.customer_sites)
-        ? safeText(row.customer_sites[0]?.name)
-        : typeof row.customer_sites === "object" && row.customer_sites
-          ? safeText((row.customer_sites as { name?: unknown }).name)
-          : null,
-    }))
-  );
-  const devices = mapDevices(
-    ((deviceResponse.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      ...row,
-      installation_name: Array.isArray(row.customer_installations)
-        ? safeText(row.customer_installations[0]?.name)
-        : typeof row.customer_installations === "object" && row.customer_installations
-          ? safeText((row.customer_installations as { name?: unknown }).name)
-          : null,
-    }))
-  );
-  const contracts = mapContracts((contractResponse.data ?? []) as Array<Record<string, unknown>>);
-  const billing = mapBilling(
-    (invoiceResponse.data ?? []) as Array<Record<string, unknown>>,
-    (paymentResponse.data ?? []) as Array<Record<string, unknown>>
-  );
-  const tickets = mapTickets((ticketResponse.data ?? []) as Array<Record<string, unknown>>);
-  const quotes = mapQuotes((quoteResponse.data ?? []) as Array<Record<string, unknown>>);
-  const visits = mapVisits((visitResponse.data ?? []) as Array<Record<string, unknown>>);
 
   const profile = {
     id: userResponse.data.id,
@@ -524,25 +232,8 @@ export async function getCustomerProfile360(
     invitationStatus,
   } as const;
 
-  const lowerOpenTicketStatuses = new Set(["open", "abierto", "pendiente", "in_progress", "en curso"]);
-  const lowerPendingQuoteStatuses = new Set(["pending", "pendiente", "draft", "borrador"]);
-  const lowerPendingInvoiceStatuses = new Set(["pending", "pendiente", "overdue", "vencida"]);
-
   const kpis = {
-    installations: installations.length,
-    devices: devices.length,
-    contracts: contracts.length,
-    pendingInvoices: billing.filter(
-      (item) =>
-        item.kind === "invoice" && lowerPendingInvoiceStatuses.has(item.status.trim().toLowerCase())
-    ).length,
-    openTickets: tickets.filter((item) =>
-      lowerOpenTicketStatuses.has(item.status.trim().toLowerCase())
-    ).length,
-    pendingQuotes: quotes.filter((item) =>
-      lowerPendingQuoteStatuses.has(item.status.trim().toLowerCase())
-    ).length,
-    technicalVisits: visits.length,
+    sites: sites.length,
   };
 
   const timeline = toTimelineEvents({
@@ -550,80 +241,14 @@ export async function getCustomerProfile360(
     invitationEmail: profile.invitationEmail,
     invitationStatus: profile.invitationStatus,
     sites,
-    installations,
-    contracts,
-    tickets,
-    quotes,
-    visits,
   });
 
   return {
     profile,
     kpis,
     sites,
-    installations,
-    devices,
-    contracts,
-    billing,
-    tickets,
-    quotes,
-    visits,
     timeline,
   };
-}
-
-export async function createCustomerTicket(
-  companyId: string,
-  customerId: string,
-  input: CreateCustomerTicketInput
-): Promise<void> {
-  const title = input.title.trim();
-  if (!title) throw new Error("El titulo del ticket es obligatorio.");
-
-  const code = `TK-${crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase()}`;
-
-  const { error } = await supabase.from("tickets").insert({
-    company_id: companyId,
-    customer_id: customerId,
-    code,
-    title,
-    priority: input.priority.trim().toLowerCase() || "media",
-    status: "abierto",
-  });
-
-  if (error) {
-    throw new Error(error.message || "No se pudo crear el ticket.");
-  }
-}
-
-export async function createCustomerQuote(
-  companyId: string,
-  customerId: string,
-  input: CreateCustomerQuoteInput
-): Promise<void> {
-  const title = input.title.trim();
-  if (!title) throw new Error("El titulo de la cotizacion es obligatorio.");
-
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
-    throw new Error("El monto de la cotizacion debe ser mayor que 0.");
-  }
-
-  const code = `QT-${crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase()}`;
-  const currency = input.currency.trim().toUpperCase() || "DOP";
-
-  const { error } = await supabase.from("quotes").insert({
-    company_id: companyId,
-    customer_id: customerId,
-    code,
-    title,
-    status: "pendiente",
-    amount: input.amount,
-    currency,
-  });
-
-  if (error) {
-    throw new Error(error.message || "No se pudo crear la cotizacion.");
-  }
 }
 
 export async function createCustomerSite(
@@ -653,8 +278,21 @@ export async function createCustomerSite(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo crear el sitio.");
   }
-
-  return mapSites([data])[0];
+  const created = mapSites([data])[0];
+  await logAuditEvent({
+    action: "create",
+    entity: "customer_sites",
+    entityId: created.id,
+    companyId,
+    newValues: {
+      name: created.name,
+      address: created.address,
+      city: created.city,
+      status: created.status,
+      customerId,
+    },
+  });
+  return created;
 }
 
 export async function updateCustomerSite(
@@ -683,6 +321,19 @@ export async function updateCustomerSite(
   if (error) {
     throw new Error(error.message || "No se pudo actualizar el sitio.");
   }
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_sites",
+    entityId: input.siteId,
+    companyId,
+    newValues: {
+      name,
+      address,
+      city: input.city?.trim() || null,
+      status: input.status?.trim().toLowerCase() || "active",
+      customerId,
+    },
+  });
 }
 
 export async function deleteCustomerSite(
@@ -700,6 +351,13 @@ export async function deleteCustomerSite(
   if (error) {
     throw new Error(error.message || "No se pudo eliminar el sitio.");
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customer_sites",
+    entityId: siteId,
+    companyId,
+    oldValues: { customerId },
+  });
 }
 
 export async function getCustomerSiteAttachments(
@@ -788,8 +446,18 @@ export async function createCustomerSiteZone(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo crear la zona.");
   }
-
-  return mapSiteZones([data])[0];
+  const created = mapSiteZones([data])[0];
+  await logAuditEvent({
+    action: "create",
+    entity: "customer_site_zones",
+    entityId: created.id,
+    companyId,
+    newValues: {
+      name: created.name,
+      siteId: created.customerSiteId,
+    },
+  });
+  return created;
 }
 
 export async function updateCustomerSiteZone(
@@ -817,8 +485,18 @@ export async function updateCustomerSiteZone(
   if (error || !data) {
     throw new Error(error?.message || "No se pudo actualizar la zona.");
   }
-
-  return mapSiteZones([data])[0];
+  const updated = mapSiteZones([data])[0];
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_site_zones",
+    entityId: updated.id,
+    companyId,
+    newValues: {
+      name: updated.name,
+      siteId: updated.customerSiteId,
+    },
+  });
+  return updated;
 }
 
 export async function deleteCustomerSiteZone(
@@ -836,6 +514,13 @@ export async function deleteCustomerSiteZone(
   if (error) {
     throw new Error(error.message || "No se pudo eliminar la zona.");
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customer_site_zones",
+    entityId: zoneId,
+    companyId,
+    oldValues: { siteId },
+  });
 }
 
 export async function uploadCustomerSiteAttachments(
@@ -882,7 +567,19 @@ export async function uploadCustomerSiteAttachments(
       throw new Error(error?.message || "No se pudo registrar el adjunto.");
     }
 
-    created.push(...mapSiteAttachments([data]));
+    const mapped = mapSiteAttachments([data])[0];
+    await logAuditEvent({
+      action: "create",
+      entity: "customer_site_attachments",
+      entityId: mapped.id,
+      companyId,
+      newValues: {
+        name: mapped.fileName,
+        siteId: mapped.customerSiteId,
+        filePath: mapped.filePath,
+      },
+    });
+    created.push(mapped);
   }
 
   return created;
@@ -915,67 +612,3 @@ export async function deleteCustomerSiteWithAttachments(
   return { filesRemoved: true };
 }
 
-export async function createCustomerInstallation(
-  companyId: string,
-  customerId: string,
-  input: CreateCustomerInstallationInput
-): Promise<void> {
-  const name = input.name.trim();
-  if (!name) throw new Error("El nombre de la instalacion es obligatorio.");
-
-  const { error } = await supabase.from("customer_installations").insert({
-    company_id: companyId,
-    customer_id: customerId,
-    site_id: input.siteId ?? null,
-    name,
-    work_description: input.workDescription?.trim() || null,
-    status: input.status?.trim().toLowerCase() || "active",
-    address: "N/A",
-  });
-
-  if (error) {
-    throw new Error(error.message || "No se pudo crear la instalacion.");
-  }
-}
-
-export async function updateCustomerInstallation(
-  companyId: string,
-  customerId: string,
-  input: UpdateCustomerInstallationInput
-): Promise<void> {
-  const name = input.name.trim();
-  if (!name) throw new Error("El nombre de la instalacion es obligatorio.");
-
-  const { error } = await supabase
-    .from("customer_installations")
-    .update({
-      site_id: input.siteId ?? null,
-      name,
-      work_description: input.workDescription?.trim() || null,
-      status: input.status?.trim().toLowerCase() || "active",
-    })
-    .eq("id", input.installationId)
-    .eq("company_id", companyId)
-    .eq("customer_id", customerId);
-
-  if (error) {
-    throw new Error(error.message || "No se pudo actualizar la instalacion.");
-  }
-}
-
-export async function deleteCustomerInstallation(
-  companyId: string,
-  customerId: string,
-  installationId: string
-): Promise<void> {
-  const { error } = await supabase
-    .from("customer_installations")
-    .delete()
-    .eq("id", installationId)
-    .eq("company_id", companyId)
-    .eq("customer_id", customerId);
-
-  if (error) {
-    throw new Error(error.message || "No se pudo eliminar la instalacion.");
-  }
-}

@@ -14,11 +14,9 @@ export default function SitesSection({
   companyId,
   customerId,
   sites,
-  installations,
   onRefresh,
 }: SitesSectionProps) {
   const {
-    installationsBySite,
     siteCardPreviews,
     siteCardPreviewLoading,
     isSiteModalOpen,
@@ -61,12 +59,10 @@ export default function SitesSection({
     handleCreateSiteZone,
     handleUpdateSiteZone,
     handleDeleteSiteZone,
-    selectedSiteInstallations,
   } = useSitesSection({
     companyId,
     customerId,
     sites,
-    installations,
     onRefresh,
   });
 
@@ -80,7 +76,7 @@ export default function SitesSection({
               Sitios
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              {sites.length} sitios registrados - {installations.length} instalaciones vinculadas
+              {sites.length} sitios registrados
             </p>
           </div>
           <Button
@@ -99,7 +95,6 @@ export default function SitesSection({
           <div className="site-cards mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {sites.map((site) => {
-                const siteInstallations = installationsBySite.get(site.id) ?? [];
                 const preview = siteCardPreviews[site.id];
                 return (
                   <article
@@ -128,7 +123,7 @@ export default function SitesSection({
                         <span>{site.address}</span>
                       </div>
                       <div className="mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                        Instalaciones: {siteInstallations.length}
+                        Estado: {site.status}
                       </div>
                     </div>
 
@@ -137,7 +132,7 @@ export default function SitesSection({
                         <Button
                           type="button"
                           onClick={() => void openSiteDetailModal(site)}
-                          className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-none transition hover:bg-slate-800"
+                          className="rounded-full border border-slate-200 bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-none transition hover:bg-blue-700"
                         >
                           Ver detalle
                         </Button>
@@ -229,7 +224,6 @@ export default function SitesSection({
           }
         }}
         site={selectedSite}
-        installationsCount={selectedSiteInstallations.length}
         attachments={siteDetailAttachments}
         loading={siteDetailLoading}
         error={siteDetailError}

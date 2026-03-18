@@ -9,6 +9,9 @@ export const PERMISSIONS = {
   devicesCreate: "devices.create",
   devicesUpdate: "devices.update",
   devicesDelete: "devices.delete",
+  deviceInventoryRead: "device_inventory.read",
+  deviceInventoryCreate: "device_inventory.create",
+  deviceInventoryUpdate: "device_inventory.update",
 
   rolesRead: "roles.read",
   rolesCreate: "roles.create",
@@ -26,6 +29,8 @@ export const PERMISSIONS = {
   settingsBrandsCreate: "settings.brands.create",
   settingsBrandsUpdate: "settings.brands.update",
   settingsBrandsDelete: "settings.brands.delete",
+  accountUpdate: "account.update",
+  settingsLogsRead: "settings.logs.read",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

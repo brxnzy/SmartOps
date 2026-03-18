@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import {
   createCustomerViaInvitation,
 } from "./customerInvitations.service";
@@ -216,6 +217,27 @@ export async function createCustomer(companyId: string, input: CustomerInput): P
     throw new Error(buildErrorMessage(roleError, "No se pudo asignar el rol customer."));
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "customers",
+    entityId: userId,
+    companyId,
+    newValues: {
+      name: userRow.name,
+      idCard: userRow.id_card,
+      phone: customerRow.phone,
+      taxId: customerRow.tax_id,
+      type: customerRow.type,
+    },
+  });
+  await logAuditEvent({
+    action: "create",
+    entity: "user_roles",
+    entityId: userId,
+    companyId,
+    newValues: { roleId: customerRoleId },
+  });
+
   return {
     id: userId,
     companyId,
@@ -237,7 +259,7 @@ export async function createCustomerWithInvitation(
     appBaseUrl: string;
   }
 ): Promise<Customer> {
-  return createCustomerViaInvitation({
+  const created = await createCustomerViaInvitation({
     companyId,
     invitedByUserId: invitation.invitedByUserId,
     appBaseUrl: invitation.appBaseUrl,
@@ -248,6 +270,20 @@ export async function createCustomerWithInvitation(
     customerTaxId: input.taxId,
     customerPhone: input.phone,
   });
+  await logAuditEvent({
+    action: "create",
+    entity: "customers",
+    entityId: created.id,
+    companyId,
+    newValues: {
+      name: created.name,
+      idCard: created.idCard,
+      phone: created.phone,
+      taxId: created.taxId,
+      type: created.type,
+    },
+  });
+  return created;
 }
 
 export async function updateCustomer(
@@ -312,6 +348,13 @@ export async function updateCustomer(
     if (roleInsertError) {
       throw new Error(buildErrorMessage(roleInsertError, "No se pudo asegurar el rol customer."));
     }
+    await logAuditEvent({
+      action: "create",
+      entity: "user_roles",
+      entityId: customerId,
+      companyId,
+      newValues: { roleId: customerRoleId },
+    });
   }
 
   const { data: userRow, error: userFetchError } = await supabase
@@ -323,6 +366,20 @@ export async function updateCustomer(
   if (userFetchError || !userRow) {
     throw new Error(buildErrorMessage(userFetchError, "No se pudo cargar el cliente actualizado."));
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "customers",
+    entityId: customerId,
+    companyId,
+    newValues: {
+      name: userRow.name,
+      idCard: userRow.id_card,
+      phone: customerData.phone,
+      taxId: customerData.tax_id,
+      type: customerData.type,
+    },
+  });
 
   return {
     id: customerId,
@@ -353,4 +410,10 @@ export async function deleteCustomer(companyId: string, customerId: string): Pro
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el cliente."));
   }
+  await logAuditEvent({
+    action: "delete",
+    entity: "customers",
+    entityId: customerId,
+    companyId,
+  });
 }
