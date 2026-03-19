@@ -236,10 +236,14 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsChecklistTemplatesRead}>
               <SettingsChecklistTemplates />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="logs"
           element={
             <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
-
+              <SettingsLogs />
             </PermissionRoute>
           }
         />

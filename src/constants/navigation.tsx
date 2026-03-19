@@ -1,25 +1,7 @@
 import { PERMISSIONS } from "./permissions";
-import type { DefaultAdminRoute, SidebarItem } from "../types/Navigation";
-import {
-  Building2,
-  Cpu,
-  HardDrive,
-  User,
-  UsersRound,
-  LayoutDashboard,
-  Package,
-  Settings,
-  Shield,
-  CalendarDays,
-  ClipboardCheck,
-  UserCheck2,
-  Waypoints,
-  Check,
-  Workflow,
-} from "lucide-react";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
-import { UsersRound,Building2,PackageOpen, Package, ClipboardList, Cpu, HardDrive, User, UsersRound, LayoutDashboard, PackagePlus, Settings, Shield,Waypoints,Truck } from "lucide-react";
+import { Building2, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints, CalendarDays, Workflow,ClipboardCheck,Truck,PackagePlus,PackageOpen,Check } from "lucide-react";
+
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
