@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getCustomerProfile360 } from "../services/customerProfile360.service";
 import type { CustomerProfile360Data } from "../types/customerProfile360.types";
+import type { UseCustomerProfile360Options } from "../types/interfaces";
 
-interface UseCustomerProfile360Options {
-  companyId: string | null;
-  customerId: string | undefined;
-}
 
 export function useCustomerProfile360({
   companyId,

@@ -11,7 +11,6 @@ export default function SiteDetailModal({
   onClose,
   onEdit,
   site,
-  installationsCount,
   attachments,
   loading,
   error,
@@ -180,14 +179,6 @@ export default function SiteDetailModal({
               <div className="space-y-4">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="text-xs font-medium text-slate-500">
-                        Instalaciones
-                      </div>
-                      <div className="mt-1 text-lg font-semibold text-slate-900">
-                        {installationsCount}
-                      </div>
-                    </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="text-xs font-medium text-slate-500">
                         Fecha

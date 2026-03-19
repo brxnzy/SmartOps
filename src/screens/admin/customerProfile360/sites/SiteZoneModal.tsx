@@ -53,7 +53,7 @@ export default function SiteZoneModal({
             type="button"
             onClick={() => void onSave()}
             disabled={submitting || !value.trim()}
-            className="flex-2 rounded-lg border border-slate-900 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+            className="flex-2 rounded-lg border border-blue-600 bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-50"
           >
             Guardar zona
           </Button>

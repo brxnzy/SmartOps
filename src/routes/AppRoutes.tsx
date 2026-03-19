@@ -4,6 +4,9 @@ import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
 import DeviceInventory from "../screens/admin/DeviceInventory";
 import Devices from "../screens/admin/Devices";
+import Suppliers from "../screens/admin/Suppliers";
+import InventoryLoads from "../screens/admin/InventoryLoads";
+import AutomationKits from "../screens/admin/AutomationKits";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import Login from "../screens/auth/Login";
@@ -23,6 +26,7 @@ import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
+import SettingsLogs from "../screens/admin/settings/SettingsLogs";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
@@ -117,10 +121,34 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="suppliers"
+          element={
+            <PermissionRoute permission={PERMISSIONS.suppliersRead}>
+              <Suppliers />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="inventory/devices"
           element={
             <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
               <DeviceInventory />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/loads"
+          element={
+            <PermissionRoute permission={PERMISSIONS.inventoryLoadsRead}>
+              <InventoryLoads />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/kits"
+          element={
+            <PermissionRoute permission={PERMISSIONS.kitsRead}>
+              <AutomationKits />
             </PermissionRoute>
           }
         />
@@ -192,6 +220,10 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.settingsChecklistTemplatesRead}>
               <SettingsChecklistTemplates />
+          path="logs"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
+
             </PermissionRoute>
           }
         />

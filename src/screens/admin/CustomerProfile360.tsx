@@ -7,15 +7,8 @@ import { useCustomerProfile360 } from "../../hooks/useCustomerProfile360";
 import type { Customer360TabKey } from "../../types/customerProfile360.types";
 import KpiGrid from "../../components/KpiGrid";
 import CustomerHeader from "./customerProfile360/CustomerHeader";
-import BillingSection from "./customerProfile360/sections/BillingSection";
-import ContractsSection from "./customerProfile360/sections/ContractsSection";
-import DevicesSection from "./customerProfile360/sections/DevicesSection";
-import InstallationsSection from "./customerProfile360/sections/InstallationsSection";
-import QuotesSection from "./customerProfile360/sections/QuotesSection";
 import SitesSection from "./customerProfile360/sections/SitesSection";
 import SummarySection from "./customerProfile360/sections/SummarySection";
-import TicketsSection from "./customerProfile360/sections/TicketsSection";
-import VisitsSection from "./customerProfile360/sections/VisitsSection";
 
 export default function CustomerProfile360() {
   const { customerId } = useParams<{ customerId: string }>();
@@ -32,13 +25,6 @@ export default function CustomerProfile360() {
     return [
       { key: "summary", label: "Resumen", count: source?.timeline.length ?? 0 },
       { key: "sites", label: "Sitios", count: source?.sites.length ?? 0 },
-      { key: "installations", label: "Instalaciones", count: source?.installations.length ?? 0 },
-      { key: "devices", label: "Equipos", count: source?.devices.length ?? 0 },
-      { key: "contracts", label: "Contratos", count: source?.contracts.length ?? 0 },
-      { key: "billing", label: "Facturacion", count: source?.billing.length ?? 0 },
-      { key: "tickets", label: "Tickets", count: source?.tickets.length ?? 0 },
-      { key: "quotes", label: "Cotizaciones", count: source?.quotes.length ?? 0 },
-      { key: "visits", label: "Visitas", count: source?.visits.length ?? 0 },
     ] satisfies Array<{ key: Customer360TabKey; label: string; count: number }>;
   }, [data]);
 
@@ -97,26 +83,10 @@ export default function CustomerProfile360() {
           companyId={companyProfile?.id ?? null}
           customerId={customerId}
           sites={data.sites}
-          installations={data.installations}
           onRefresh={refresh}
         />
       ) : null}
 
-      {activeTab === "installations" ? (
-        <InstallationsSection installations={data.installations} />
-      ) : null}
-
-      {activeTab === "devices" ? <DevicesSection devices={data.devices} /> : null}
-
-      {activeTab === "contracts" ? <ContractsSection contracts={data.contracts} /> : null}
-
-      {activeTab === "billing" ? <BillingSection billing={data.billing} /> : null}
-
-      {activeTab === "tickets" ? <TicketsSection tickets={data.tickets} /> : null}
-
-      {activeTab === "quotes" ? <QuotesSection quotes={data.quotes} /> : null}
-
-      {activeTab === "visits" ? <VisitsSection visits={data.visits} /> : null}
     </section>
   );
 }

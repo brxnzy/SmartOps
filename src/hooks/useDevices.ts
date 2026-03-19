@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "../libs/supabase";
 import { PERMISSIONS } from "../constants/permissions";
 import useAuth from "./useAuth";
 import {
@@ -6,6 +7,7 @@ import {
   createDevice,
   deleteDevice,
   getBrandsByCompany,
+  getDeviceInventoryByCompany,
   getDevicesByCompany,
   getDeviceTypesByCompany,
   getProtocolsByCompany,
@@ -13,10 +15,20 @@ import {
 } from "../services/device.service";
 import { notifications } from "../services/notification.service";
 import type { Brand, Device, DeviceType, Protocol } from "../types/Device";
+import type { DeviceInventory } from "../types/Device";
+
+type DeviceInventoryRealtimeRow = {
+  id: string;
+  device_id: string;
+  quantity: number;
+  status: string | null;
+  last_updated: string | null;
+};
 
 const useDevices = () => {
   const { companyProfile, canAccess } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
+  const [inventory, setInventory] = useState<DeviceInventory[]>([]);
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -28,6 +40,7 @@ const useDevices = () => {
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
   const [price, setPrice] = useState("");
+  const [compatibility, setCompatibility] = useState("");
   const [quantity, setQuantity] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [protocolId, setProtocolId] = useState("");
@@ -42,17 +55,20 @@ const useDevices = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [loadedDevices, loadedProtocols, loadedDeviceTypes, loadedBrands] = await Promise.all([
-        getDevicesByCompany(companyId),
-        getProtocolsByCompany(companyId),
-        getDeviceTypesByCompany(companyId),
-        getBrandsByCompany(companyId),
-      ]);
+      const [loadedDevices, loadedProtocols, loadedDeviceTypes, loadedBrands, loadedInventory] =
+        await Promise.all([
+          getDevicesByCompany(companyId),
+          getProtocolsByCompany(companyId),
+          getDeviceTypesByCompany(companyId),
+          getBrandsByCompany(companyId),
+          getDeviceInventoryByCompany(companyId),
+        ]);
 
       setDevices(loadedDevices);
       setProtocols(loadedProtocols);
       setDeviceTypes(loadedDeviceTypes);
       setBrands(loadedBrands);
+      setInventory(loadedInventory);
     } catch (error) {
       notifications.error({
         title: "Error cargando dispositivos",
@@ -68,6 +84,46 @@ const useDevices = () => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!companyId) return;
+
+    const channel = supabase
+      .channel("device-inventory")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "device_inventory" },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldRow = payload.old as DeviceInventoryRealtimeRow | null;
+            if (!oldRow?.id) return;
+            setInventory((current) => current.filter((item) => item.id !== oldRow.id));
+            return;
+          }
+
+          const row = payload.new as DeviceInventoryRealtimeRow | null;
+          if (!row?.id || !row.device_id) return;
+
+          setInventory((current) => {
+            const next = current.filter((item) => item.id !== row.id);
+            next.push({
+              id: row.id,
+              deviceId: row.device_id,
+              quantity: row.quantity ?? 0,
+              status: row.status ?? null,
+              lastUpdated: row.last_updated ?? null,
+              device: null,
+            });
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [companyId]);
+
   const protocolNameById = useMemo(
     () => new Map(protocols.map((protocol) => [String(protocol.id), protocol.name ?? "(Sin nombre)"])),
     [protocols]
@@ -82,30 +138,38 @@ const useDevices = () => {
     () => new Map(brands.map((brand) => [brand.id, brand.name])),
     [brands]
   );
+
+  const inventoryQuantityByDeviceId = useMemo(
+    () => new Map(inventory.map((item) => [item.deviceId, item.quantity])),
+    [inventory]
+  );
   const filteredDevices = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return devices;
 
     return devices.filter((device) => {
       const protocolName = (protocolNameById.get(device.protocolId) ?? "").toLowerCase();
-      const deviceTypeName = (deviceTypeNameById.get(String(device.deviceTypeId)) ?? "").toLowerCase();
+      const deviceTypeName = (deviceTypeNameById.get(device.deviceTypeId) ?? "").toLowerCase();
       const brandName = (brandNameById.get(device.brandId) ?? "").toLowerCase();
 
       return (
         device.name.toLowerCase().includes(query) ||
         device.model.toLowerCase().includes(query) ||
+        (device.compatibility ?? "").toLowerCase().includes(query) ||
         protocolName.includes(query) ||
         deviceTypeName.includes(query) ||
-        brandName.includes(query)
+        brandName.includes(query) ||
+        String(inventoryQuantityByDeviceId.get(device.id) ?? 0).includes(query)
       );
     });
-  }, [brandNameById, deviceTypeNameById, devices, protocolNameById, searchTerm]);
+  }, [brandNameById, deviceTypeNameById, devices, protocolNameById, searchTerm, inventoryQuantityByDeviceId]);
 
   const hasChanges = useMemo(() => {
     const cleanName = name.trim();
     const cleanModel = model.trim();
     const cleanPrice = Number(price);
     const cleanQuantity = Number(quantity);
+    const cleanCompatibility = compatibility.trim();
 
     if (!editingDevice) {
       return Boolean(
@@ -126,17 +190,19 @@ const useDevices = () => {
       cleanName !== editingDevice.name.trim() ||
       cleanModel !== editingDevice.model.trim() ||
       cleanPrice !== editingDevice.price ||
+      cleanCompatibility !== (editingDevice.compatibility ?? "").trim() ||
       protocolId !== editingDevice.protocolId ||
-      Number(deviceTypeId) !== editingDevice.deviceTypeId ||
+      deviceTypeId !== editingDevice.deviceTypeId ||
       brandId !== editingDevice.brandId
     );
-  }, [brandId, deviceTypeId, editingDevice, model, name, price, protocolId, quantity]);
+  }, [brandId, compatibility, deviceTypeId, editingDevice, model, name, price, protocolId, quantity]);
 
   const openCreateModal = () => {
     setEditingDevice(null);
     setName("");
     setModel("");
     setPrice("");
+    setCompatibility("");
     setQuantity("");
     setProtocolId("");
     setDeviceTypeId("");
@@ -149,9 +215,10 @@ const useDevices = () => {
     setName(device.name);
     setModel(device.model);
     setPrice(String(device.price));
+    setCompatibility(device.compatibility ?? "");
     setQuantity("");
     setProtocolId(device.protocolId);
-    setDeviceTypeId(String(device.deviceTypeId));
+    setDeviceTypeId(device.deviceTypeId);
     setBrandId(device.brandId);
     setIsModalOpen(true);
   };
@@ -163,6 +230,7 @@ const useDevices = () => {
     setName("");
     setModel("");
     setPrice("");
+    setCompatibility("");
     setQuantity("");
     setProtocolId("");
     setDeviceTypeId("");
@@ -176,6 +244,7 @@ const useDevices = () => {
     const cleanModel = model.trim();
     const cleanPrice = Number(price);
     const cleanQuantity = Number(quantity);
+    const cleanCompatibility = compatibility.trim();
 
     const invalidBaseFields =
       !cleanName || !cleanModel || !price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0;
@@ -216,8 +285,9 @@ const useDevices = () => {
           model: cleanModel,
           price: cleanPrice,
           protocolId,
-          deviceTypeId: Number(deviceTypeId),
+          deviceTypeId,
           brandId,
+          compatibility: cleanCompatibility || null,
         });
 
         setDevices((current) => current.map((item) => (item.id === updated.id ? updated : item)));
@@ -232,9 +302,10 @@ const useDevices = () => {
           model: cleanModel,
           price: cleanPrice,
           protocolId,
-          deviceTypeId: Number(deviceTypeId),
+          deviceTypeId,
           companyId: companyId as string,
           brandId,
+          compatibility: cleanCompatibility || null,
         });
 
         await createDeviceInventory({
@@ -308,6 +379,7 @@ const useDevices = () => {
     name,
     model,
     price,
+    compatibility,
     quantity,
     searchTerm,
     protocolId,
@@ -322,9 +394,11 @@ const useDevices = () => {
     protocolNameById,
     deviceTypeNameById,
     brandNameById,
+    inventoryQuantityByDeviceId,
     setName,
     setModel,
     setPrice,
+    setCompatibility,
     setQuantity,
     setSearchTerm,
     setProtocolId,

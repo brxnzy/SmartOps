@@ -1,5 +1,6 @@
 ﻿import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   CompanyUser,
   CompanyUserInput,
@@ -220,6 +221,14 @@ export async function setCompanyUserDisabledState(input: {
     throw new Error("No se recibio confirmacion de estado del usuario.");
   }
 
+  await logAuditEvent({
+    action: "update",
+    entity: "users_status",
+    entityId: input.targetUserId,
+    companyId: input.companyId,
+    newValues: { disabled: input.disabled },
+  });
+
   return {
     userId: response.status.userId,
     bannedUntil: response.status.bannedUntil ?? null,
@@ -275,4 +284,11 @@ export async function updateUserRole(
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo actualizar el rol del usuario."));
   }
+  await logAuditEvent({
+    action: "update",
+    entity: "user_roles",
+    entityId: existing.id,
+    companyId,
+    newValues: { userId, roleId },
+  });
 }

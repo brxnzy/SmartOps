@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type { Customer } from "../types/customer.types";
 import type { CreateInvitationInput } from "../types/interfaces";
 import type { EmailInvitationPayload } from "../types/interfaces";
@@ -109,6 +110,16 @@ export async function createAndSendCustomerInvitation({
     customerName,
     companyName,
   });
+  await logAuditEvent({
+    action: "invite",
+    entity: "customer_invitations",
+    companyId,
+    newValues: {
+      customerId,
+      customerName,
+      email,
+    },
+  });
 }
 
 export async function inviteCustomerAuthUser(input: {
@@ -142,6 +153,17 @@ export async function inviteCustomerAuthUser(input: {
   if (typeof authUserId !== "string" || !authUserId) {
     throw new Error("No se recibio el authUserId de la invitacion.");
   }
+
+  await logAuditEvent({
+    action: "invite",
+    entity: "customer_invitations",
+    companyId: input.companyId,
+    newValues: {
+      customerName: input.customerName,
+      email,
+      authUserId,
+    },
+  });
 
   return authUserId;
 }
@@ -177,6 +199,20 @@ export async function createCustomerViaInvitation(input: {
   if (!customer?.id) {
     throw new Error("No se pudo crear el cliente invitado.");
   }
+
+  await logAuditEvent({
+    action: "create",
+    entity: "customers",
+    entityId: customer.id,
+    companyId: input.companyId,
+    newValues: {
+      name: customer.name,
+      idCard: customer.idCard,
+      phone: customer.phone,
+      taxId: customer.taxId,
+      type: customer.type,
+    },
+  });
 
   return customer;
 }
@@ -215,4 +251,10 @@ export async function syncPendingInvitationEmail(
   if (error) {
     throw new Error(error.message || "No se pudo sincronizar email de invitacion pendiente.");
   }
+  await logAuditEvent({
+    action: "update",
+    entity: "customer_invitations",
+    companyId,
+    newValues: { customerId, email: normalizedEmail },
+  });
 }

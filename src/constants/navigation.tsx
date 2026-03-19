@@ -17,6 +17,8 @@ import {
   Check,
   Workflow,
 } from "lucide-react";
+import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
+import { UsersRound,Building2,PackageOpen, Package, ClipboardList, Cpu, HardDrive, User, UsersRound, LayoutDashboard, PackagePlus, Settings, Shield,Waypoints,Truck } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -73,6 +75,24 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         permission: PERMISSIONS.devicesRead,
         icon: <Cpu size={19} />,
       },
+      {
+        name: "Proveedores",
+        to: "/admin/suppliers",
+        permission: PERMISSIONS.suppliersRead,
+        icon: <Truck size={19} />,
+      },
+      {
+        name: "Cargas",
+        to: "/admin/inventory/loads",
+        permission: PERMISSIONS.inventoryLoadsRead,
+        icon: <PackagePlus size={19} />,
+      },
+      {
+        name: "Kits",
+        to: "/admin/inventory/kits",
+        permission: PERMISSIONS.kitsRead,
+        icon: <PackageOpen size={19} />,
+      },
     ],
   },
   {
@@ -107,6 +127,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         name: "Mi cuenta",
         to: "/admin/account",
         icon: <User size={19} />,
+       },
+      {
+        name: "Logs",
+        to: "/admin/logs",
+        permission: PERMISSIONS.settingsLogsRead,
+        icon: <ClipboardList size={19} />,
       },
     ],
   },

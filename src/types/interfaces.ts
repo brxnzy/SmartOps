@@ -1,8 +1,10 @@
 import type { ChangeEvent, ReactNode, RefObject } from "react";
 import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
+import type { CustomerInput } from "../types/customer.types";
+import type { Supplier, SupplierInput } from "../types/supplier.types";
 import type { CustomerInput} from "../types/customer.types";
-import type { Customer360BasicProfile, Customer360Kpis, CustomerBillingRecord, CustomerContractPlan, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
+import type { Customer360BasicProfile, Customer360Kpis, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
 
 export interface CustomerSubmitOptions {
   invitationEmail?: string;
@@ -51,6 +53,47 @@ export interface CustomerTableProps {
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
   onViewDetail: (customer: Customer) => void;
+  onPageChange: (page: number) => void;
+}
+
+export interface SupplierFiltersProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  onCreate: () => void;
+  disabled?: boolean;
+}
+
+export interface SupplierDeleteModalProps {
+  open: boolean;
+  supplier: Supplier | null;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+export interface SupplierFormProps {
+  initialData?: Supplier | null;
+  submitting: boolean;
+  onCancel: () => void;
+  onSubmit: (payload: SupplierInput) => Promise<void>;
+}
+
+export interface SupplierModalProps {
+  open: boolean;
+  supplier: Supplier | null;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (payload: SupplierInput) => Promise<void>;
+}
+
+export interface SupplierTableProps {
+  items: Supplier[];
+  page: number;
+  totalPages: number;
+  total: number;
+  disabled?: boolean;
+  onEdit: (supplier: Supplier) => void;
+  onDelete: (supplier: Supplier) => void;
   onPageChange: (page: number) => void;
 }
 
@@ -174,32 +217,6 @@ export interface EditCustomerModalProps {
 }
 
 
-export interface QuoteModalProps {
-  profile: Customer360BasicProfile;
-  open: boolean;
-  onClose: () => void;
-  companyId: string | null;
-  customerId: string | undefined;
-  onSaved: () => Promise<void>;
-}
-
-
-export interface TicketModalProps {
-  profile: Customer360BasicProfile;
-  open: boolean;
-  onClose: () => void;
-  companyId: string | null;
-  customerId: string | undefined;
-  onSaved: () => Promise<void>;
-}
-
-export interface BillingSectionProps {
-  billing: CustomerBillingRecord[];
-}
-
-export interface ContractsSectionProps {
-  contracts: CustomerContractPlan[];
-}
 
 
 export interface SiteDeleteModalProps {
@@ -265,4 +282,43 @@ export interface SiteZonesPanelProps {
 export interface SiteFormValues {
   name: string;
   address: string;
+}
+
+
+export interface AuditLogEntry {
+  id: string;
+  user_id: string | null;
+  company_id: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  created_at: string;
+  user: {
+    id: string;
+    name: string;
+    photo_url: string | null;
+  } | null;
+}
+
+
+export interface UseCustomerProfile360Options {
+  companyId: string | null;
+  customerId: string | undefined;
+}
+
+export interface UseCustomersOptions {
+  companyId: string | null;
+  invitedByUserId?: string | null;
+  pageSize?: number;
+}
+
+export type CustomerFilterType = CustomerType | "all";
+
+export interface CustomerQueryState {
+  page: number;
+  pageSize: number;
+  search: string;
+  type: CustomerFilterType;
 }

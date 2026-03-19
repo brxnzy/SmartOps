@@ -5,8 +5,6 @@ import Button from "../../../components/Button";
 import type { Customer360BasicProfile, Customer360TabKey } from "../../../types/customerProfile360.types";
 import { formatDate, initialsFromName } from "../../../utils/utils";
 import EditCustomerModal from "../../../modals/ModalsCustomer/EditCustomerModal";
-import QuoteModal from "../../../modals/ModalsCustomer/QuoteModal";
-import TicketModal from "../../../modals/ModalsCustomer/TicketModal";
 
 interface TabItem {
   key: Customer360TabKey;
@@ -34,8 +32,6 @@ export default function CustomerHeader({
   onRefresh,
 }: CustomerHeaderProps) {
   const [isEditModalOpen, setEditModalOpen] = useState(false);
-  const [isTicketModalOpen, setTicketModalOpen] = useState(false);
-  const [isQuoteModalOpen, setQuoteModalOpen] = useState(false);
   const initials = initialsFromName(profile.name);
 
   return (
@@ -78,20 +74,6 @@ export default function CustomerHeader({
             >
               Editar
             </Button>
-            <Button
-              type="button"
-              onClick={() => setTicketModalOpen(true)}
-              className="border-blue-500 bg-blue-600 text-white hover:bg-blue-500"
-            >
-              Nuevo Ticket
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setQuoteModalOpen(true)}
-              className="border-cyan-500 bg-cyan-600 text-white hover:bg-cyan-500"
-            >
-              Nueva Cotizacion
-            </Button>
           </div>
         </div>
 
@@ -120,22 +102,6 @@ export default function CustomerHeader({
         companyId={companyId}
         customerId={customerId}
         profile={profile}
-        onSaved={onRefresh}
-      />
-      <TicketModal
-        profile={profile}
-        open={isTicketModalOpen}
-        onClose={() => setTicketModalOpen(false)}
-        companyId={companyId}
-        customerId={customerId}
-        onSaved={onRefresh}
-      />
-      <QuoteModal
-        profile={profile}
-        open={isQuoteModalOpen}
-        onClose={() => setQuoteModalOpen(false)}
-        companyId={companyId}
-        customerId={customerId}
         onSaved={onRefresh}
       />
     </>
