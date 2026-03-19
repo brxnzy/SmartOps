@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, CalendarCheck, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
+import { Building2, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -51,12 +51,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/tickets",
         permission: PERMISSIONS.ticketsRead,
         icon: <ClipboardList size={19} />,
-      },
-      {
-        name: "Visitas",
-        to: "/admin/visits",
-        permission: PERMISSIONS.visitsRead,
-        icon: <CalendarCheck size={19} />,
       },
     ],
   },

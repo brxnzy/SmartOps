@@ -30,7 +30,6 @@ import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
 import AdminTickets from "../screens/admin/Tickets";
 import AdminTicketDetail from "../screens/admin/TicketDetail";
-import AdminVisits from "../screens/admin/Visits";
 import CustomerTickets from "../screens/customer/CustomerTickets";
 import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
 import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
@@ -216,16 +215,6 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
-        <Route
-          path="visits"
-          element={
-            <PermissionRoute permission={PERMISSIONS.visitsRead}>
-              <AdminVisits />
-            </PermissionRoute>
-          }
-        />
-
-
       </Route>
 
       <Route

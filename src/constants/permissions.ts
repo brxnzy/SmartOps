@@ -42,9 +42,6 @@ export const PERMISSIONS = {
   ticketsUpdate: "tickets.update",
   ticketsAssign: "tickets.assign",
   ticketsComment: "tickets.comment",
-  visitsRead: "visits.read",
-  visitsCreate: "visits.create",
-  visitsUpdate: "visits.update",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

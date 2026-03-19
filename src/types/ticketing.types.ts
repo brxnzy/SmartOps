@@ -53,18 +53,6 @@ export interface TicketAttachment {
   url?: string;
 }
 
-export interface TicketVisit {
-  id: string;
-  ticketId: string;
-  technicianId: string | null;
-  technicianName: string | null;
-  scheduledAt: string;
-  diagnosis: string | null;
-  resolution: string | null;
-  createdAt: string;
-  completedAt: string | null;
-}
-
 export interface CreateTicketInput {
   siteId: string | null;
   zoneId: string | null;
@@ -84,11 +72,4 @@ export interface TicketCategoryItem {
 export interface CreateTicketCommentInput {
   body: string;
   isInternal: boolean;
-}
-
-export interface CreateTicketVisitInput {
-  technicianId: string | null;
-  scheduledAt: string;
-  diagnosis?: string | null;
-  resolution?: string | null;
 }

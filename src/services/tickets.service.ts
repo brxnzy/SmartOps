@@ -2,14 +2,11 @@ import { supabase } from "../libs/supabase";
 import type {
   CreateTicketCommentInput,
   CreateTicketInput,
-  CreateTicketVisitInput,
   Ticket,
   TicketAttachment,
   TicketComment,
   TicketListItem,
   TicketSla,
-  TicketStatus,
-  TicketVisit,
 } from "../types/ticketing.types";
 
 const TICKET_ATTACHMENT_BUCKET = "ticket-attachments";
@@ -102,23 +99,6 @@ function mapAttachment(row: Record<string, unknown>): TicketAttachment {
   };
 }
 
-function mapVisit(row: Record<string, unknown>): TicketVisit {
-  return {
-    id: safeText(row.id),
-    ticketId: safeText(row.ticket_id),
-    technicianId: safeNullableText(row.technician_id),
-    technicianName:
-      typeof row.technician === "object" && row.technician
-        ? safeNullableText((row.technician as { name?: unknown }).name)
-        : safeNullableText(row.technician_name),
-    scheduledAt: safeText(row.scheduled_at, new Date().toISOString()),
-    diagnosis: safeNullableText(row.diagnosis),
-    resolution: safeNullableText(row.resolution),
-    createdAt: safeText(row.created_at, new Date().toISOString()),
-    completedAt: safeDate(row.completed_at),
-  };
-}
-
 async function resolveAttachmentUrls(attachments: TicketAttachment[]): Promise<TicketAttachment[]> {
   return Promise.all(
     attachments.map(async (attachment) => {
@@ -184,32 +164,25 @@ export async function getTicketDetail(
   ticket: Ticket;
   comments: TicketComment[];
   attachments: TicketAttachment[];
-  visits: TicketVisit[];
 }> {
-  const [{ data: ticketData, error: ticketError }, commentsResponse, attachmentsResponse, visitsResponse] =
-    await Promise.all([
-      supabase
-    .from("tickets")
-    .select("*, category:ticket_categories ( id, name )")
-        .eq("company_id", companyId)
-        .eq("id", ticketId)
-        .single(),
-      supabase
-        .from("ticket_comments")
-        .select("id, ticket_id, author_id, body, is_internal, created_at")
-        .eq("ticket_id", ticketId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("ticket_attachments")
-        .select("id, ticket_id, comment_id, file_name, file_path, file_type, uploaded_by, created_at")
-        .eq("ticket_id", ticketId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("ticket_visits")
-        .select("id, ticket_id, technician_id, scheduled_at, diagnosis, resolution, created_at, completed_at")
-        .eq("ticket_id", ticketId)
-        .order("scheduled_at", { ascending: true }),
-    ]);
+  const [{ data: ticketData, error: ticketError }, commentsResponse, attachmentsResponse] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select("*, category:ticket_categories ( id, name )")
+      .eq("company_id", companyId)
+      .eq("id", ticketId)
+      .single(),
+    supabase
+      .from("ticket_comments")
+      .select("id, ticket_id, author_id, body, is_internal, created_at")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("ticket_attachments")
+      .select("id, ticket_id, comment_id, file_name, file_path, file_type, uploaded_by, created_at")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: true }),
+  ]);
 
   if (ticketError || !ticketData) {
     throw new Error(ticketError?.message || "No se pudo cargar el ticket.");
@@ -221,13 +194,11 @@ export async function getTicketDetail(
   const attachments = await resolveAttachmentUrls(
     (attachmentsResponse.data ?? []).map((row) => mapAttachment(row as Record<string, unknown>))
   );
-  const visits = (visitsResponse.data ?? []).map((row) => mapVisit(row as Record<string, unknown>));
 
   return {
     ticket: mapTicket(ticketData as Record<string, unknown>),
     comments,
     attachments,
-    visits,
   };
 }
 
@@ -336,88 +307,4 @@ export async function addTicketComment(
   if (files.length > 0) {
     await uploadTicketAttachments(companyId, ticketId, authorId, files, data.id as string);
   }
-}
-
-export async function updateTicketStatus(ticketId: string, status: TicketStatus): Promise<void> {
-  const { error } = await supabase.from("tickets").update({ status }).eq("id", ticketId);
-  if (error) throw new Error(error.message || "No se pudo actualizar el estado.");
-}
-
-export async function assignTicket(ticketId: string, technicianId: string | null): Promise<void> {
-  const { error } = await supabase.from("tickets").update({ assigned_to: technicianId }).eq("id", ticketId);
-  if (error) throw new Error(error.message || "No se pudo asignar el tecnico.");
-}
-
-export async function createTicketVisit(
-  companyId: string,
-  ticketId: string,
-  input: CreateTicketVisitInput
-): Promise<void> {
-  const { error } = await supabase.from("ticket_visits").insert({
-    company_id: companyId,
-    ticket_id: ticketId,
-    technician_id: input.technicianId,
-    scheduled_at: input.scheduledAt,
-    diagnosis: input.diagnosis ?? null,
-    resolution: input.resolution ?? null,
-  });
-
-  if (error) throw new Error(error.message || "No se pudo programar la visita.");
-}
-
-export async function completeTicketVisit(
-  visitId: string,
-  payload: { diagnosis: string; resolution: string }
-): Promise<void> {
-  const { error } = await supabase
-    .from("ticket_visits")
-    .update({
-      diagnosis: payload.diagnosis,
-      resolution: payload.resolution,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", visitId);
-
-  if (error) throw new Error(error.message || "No se pudo cerrar la visita.");
-}
-
-export async function listTechnicians(companyId: string): Promise<Array<{ id: string; name: string }>> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("users:user_id ( id, name ), roles:role_id ( name )")
-    .eq("company_id", companyId);
-
-  if (error) {
-    throw new Error(error.message || "No se pudieron cargar los tecnicos.");
-  }
-
-  const mapped =
-    (data ?? [])
-      .map((row) => {
-        const user = (row as { users?: { id?: string; name?: string } | null }).users ?? null;
-        const role = (row as { roles?: { name?: string } | null }).roles ?? null;
-        if (!user?.id || !user.name) return null;
-        const roleName = role?.name?.toLowerCase() ?? "";
-        if (!["tecnico", "técnico", "technician", "admin"].some((key) => roleName.includes(key))) {
-          return null;
-        }
-        return { id: user.id, name: user.name };
-      })
-      .filter((item): item is { id: string; name: string } => Boolean(item)) ?? [];
-
-  return mapped;
-}
-
-export async function listTicketVisits(companyId: string): Promise<TicketVisit[]> {
-  const { data, error } = await supabase
-    .from("ticket_visits")
-    .select("id, ticket_id, technician_id, scheduled_at, diagnosis, resolution, created_at, completed_at")
-    .eq("company_id", companyId)
-    .order("scheduled_at", { ascending: false });
-
-  if (error) {
-    throw new Error(error.message || "No se pudieron cargar las visitas.");
-  }
-
-  return (data ?? []).map((row) => mapVisit(row as Record<string, unknown>));
 }

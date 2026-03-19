@@ -7,23 +7,26 @@ import EmptyState from "../../components/EmptyState";
 import Field from "../../components/Field";
 import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
-import {
-  addTicketComment,
-  assignTicket,
-  createTicketVisit,
-  getTicketDetail,
-  listTechnicians,
-  updateTicketStatus,
-} from "../../services/tickets.service";
+import { addTicketComment, getTicketDetail } from "../../services/tickets.service";
 import type { TicketComment, TicketListItem, TicketStatus } from "../../types/ticketing.types";
 
-const STATUS_OPTIONS: Array<{ value: TicketStatus; label: string }> = [
-  { value: "abierto", label: "Abierto" },
-  { value: "en_proceso", label: "En proceso" },
-  { value: "esperando_cliente", label: "Esperando cliente" },
-  { value: "resuelto", label: "Resuelto" },
-  { value: "cerrado", label: "Cerrado" },
-];
+function statusLabel(status: TicketStatus): string {
+  if (status === "abierto") return "Abierto";
+  if (status === "en_proceso") return "En proceso";
+  if (status === "esperando_cliente") return "Esperando cliente";
+  if (status === "resuelto") return "Resuelto";
+  if (status === "cerrado") return "Cerrado";
+  return status;
+}
+
+function statusBadgeClass(status: TicketStatus): string {
+  if (status === "abierto") return "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "en_proceso") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "esperando_cliente") return "bg-purple-50 text-purple-700 border-purple-200";
+  if (status === "resuelto") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "cerrado") return "bg-slate-100 text-slate-700 border-slate-200";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
 
 function formatDateTime(value: string | null): string {
   if (!value) return "Sin fecha";
@@ -50,18 +53,10 @@ export default function AdminTicketDetail() {
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [attachments, setAttachments] = useState<Array<{ name: string; url?: string }>>([]);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
-  const [visitModalOpen, setVisitModalOpen] = useState(false);
-  const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([]);
-  const [statusValue, setStatusValue] = useState<TicketStatus>("abierto");
-  const [statusSaving, setStatusSaving] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentInternal, setCommentInternal] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [visitDate, setVisitDate] = useState("");
-  const [visitTechnician, setVisitTechnician] = useState("");
-  const [visitDiagnosis, setVisitDiagnosis] = useState("");
-  const [visitResolution, setVisitResolution] = useState("");
 
   const loadTicket = async () => {
     if (!companyId || !ticketId) return;
@@ -76,8 +71,6 @@ export default function AdminTicketDetail() {
           .filter((attachment) => !attachment.commentId)
           .map((attachment) => ({ name: attachment.fileName, url: attachment.url }))
       );
-      setStatusValue(data.ticket.status);
-      setVisitTechnician(data.ticket.assignedTo ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el ticket.");
     } finally {
@@ -88,30 +81,6 @@ export default function AdminTicketDetail() {
   useEffect(() => {
     void loadTicket();
   }, [companyId, ticketId]);
-
-  useEffect(() => {
-    if (!companyId) return;
-    listTechnicians(companyId)
-      .then(setTechnicians)
-      .catch(() => setTechnicians([]));
-  }, [companyId]);
-
-  const handleStatusChange = async (nextStatus: TicketStatus) => {
-    if (!ticketId) return;
-    const previousStatus = ticket?.status ?? statusValue;
-    setStatusValue(nextStatus);
-    setStatusSaving(true);
-    setError(null);
-    try {
-      await updateTicketStatus(ticketId, nextStatus);
-      setTicket((prev) => (prev ? { ...prev, status: nextStatus } : prev));
-    } catch (err) {
-      setStatusValue(previousStatus);
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el estado.");
-    } finally {
-      setStatusSaving(false);
-    }
-  };
 
   const handleComment = async () => {
     if (!companyId || !ticketId || !userId || !commentText.trim()) return;
@@ -129,32 +98,6 @@ export default function AdminTicketDetail() {
       await loadTicket();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar el comentario.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleVisitSchedule = async () => {
-    if (!companyId || !ticketId || !visitDate) return;
-    setSubmitting(true);
-    try {
-      await createTicketVisit(companyId, ticketId, {
-        technicianId: visitTechnician || null,
-        scheduledAt: new Date(visitDate).toISOString(),
-        diagnosis: visitDiagnosis.trim() || null,
-        resolution: visitResolution.trim() || null,
-      });
-      if (visitTechnician !== (ticket?.assignedTo ?? "")) {
-        await assignTicket(ticketId, visitTechnician || null);
-      }
-      setVisitDate("");
-      setVisitTechnician(ticket?.assignedTo ?? "");
-      setVisitDiagnosis("");
-      setVisitResolution("");
-      setVisitModalOpen(false);
-      await loadTicket();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo programar la visita.");
     } finally {
       setSubmitting(false);
     }
@@ -188,13 +131,6 @@ export default function AdminTicketDetail() {
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            onClick={() => setVisitModalOpen(true)}
-            className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-          >
-            Programar visita tecnica
-          </Button>
-          <Button
-            type="button"
             onClick={() => navigate("/admin/tickets")}
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
           >
@@ -206,21 +142,13 @@ export default function AdminTicketDetail() {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Estado</p>
-          <select
-            value={statusValue}
-            onChange={(event) => void handleStatusChange(event.target.value as TicketStatus)}
-            disabled={statusSaving}
-            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+          <span
+            className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(
+              ticket.status
+            )}`}
           >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {statusSaving ? (
-            <p className="mt-2 text-xs text-slate-500">Guardando estado...</p>
-          ) : null}
+            {statusLabel(ticket.status)}
+          </span>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Categoria</p>
@@ -353,101 +281,6 @@ export default function AdminTicketDetail() {
         )}
       </Modal>
 
-      <Modal
-        open={visitModalOpen}
-        onClose={() => setVisitModalOpen(false)}
-        title="Programar visita técnica"
-        subtitle="Coordina fecha, técnico y notas iniciales."
-        size="lg"
-        containerClassName="overflow-hidden border border-slate-100 bg-white"
-        headerClassName="px-7 pt-7 pb-5"
-        bodyClassName="px-7 py-0"
-        footerClassName="px-7 py-4 bg-slate-50 border-t border-slate-100"
-        footer={
-          <>
-            <Button
-              type="button"
-              onClick={() => setVisitModalOpen(false)}
-              disabled={submitting}
-              className="border-slate-200 bg-transparent text-slate-500 hover:bg-slate-100 font-medium text-sm"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleVisitSchedule()}
-              disabled={submitting || !visitDate}
-              className="border-0 bg-blue-600 text-white hover:bg-blue-800 font-medium text-sm"
-            >
-              Guardar visita
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-5 py-6">
-
-          {/* Fila: fecha y técnico */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Fecha y hora
-              </label>
-              <input
-                type="datetime-local"
-                value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
-                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Técnico
-              </label>
-              <select
-                value={visitTechnician}
-                onChange={(e) => setVisitTechnician(e.target.value)}
-                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 appearance-none cursor-pointer"
-              >
-                <option value="">Sin asignar</option>
-                {technicians.map((tech) => (
-                  <option key={tech.id} value={tech.id}>{tech.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <hr className="border-slate-100" />
-
-          {/* Notas opcionales */}
-          <div className="flex flex-col gap-3.5">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Diagnóstico inicial{" "}
-                <span className="font-normal text-slate-400">opcional</span>
-              </label>
-              <input
-                value={visitDiagnosis}
-                onChange={(e) => setVisitDiagnosis(e.target.value)}
-                placeholder="Ej: Revisión de sensores"
-                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Solución estimada{" "}
-                <span className="font-normal text-slate-400">opcional</span>
-              </label>
-              <input
-                value={visitResolution}
-                onChange={(e) => setVisitResolution(e.target.value)}
-                placeholder="Ej: Recalibrar equipo"
-                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
-            </div>
-          </div>
-
-        </div>
-      </Modal>
     </section>
   );
 }
