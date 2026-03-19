@@ -27,10 +27,13 @@ import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsTicketCategories from "../screens/admin/settings/SettingsTicketCategories";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
+import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
 import SettingsLogs from "../screens/admin/settings/SettingsLogs";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
+import VisitsCalendar from "../screens/admin/SiteSurvey";
+import Schedule from "../screens/admin/Schedule";
 import AdminTickets from "../screens/admin/Tickets";
 import AdminTicketDetail from "../screens/admin/TicketDetail";
 import CustomerTickets from "../screens/customer/CustomerTickets";
@@ -166,6 +169,17 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route path="schedule" element={<Schedule />} />
+        <Route
+          path="operaciones/visitas-tecnicas"
+          element={
+            <PermissionRoute permission={PERMISSIONS.siteSurveyRead}>
+              <VisitsCalendar />
+            </PermissionRoute>
+          }
+        />
+
         <Route
           path="users"
           element={
@@ -218,10 +232,14 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="checklist-templates"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsChecklistTemplatesRead}>
+              <SettingsChecklistTemplates />
           path="logs"
           element={
             <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
-              <SettingsLogs />
+
             </PermissionRoute>
           }
         />
