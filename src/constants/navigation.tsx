@@ -55,8 +55,9 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     icon: <Workflow />,
     children: [
       {
-        name: "Visita tecnica",
+        name: "Levantamiento",
         to: "/admin/operaciones/visitas-tecnicas",
+        permission: PERMISSIONS.siteSurveyRead,
         icon: <ClipboardCheck size={19} />,
       },
     ],

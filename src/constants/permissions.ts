@@ -32,6 +32,8 @@ export const PERMISSIONS = {
   settingsChecklistItemsCreate: "settings.checklist-items.create",
   settingsChecklistItemsUpdate: "settings.checklist-items.update",
   settingsChecklistItemsDelete: "settings.checklist-items.delete",
+  siteSurveyRead: "site_survey.read",
+  siteSurveyCreate: "site_survey.create",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
