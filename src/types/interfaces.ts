@@ -1,6 +1,8 @@
 import type { ChangeEvent, ReactNode, RefObject } from "react";
 import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
+import type { CustomerInput } from "../types/customer.types";
+import type { Supplier, SupplierInput } from "../types/supplier.types";
 import type { CustomerInput} from "../types/customer.types";
 import type { Customer360BasicProfile, Customer360Kpis, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
 
@@ -51,6 +53,47 @@ export interface CustomerTableProps {
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
   onViewDetail: (customer: Customer) => void;
+  onPageChange: (page: number) => void;
+}
+
+export interface SupplierFiltersProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  onCreate: () => void;
+  disabled?: boolean;
+}
+
+export interface SupplierDeleteModalProps {
+  open: boolean;
+  supplier: Supplier | null;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+export interface SupplierFormProps {
+  initialData?: Supplier | null;
+  submitting: boolean;
+  onCancel: () => void;
+  onSubmit: (payload: SupplierInput) => Promise<void>;
+}
+
+export interface SupplierModalProps {
+  open: boolean;
+  supplier: Supplier | null;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (payload: SupplierInput) => Promise<void>;
+}
+
+export interface SupplierTableProps {
+  items: Supplier[];
+  page: number;
+  totalPages: number;
+  total: number;
+  disabled?: boolean;
+  onEdit: (supplier: Supplier) => void;
+  onDelete: (supplier: Supplier) => void;
   onPageChange: (page: number) => void;
 }
 

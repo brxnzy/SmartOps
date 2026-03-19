@@ -4,6 +4,9 @@ import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
 import DeviceInventory from "../screens/admin/DeviceInventory";
 import Devices from "../screens/admin/Devices";
+import Suppliers from "../screens/admin/Suppliers";
+import InventoryLoads from "../screens/admin/InventoryLoads";
+import AutomationKits from "../screens/admin/AutomationKits";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import Login from "../screens/auth/Login";
@@ -123,10 +126,34 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="suppliers"
+          element={
+            <PermissionRoute permission={PERMISSIONS.suppliersRead}>
+              <Suppliers />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="inventory/devices"
           element={
             <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
               <DeviceInventory />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/loads"
+          element={
+            <PermissionRoute permission={PERMISSIONS.inventoryLoadsRead}>
+              <InventoryLoads />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/kits"
+          element={
+            <PermissionRoute permission={PERMISSIONS.kitsRead}>
+              <AutomationKits />
             </PermissionRoute>
           }
         />
