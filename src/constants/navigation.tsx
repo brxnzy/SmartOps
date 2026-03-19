@@ -1,6 +1,6 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { UsersRound,Building2, Cpu,HardDrive, LayoutDashboard, Package, PackagePlus, PackageOpen, Settings, Shield, UserCheck2, Waypoints, Truck } from "lucide-react";
+import { UsersRound,Building2,PackageOpen, Package, ClipboardList, Cpu, HardDrive, User, UsersRound, LayoutDashboard, PackagePlus, Settings, Shield,Waypoints,Truck } from "lucide-react";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -77,10 +77,21 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <HardDrive size={19} />,
       },
       {
+        name: "Mi cuenta",
+        to: "/admin/account",
+        icon: <User size={19} />
+      },
+      {
         name: "Marcas",
         to: "/admin/brands",
         permission: PERMISSIONS.settingsBrandsRead,
         icon: <Building2 size={19} />,
+       },
+      {
+        name: "Logs",
+        to: "/admin/logs",
+        permission: PERMISSIONS.settingsLogsRead,
+        icon: <ClipboardList size={19} />,
       },
     ],
   },

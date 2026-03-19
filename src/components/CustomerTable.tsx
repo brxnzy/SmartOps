@@ -1,4 +1,4 @@
-import { Building2, Home, Store, UserPen } from "lucide-react";
+import { Building2, Eye, Home, Store, Trash2, UserPen } from "lucide-react";
 import Button from "./Button";
 import type { Customer } from "../types/customer.types";
 import type { CustomerTableProps } from "../types/interfaces";
@@ -29,6 +29,7 @@ export default function CustomerTable({
   disabled = false,
   onEdit,
   onDelete,
+  onViewDetail,
   onPageChange,
 }: CustomerTableProps) {
   return (
@@ -67,20 +68,33 @@ export default function CustomerTable({
                   <div className="flex justify-end gap-2">
                     <Button
                       type="button"
+                      onClick={() => onViewDetail(customer)}
+                      disabled={disabled}
+                      aria-label="Ver perfil 360"
+                      title="Ver perfil 360"
+                      icon={<Eye size={14} />}
+                      className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    >
+                    </Button>
+                    <Button
+                      type="button"
                       onClick={() => onEdit(customer)}
                       disabled={disabled}
+                      aria-label="Editar cliente"
+                      title="Editar cliente"
                       icon={<UserPen size={14} />}
                       className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                     >
-                      Editar
                     </Button>
                     <Button
                       type="button"
                       onClick={() => onDelete(customer)}
                       disabled={disabled}
+                      aria-label="Eliminar cliente"
+                      title="Eliminar cliente"
+                      icon={<Trash2 size={14} />}
                       className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
                     >
-                      Eliminar
                     </Button>
                   </div>
                 </td>

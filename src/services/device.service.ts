@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   Brand,
   CreateDeviceInventoryPayload,
@@ -113,8 +114,15 @@ export async function createProtocol(payload: CreateProtocolPayload): Promise<Pr
     .single<ProtocolRow>();
 
   if (error) throw error;
-
-  return mapProtocol(data);
+  const created = mapProtocol(data);
+  await logAuditEvent({
+    action: "create",
+    entity: "protocols",
+    entityId: created.id,
+    companyId: created.companyId,
+    newValues: { name: created.name },
+  });
+  return created;
 }
 
 export async function updateProtocol(payload: UpdateProtocolPayload): Promise<Protocol> {
@@ -126,13 +134,32 @@ export async function updateProtocol(payload: UpdateProtocolPayload): Promise<Pr
     .single<ProtocolRow>();
 
   if (error) throw error;
-
-  return mapProtocol(data);
+  const updated = mapProtocol(data);
+  await logAuditEvent({
+    action: "update",
+    entity: "protocols",
+    entityId: updated.id,
+    companyId: updated.companyId,
+    newValues: { name: updated.name },
+  });
+  return updated;
 }
 
-export async function deleteProtocol(protocolId: string): Promise<void> {
+export async function deleteProtocol(protocolId: number): Promise<void> {
+  const { data: existing } = await supabase
+    .from("protocols")
+    .select("id, name, company_id")
+    .eq("id", protocolId)
+    .maybeSingle<{ id: number; name: string; company_id: string | null }>();
   const { error } = await supabase.from("protocols").delete().eq("id", protocolId);
   if (error) throw error;
+  await logAuditEvent({
+    action: "delete",
+    entity: "protocols",
+    entityId: protocolId,
+    companyId: existing?.company_id ?? null,
+    oldValues: { name: existing?.name ?? null },
+  });
 }
 
 export async function getDeviceTypesByCompany(companyId: string | null): Promise<DeviceType[]> {
@@ -164,8 +191,15 @@ export async function createDeviceType(payload: CreateDeviceTypePayload): Promis
     .single<DeviceTypeRow>();
 
   if (error) throw error;
-
-  return mapDeviceType(data);
+  const created = mapDeviceType(data);
+  await logAuditEvent({
+    action: "create",
+    entity: "device_types",
+    entityId: created.id,
+    companyId: created.companyId,
+    newValues: { name: created.name, description: created.description },
+  });
+  return created;
 }
 
 export async function updateDeviceType(payload: UpdateDeviceTypePayload): Promise<DeviceType> {
@@ -180,13 +214,27 @@ export async function updateDeviceType(payload: UpdateDeviceTypePayload): Promis
     .single<DeviceTypeRow>();
 
   if (error) throw error;
-
-  return mapDeviceType(data);
+  const updated = mapDeviceType(data);
+  await logAuditEvent({
+    action: "update",
+    entity: "device_types",
+    entityId: updated.id,
+    companyId: updated.companyId,
+    newValues: { name: updated.name, description: updated.description },
+  });
+  return updated;
 }
 
 export async function deleteDeviceType(deviceTypeId: string): Promise<void> {
   const { error } = await supabase.from("device_types").delete().eq("id", deviceTypeId);
   if (error) throw error;
+  await logAuditEvent({
+    action: "delete",
+    entity: "device_types",
+    entityId: deviceTypeId,
+    companyId: existing?.company_id ?? null,
+    oldValues: { name: existing?.name ?? null },
+  });
 }
 
 export async function getBrandsByCompany(companyId: string | null): Promise<Brand[]> {
@@ -215,8 +263,15 @@ export async function createBrand(payload: CreateBrandPayload): Promise<Brand> {
     .single<BrandRow>();
 
   if (error) throw error;
-
-  return mapBrand(data);
+  const created = mapBrand(data);
+  await logAuditEvent({
+    action: "create",
+    entity: "brands",
+    entityId: created.id,
+    companyId: created.companyId,
+    newValues: { name: created.name },
+  });
+  return created;
 }
 
 export async function updateBrand(payload: UpdateBrandPayload): Promise<Brand> {
@@ -228,13 +283,32 @@ export async function updateBrand(payload: UpdateBrandPayload): Promise<Brand> {
     .single<BrandRow>();
 
   if (error) throw error;
-
-  return mapBrand(data);
+  const updated = mapBrand(data);
+  await logAuditEvent({
+    action: "update",
+    entity: "brands",
+    entityId: updated.id,
+    companyId: updated.companyId,
+    newValues: { name: updated.name },
+  });
+  return updated;
 }
 
 export async function deleteBrand(brandId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from("brands")
+    .select("id, name, company_id")
+    .eq("id", brandId)
+    .maybeSingle<{ id: string; name: string; company_id: string | null }>();
   const { error } = await supabase.from("brands").delete().eq("id", brandId);
   if (error) throw error;
+  await logAuditEvent({
+    action: "delete",
+    entity: "brands",
+    entityId: brandId,
+    companyId: existing?.company_id ?? null,
+    oldValues: { name: existing?.name ?? null },
+  });
 }
 
 export async function getDevicesByCompany(companyId: string | null): Promise<Device[]> {
@@ -273,8 +347,22 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
     .single<DeviceRow>();
 
   if (error) throw error;
-
-  return mapDevice(data);
+  const created = mapDevice(data);
+  await logAuditEvent({
+    action: "create",
+    entity: "devices",
+    entityId: created.id,
+    companyId: created.companyId,
+    newValues: {
+      name: created.name,
+      model: created.model,
+      price: created.price,
+      protocolId: created.protocolId,
+      deviceTypeId: created.deviceTypeId,
+      brandId: created.brandId,
+    },
+  });
+  return created;
 }
 
 export async function updateDevice(payload: UpdateDevicePayload): Promise<Device> {
@@ -296,13 +384,39 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
     .single<DeviceRow>();
 
   if (error) throw error;
-
-  return mapDevice(data);
+  const updated = mapDevice(data);
+  await logAuditEvent({
+    action: "update",
+    entity: "devices",
+    entityId: updated.id,
+    companyId: updated.companyId,
+    newValues: {
+      name: updated.name,
+      model: updated.model,
+      price: updated.price,
+      protocolId: updated.protocolId,
+      deviceTypeId: updated.deviceTypeId,
+      brandId: updated.brandId,
+    },
+  });
+  return updated;
 }
 
 export async function deleteDevice(deviceId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from("devices")
+    .select("id, name, company_id")
+    .eq("id", deviceId)
+    .maybeSingle<{ id: string; name: string; company_id: string | null }>();
   const { error } = await supabase.from("devices").delete().eq("id", deviceId);
   if (error) throw error;
+  await logAuditEvent({
+    action: "delete",
+    entity: "devices",
+    entityId: deviceId,
+    companyId: existing?.company_id ?? null,
+    oldValues: { name: existing?.name ?? null },
+  });
 }
 
 export async function getDeviceInventoryByCompany(companyId: string | null): Promise<DeviceInventory[]> {
@@ -336,8 +450,19 @@ export async function createDeviceInventory(payload: CreateDeviceInventoryPayloa
     .single<DeviceInventoryRow>();
 
   if (error) throw error;
-
-  return mapDeviceInventory(data);
+  const created = mapDeviceInventory(data);
+  await logAuditEvent({
+    action: "create",
+    entity: "device_inventory",
+    entityId: created.id,
+    companyId: created.device?.companyId ?? null,
+    newValues: {
+      deviceId: created.deviceId,
+      quantity: created.quantity,
+      status: created.status,
+    },
+  });
+  return created;
 }
 
 export async function updateDeviceInventory(payload: UpdateDeviceInventoryPayload): Promise<DeviceInventory> {
@@ -356,11 +481,38 @@ export async function updateDeviceInventory(payload: UpdateDeviceInventoryPayloa
     .single<DeviceInventoryRow>();
 
   if (error) throw error;
-
-  return mapDeviceInventory(data);
+  const updated = mapDeviceInventory(data);
+  await logAuditEvent({
+    action: "update",
+    entity: "device_inventory",
+    entityId: updated.id,
+    companyId: updated.device?.companyId ?? null,
+    newValues: {
+      deviceId: updated.deviceId,
+      quantity: updated.quantity,
+      status: updated.status,
+    },
+  });
+  return updated;
 }
 
 export async function deleteDeviceInventory(inventoryId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from("device_inventory")
+    .select("id, device_id, device:devices ( company_id, name )")
+    .eq("id", inventoryId)
+    .maybeSingle<{
+      id: string;
+      device_id: string | null;
+      device: { company_id: string | null; name: string | null } | null;
+    }>();
   const { error } = await supabase.from("device_inventory").delete().eq("id", inventoryId);
   if (error) throw error;
+  await logAuditEvent({
+    action: "delete",
+    entity: "device_inventory",
+    entityId: inventoryId,
+    companyId: existing?.device?.company_id ?? null,
+    oldValues: { name: existing?.device?.name ?? null, deviceId: existing?.device_id ?? null },
+  });
 }

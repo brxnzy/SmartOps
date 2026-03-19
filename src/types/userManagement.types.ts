@@ -4,6 +4,7 @@
   companyId: string;
   name: string;
   idCard: string | null;
+  photoUrl: string | null;
   roleId: string;
   roleName: string;
   createdAt: string;

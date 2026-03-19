@@ -9,25 +9,16 @@ import {
 import type {
   Customer,
   CustomerInput,
-  CustomerType,
   CustomersResult,
 } from "../types/customer.types";
-import type { CustomerSubmitOptions } from "../types/interfaces";
+import type {
+   CustomerSubmitOptions, 
+   UseCustomersOptions, 
+   CustomerQueryState, 
+   CustomerFilterType 
+  } from "../types/interfaces";
 
-type CustomerFilterType = CustomerType | "all";
 
-interface UseCustomersOptions {
-  companyId: string | null;
-  invitedByUserId?: string | null;
-  pageSize?: number;
-}
-
-interface CustomerQueryState {
-  page: number;
-  pageSize: number;
-  search: string;
-  type: CustomerFilterType;
-}
 
 export function useCustomers({
   companyId,

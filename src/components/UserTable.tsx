@@ -1,4 +1,4 @@
-﻿import { BadgeCheck, UserCog } from "lucide-react";
+import { BadgeCheck, UserCog, UserRound } from "lucide-react";
 import Button from "./Button";
 import type { CompanyUser } from "../types/userManagement.types";
 
@@ -48,8 +48,23 @@ export default function UserTable({
               return (
                 <tr key={user.userRoleId} className="hover:bg-slate-50/80">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-slate-900">{user.name}</p>
-                    <p className="text-xs text-slate-500">{new Date(user.createdAt).toLocaleDateString()}</p>
+                    <div className="flex items-center gap-3">
+                      {user.photoUrl ? (
+                        <img
+                          src={user.photoUrl}
+                          alt={user.name}
+                          className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-white"
+                        />
+                      ) : (
+                        <UserRound size={36} className="text-slate-400" />
+                      )}
+                      <div>
+                        <p className="font-semibold text-slate-900">{user.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">{user.idCard ?? "N/A"}</td>
                   <td className="px-4 py-3">
@@ -133,3 +148,6 @@ export default function UserTable({
     </div>
   );
 }
+
+
+
