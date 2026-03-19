@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import RouteLoading from "./RouteLoading";
-import CustomerHome from "../screens/customer/CustomerHome";
+import Sidebar from "../layouts/Sidebar";
 
 export default function CustomerAreaRoute() {
   const { initializing, authzLoading, roleProfile } = useAuth();
@@ -12,6 +12,6 @@ export default function CustomerAreaRoute() {
     return <Navigate to="/admin" replace />;
   }
 
-  return <CustomerHome />;
+  return <Sidebar />;
 }
 

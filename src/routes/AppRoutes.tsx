@@ -18,12 +18,14 @@ import AdminDefaultRoute from "./AdminDefaultRoute";
 import AdminAreaRoute from "./AdminAreaRoute";
 import AppEntryRoute from "./AppEntryRoute";
 import CustomerAreaRoute from "./CustomerAreaRoute";
+import CustomerDefaultRoute from "./CustomerDefaultRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import Roles from "../screens/admin/Roles";
 import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
 import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
+import SettingsTicketCategories from "../screens/admin/settings/SettingsTicketCategories";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
 import SettingsLogs from "../screens/admin/settings/SettingsLogs";
@@ -32,6 +34,12 @@ import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
 import VisitsCalendar from "../screens/admin/SiteSurvey";
 import Schedule from "../screens/admin/Schedule";
+import AdminTickets from "../screens/admin/Tickets";
+import AdminTicketDetail from "../screens/admin/TicketDetail";
+import CustomerTickets from "../screens/customer/CustomerTickets";
+import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
+import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
+import CustomerProfile from "../screens/customer/CustomerProfile";
 
 
 export default function AppRoutes() {
@@ -199,6 +207,14 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="ticket-categories"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsTicketCategoriesRead}>
+              <SettingsTicketCategories />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="account"
           element={
             <PermissionRoute permission={PERMISSIONS.accountUpdate}>
@@ -228,7 +244,22 @@ export default function AppRoutes() {
           }
         />
 
-
+        <Route
+          path="tickets"
+          element={
+            <PermissionRoute permission={PERMISSIONS.ticketsRead}>
+              <AdminTickets />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="tickets/:ticketId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.ticketsRead}>
+              <AdminTicketDetail />
+            </PermissionRoute>
+          }
+        />
       </Route>
 
       <Route
@@ -238,7 +269,13 @@ export default function AppRoutes() {
             <CustomerAreaRoute />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<CustomerDefaultRoute />} />
+        <Route path="tickets" element={<CustomerTickets />} />
+        <Route path="tickets/new" element={<CustomerTicketCreate />} />
+        <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
+        <Route path="profile" element={<CustomerProfile />} />
+      </Route>
 
       <Route
         path="/403"

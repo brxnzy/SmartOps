@@ -37,6 +37,13 @@ export const PERMISSIONS = {
   settingsDeviceTypesCreate: "settings.device-types.create",
   settingsDeviceTypesUpdate: "settings.device-types.update",
   settingsDeviceTypesDelete: "settings.device-types.delete",
+
+
+  //Aqui iran los permisos para lo que tenga que ver con el customer
+  settingsTicketCategoriesRead: "settings.ticket-categories.read",
+  settingsTicketCategoriesCreate: "settings.ticket-categories.create",
+  settingsTicketCategoriesUpdate: "settings.ticket-categories.update",
+  settingsTicketCategoriesDelete: "settings.ticket-categories.delete",
   settingsBrandsRead: "settings.brands.read",
   settingsBrandsCreate: "settings.brands.create",
   settingsBrandsUpdate: "settings.brands.update",
@@ -52,6 +59,10 @@ export const PERMISSIONS = {
   siteSurveyCreate: "site_survey.create",
   accountUpdate: "account.update",
   settingsLogsRead: "settings.logs.read",
+  ticketsRead: "tickets.read",
+  ticketsUpdate: "tickets.update",
+  ticketsAssign: "tickets.assign",
+  ticketsComment: "tickets.comment",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
