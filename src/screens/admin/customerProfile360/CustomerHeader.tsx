@@ -22,6 +22,20 @@ interface CustomerHeaderProps {
   onRefresh: () => Promise<void>;
 }
 
+const INVITATION_LABELS: Record<Customer360BasicProfile["invitationStatus"], string> = {
+  accepted: "Aceptada",
+  pending: "Pendiente",
+  expired: "Expirada",
+  none: "Sin invitacion",
+};
+
+function invitationBadgeClass(status: Customer360BasicProfile["invitationStatus"]): string {
+  if (status === "accepted") return "border-emerald-500/40 bg-emerald-500/20 text-emerald-200";
+  if (status === "pending") return "border-amber-400/40 bg-amber-400/15 text-amber-100";
+  if (status === "expired") return "border-rose-400/40 bg-rose-400/15 text-rose-100";
+  return "border-slate-400/40 bg-slate-400/15 text-slate-200";
+}
+
 export default function CustomerHeader({
   profile,
   tabs,
@@ -52,8 +66,8 @@ export default function CustomerHeader({
               </Link>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">{profile.name}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-200 sm:text-sm">
-                <span className="rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-emerald-200">
-                  {profile.invitationStatus}
+                <span className={`rounded-md border px-2 py-0.5 ${invitationBadgeClass(profile.invitationStatus)}`}>
+                  {INVITATION_LABELS[profile.invitationStatus]}
                 </span>
                 <span>ID: {profile.id.slice(0, 8)}</span>
                 <span>Tax ID: {profile.taxId}</span>

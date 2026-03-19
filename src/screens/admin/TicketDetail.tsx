@@ -53,7 +53,7 @@ export default function AdminTicketDetail() {
   const [visitModalOpen, setVisitModalOpen] = useState(false);
   const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([]);
   const [statusValue, setStatusValue] = useState<TicketStatus>("abierto");
-  const [assignedTo, setAssignedTo] = useState<string>("");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentInternal, setCommentInternal] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
@@ -77,7 +77,7 @@ export default function AdminTicketDetail() {
           .map((attachment) => ({ name: attachment.fileName, url: attachment.url }))
       );
       setStatusValue(data.ticket.status);
-      setAssignedTo(data.ticket.assignedTo ?? "");
+      setVisitTechnician(data.ticket.assignedTo ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el ticket.");
     } finally {
@@ -96,29 +96,20 @@ export default function AdminTicketDetail() {
       .catch(() => setTechnicians([]));
   }, [companyId]);
 
-  const handleStatusUpdate = async () => {
+  const handleStatusChange = async (nextStatus: TicketStatus) => {
     if (!ticketId) return;
-    setSubmitting(true);
+    const previousStatus = ticket?.status ?? statusValue;
+    setStatusValue(nextStatus);
+    setStatusSaving(true);
+    setError(null);
     try {
-      await updateTicketStatus(ticketId, statusValue);
-      await loadTicket();
+      await updateTicketStatus(ticketId, nextStatus);
+      setTicket((prev) => (prev ? { ...prev, status: nextStatus } : prev));
     } catch (err) {
+      setStatusValue(previousStatus);
       setError(err instanceof Error ? err.message : "No se pudo actualizar el estado.");
     } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAssign = async () => {
-    if (!ticketId) return;
-    setSubmitting(true);
-    try {
-      await assignTicket(ticketId, assignedTo || null);
-      await loadTicket();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo asignar el tecnico.");
-    } finally {
-      setSubmitting(false);
+      setStatusSaving(false);
     }
   };
 
@@ -153,8 +144,11 @@ export default function AdminTicketDetail() {
         diagnosis: visitDiagnosis.trim() || null,
         resolution: visitResolution.trim() || null,
       });
+      if (visitTechnician !== (ticket?.assignedTo ?? "")) {
+        await assignTicket(ticketId, visitTechnician || null);
+      }
       setVisitDate("");
-      setVisitTechnician("");
+      setVisitTechnician(ticket?.assignedTo ?? "");
       setVisitDiagnosis("");
       setVisitResolution("");
       setVisitModalOpen(false);
@@ -209,12 +203,13 @@ export default function AdminTicketDetail() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Estado</p>
           <select
             value={statusValue}
-            onChange={(event) => setStatusValue(event.target.value as TicketStatus)}
+            onChange={(event) => void handleStatusChange(event.target.value as TicketStatus)}
+            disabled={statusSaving}
             className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
           >
             {STATUS_OPTIONS.map((option) => (
@@ -223,43 +218,15 @@ export default function AdminTicketDetail() {
               </option>
             ))}
           </select>
-          <Button
-            type="button"
-            onClick={() => void handleStatusUpdate()}
-            disabled={submitting}
-            className="mt-3 w-full border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-          >
-            Actualizar estado
-          </Button>
+          {statusSaving ? (
+            <p className="mt-2 text-xs text-slate-500">Guardando estado...</p>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Categoria</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">
             {ticket.categoryName ?? ticket.categoryId.slice(0, 6)}
           </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500">Asignar tecnico</p>
-          <select
-            value={assignedTo}
-            onChange={(event) => setAssignedTo(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
-          >
-            <option value="">Sin asignar</option>
-            {technicians.map((tech) => (
-              <option key={tech.id} value={tech.id}>
-                {tech.name}
-              </option>
-            ))}
-          </select>
-          <Button
-            type="button"
-            onClick={() => void handleAssign()}
-            disabled={submitting}
-            className="mt-3 w-full border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-          >
-            Guardar asignacion
-          </Button>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">SLA</p>

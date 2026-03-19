@@ -3,6 +3,7 @@ import { Paperclip, Send } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
+import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
 import { addTicketComment, getTicketDetail } from "../../services/tickets.service";
 import type { TicketComment, TicketListItem } from "../../types/ticketing.types";
@@ -31,6 +32,7 @@ export default function CustomerTicketDetail() {
   const [ticket, setTicket] = useState<TicketListItem | null>(null);
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [attachments, setAttachments] = useState<Array<{ name: string; url?: string }>>([]);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -146,25 +148,18 @@ export default function CustomerTicketDetail() {
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Adjuntos</h2>
-        {attachments.length === 0 ? (
-          <EmptyState text="No hay adjuntos." />
-        ) : (
-          <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            {attachments.map((attachment) => (
-              <li key={attachment.name} className="flex items-center gap-2">
-                <Paperclip size={14} className="text-slate-400" />
-                {attachment.url ? (
-                  <a href={attachment.url} target="_blank" rel="noreferrer" className="hover:underline">
-                    {attachment.name}
-                  </a>
-                ) : (
-                  attachment.name
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-slate-900">Adjuntos</h2>
+          <Button
+            type="button"
+            onClick={() => setAttachmentsOpen(true)}
+            disabled={attachments.length === 0}
+            className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          >
+            Ver adjuntos ({attachments.length})
+          </Button>
+        </div>
+        {attachments.length === 0 ? <EmptyState text="No hay adjuntos." /> : null}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -212,6 +207,49 @@ export default function CustomerTicketDetail() {
           </div>
         </div>
       </section>
+
+      <Modal
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        title="Evidencias del ticket"
+        subtitle="Archivos enviados junto al ticket."
+        size="xl"
+        containerClassName="overflow-hidden border border-slate-200 bg-white"
+        headerClassName="border-b border-slate-100 bg-white/80 px-6 py-5 backdrop-blur"
+        bodyClassName="px-6 py-6"
+      >
+        {attachments.length === 0 ? (
+          <EmptyState text="No hay adjuntos para mostrar." />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {attachments.map((attachment) => (
+              <div
+                key={attachment.name}
+                className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3"
+              >
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <Paperclip size={14} className="text-slate-400" />
+                  <span className="truncate">{attachment.name}</span>
+                </div>
+                {attachment.url ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <img
+                      src={attachment.url}
+                      alt={attachment.name}
+                      className="h-40 w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500">
+                    Archivo sin vista previa.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </section>
   );
 }
