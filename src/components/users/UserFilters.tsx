@@ -1,7 +1,7 @@
 ﻿import { Filter, Plus, Search } from "lucide-react";
-import Button from "./Button";
-import Input from "./Input";
-import type { Role } from "../types/Role";
+import Button from "../Button";
+import Input from "../Input";
+import type { Role } from "../../types/Role";
 
 interface UserFiltersProps {
   search: string;

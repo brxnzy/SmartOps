@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
-import CustomerDeleteModal from "../../components/CustomerDeleteModal";
-import CustomerFilters from "../../components/CustomerFilters";
-import CustomerModal from "../../components/CustomerModal";
-import CustomerTable from "../../components/CustomerTable";
+import CustomerDeleteModal from "../../components/customers/CustomerDeleteModal";
+import CustomerFilters from "../../components/customers/CustomerFilters";
+import CustomerModal from "../../components/customers/CustomerModal";
+import CustomerTable from "../../components/customers/CustomerTable";
 import { useCustomers } from "../../hooks/useCustomers";
 
 export default function Customers() {

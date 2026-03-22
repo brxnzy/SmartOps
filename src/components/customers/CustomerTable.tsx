@@ -1,7 +1,7 @@
 import { Building2, Eye, Home, Store, Trash2, UserPen } from "lucide-react";
-import Button from "./Button";
-import type { Customer } from "../types/customer.types";
-import type { CustomerTableProps } from "../types/interfaces";
+import Button from "../Button";
+import type { Customer } from "../../types/customer.types";
+import type { CustomerTableProps } from "../../types/interfaces";
 
 function formatType(type: Customer["type"]): string {
   if (type === "hogar") return "Hogar";

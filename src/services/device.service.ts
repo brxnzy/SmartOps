@@ -145,7 +145,7 @@ export async function updateProtocol(payload: UpdateProtocolPayload): Promise<Pr
   return updated;
 }
 
-export async function deleteProtocol(protocolId: number): Promise<void> {
+export async function deleteProtocol(protocolId: string): Promise<void> {
   const { data: existing } = await supabase
     .from("protocols")
     .select("id, name, company_id")
@@ -226,6 +226,11 @@ export async function updateDeviceType(payload: UpdateDeviceTypePayload): Promis
 }
 
 export async function deleteDeviceType(deviceTypeId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from("device_types")
+    .select("id, name, company_id")
+    .eq("id", deviceTypeId)
+    .maybeSingle<{ id: string; name: string; company_id: string | null }>();
   const { error } = await supabase.from("device_types").delete().eq("id", deviceTypeId);
   if (error) throw error;
   await logAuditEvent({

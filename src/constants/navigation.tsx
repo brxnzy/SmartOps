@@ -41,7 +41,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     children: [
       {
         name: "Levantamiento",
-        to: "/admin/operaciones/visitas-tecnicas",
+        to: "/admin/site_surveys",
         permission: PERMISSIONS.siteSurveyRead,
         icon: <ClipboardCheck size={19} />,
       },

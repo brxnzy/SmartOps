@@ -1,7 +1,6 @@
 import { Mail, Phone, UserPen } from "lucide-react";
-import Button from "./Button";
-import type { Supplier } from "../types/supplier.types";
-import type { SupplierTableProps } from "../types/interfaces";
+import Button from "../Button";
+import type { SupplierTableProps } from "../../types/interfaces";
 
 export default function SupplierTable({
   items,

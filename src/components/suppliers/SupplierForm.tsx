@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Building2, Mail, MapPin, Phone } from "lucide-react";
-import Button from "./Button";
-import Field from "./Field";
-import Input from "./Input";
-import { hasErrors, toSupplierInput, validateSupplierForm } from "../utils/supplier";
-import type { Supplier, SupplierFormValues } from "../types/supplier.types";
-import { formatPhoneDigits } from "../utils/formatters";
-import type { SupplierFormProps } from "../types/interfaces";
+import Button from "../Button";
+import Field from "../Field";
+import Input from "../Input";
+import { hasErrors, toSupplierInput, validateSupplierForm } from "../../utils/supplier";
+import type { Supplier, SupplierFormValues } from "../../types/supplier.types";
+import { formatPhoneDigits } from "../../utils/formatters";
+import type { SupplierFormProps } from "../../types/interfaces";
 
 function getInitialValues(supplier?: Supplier | null): SupplierFormValues {
   if (!supplier) {

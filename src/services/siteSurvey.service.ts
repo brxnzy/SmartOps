@@ -66,6 +66,7 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
       technical_visits (
         id,
         scheduled_start,
+        scheduled_end,
         technician_id,
         status,
         users:technician_id ( id, name )
@@ -95,7 +96,13 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
         return bTime - aTime;
       });
     const visit = sortedVisits.length ? sortedVisits[0] : null;
-    const technician = visit?.users ?? null;
+    const technician = pickFirst(
+      visit?.users as
+        | { id?: string | null; name?: string | null }
+        | { id?: string | null; name?: string | null }[]
+        | null
+        | undefined
+    );
 
     return {
       id: safeText(row.id),
@@ -113,6 +120,7 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
       risks: safeNullableText(row.risks),
       visitId: safeNumber(visit?.id),
       scheduledStart: safeNullableText(visit?.scheduled_start),
+      scheduledEnd: safeNullableText(visit?.scheduled_end),
       technicianId: safeNullableText(visit?.technician_id),
       technicianName: safeNullableText(technician?.name),
       visitStatus: safeNullableText(visit?.status),
@@ -141,6 +149,7 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
       site_survey_id: surveyRow.id,
       technician_id: input.technicianId,
       scheduled_start: input.scheduledStart,
+      scheduled_end: input.scheduledEnd ?? null,
     });
 
   if (visitError) {
