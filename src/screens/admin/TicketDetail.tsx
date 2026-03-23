@@ -7,7 +7,7 @@ import EmptyState from "../../components/EmptyState";
 import Field from "../../components/Field";
 import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
-import { addTicketComment, getTicketDetail } from "../../services/tickets.service";
+import { addTicketComment, createTicketTechnicalVisit, getTicketDetail, listTechnicians } from "../../services/tickets.service";
 import type { TicketComment, TicketListItem, TicketStatus } from "../../types/ticketing.types";
 
 function statusLabel(status: TicketStatus): string {
@@ -53,6 +53,12 @@ export default function AdminTicketDetail() {
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [attachments, setAttachments] = useState<Array<{ name: string; url?: string }>>([]);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [visitModalOpen, setVisitModalOpen] = useState(false);
+  const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([]);
+  const [visitStart, setVisitStart] = useState("");
+  const [visitEnd, setVisitEnd] = useState("");
+  const [visitTechnician, setVisitTechnician] = useState("");
+  const [visitSubmitting, setVisitSubmitting] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentInternal, setCommentInternal] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
@@ -81,6 +87,36 @@ export default function AdminTicketDetail() {
   useEffect(() => {
     void loadTicket();
   }, [companyId, ticketId]);
+
+  useEffect(() => {
+    if (!companyId) {
+      setTechnicians([]);
+      return;
+    }
+    listTechnicians(companyId)
+      .then(setTechnicians)
+      .catch(() => setTechnicians([]));
+  }, [companyId]);
+
+  const handleScheduleVisit = async () => {
+    if (!companyId || !ticketId || !visitStart) return;
+    setVisitSubmitting(true);
+    try {
+      await createTicketTechnicalVisit(companyId, ticketId, {
+        technicianId: visitTechnician || null,
+        scheduledStart: new Date(visitStart).toISOString(),
+        scheduledEnd: visitEnd ? new Date(visitEnd).toISOString() : null,
+      });
+      setVisitStart("");
+      setVisitEnd("");
+      setVisitTechnician("");
+      setVisitModalOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo programar la visita tecnica.");
+    } finally {
+      setVisitSubmitting(false);
+    }
+  };
 
   const handleComment = async () => {
     if (!companyId || !ticketId || !userId || !commentText.trim()) return;
@@ -129,6 +165,13 @@ export default function AdminTicketDetail() {
           <p className="mt-1 text-sm text-slate-500">{ticket.description}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            onClick={() => setVisitModalOpen(true)}
+            className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Programar visita tecnica
+          </Button>
           <Button
             type="button"
             onClick={() => navigate("/admin/tickets")}
@@ -279,6 +322,83 @@ export default function AdminTicketDetail() {
             ))}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={visitModalOpen}
+        onClose={() => setVisitModalOpen(false)}
+        title="Programar visita tecnica"
+        subtitle="Agenda fecha y tecnico para este ticket."
+        size="lg"
+        containerClassName="overflow-hidden border border-slate-100 bg-white"
+        headerClassName="px-7 pt-7 pb-5"
+        bodyClassName="px-7 py-0"
+        footerClassName="px-7 py-4 bg-slate-50 border-t border-slate-100"
+        footer={
+          <>
+            <Button
+              type="button"
+              onClick={() => setVisitModalOpen(false)}
+              disabled={visitSubmitting}
+              className="border-slate-200 bg-transparent text-slate-500 hover:bg-slate-100 font-medium text-sm"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleScheduleVisit()}
+              disabled={visitSubmitting || !visitStart}
+              className="border-0 bg-blue-600 text-white hover:bg-blue-800 font-medium text-sm"
+            >
+              Guardar visita
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-5 py-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                Inicio
+              </label>
+              <input
+                type="datetime-local"
+                value={visitStart}
+                onChange={(event) => setVisitStart(event.target.value)}
+                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                Fin (opcional)
+              </label>
+              <input
+                type="datetime-local"
+                value={visitEnd}
+                onChange={(event) => setVisitEnd(event.target.value)}
+                className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+              Tecnico
+            </label>
+            <select
+              value={visitTechnician}
+              onChange={(event) => setVisitTechnician(event.target.value)}
+              className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              <option value="">Sin asignar</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </Modal>
 
     </section>

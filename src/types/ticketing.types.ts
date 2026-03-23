@@ -73,3 +73,22 @@ export interface CreateTicketCommentInput {
   body: string;
   isInternal: boolean;
 }
+
+export interface CreateTechnicalVisitInput {
+  technicianId: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  status?: string | null;
+}
+
+export interface TechnicalVisitSummary {
+  id: number;
+  ticketId: string | null;
+  ticketCode: string | null;
+  siteName: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  technicianId: string | null;
+  technicianName: string | null;
+  status: string | null;
+}

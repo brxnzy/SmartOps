@@ -7,8 +7,10 @@ import { CalendarDays } from "lucide-react";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import { listSiteSurveys } from "../../services/siteSurvey.service";
+import { listTicketTechnicalVisits } from "../../services/tickets.service";
 import Button from "../../components/Button";
 import type { SiteSurveySummary } from "../../types/siteSurvey.types";
+import type { TechnicalVisitSummary } from "../../types/ticketing.types";
 
 function toLocalDateString(value?: string | null): string | null {
   if (!value) return null;
@@ -19,18 +21,30 @@ function toLocalDateString(value?: string | null): string | null {
   return `${year}-${month}-${day}`;
 }
 
+function formatShortDate(value?: string | null): string | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return null;
+  return new Intl.DateTimeFormat("es-DO", { day: "2-digit", month: "short" }).format(
+    new Date(timestamp)
+  );
+}
+
 export default function Schedule() {
   const { companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const canReadSurveys = canAccess(PERMISSIONS.siteSurveyRead);
+  const canReadTickets = canAccess(PERMISSIONS.ticketsRead);
 
   const [surveys, setSurveys] = useState<SiteSurveySummary[]>([]);
+  const [ticketVisits, setTicketVisits] = useState<TechnicalVisitSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSurveys = useCallback(async () => {
-    if (!companyId || !canReadSurveys) {
+  const loadSchedule = useCallback(async () => {
+    if (!companyId || (!canReadSurveys && !canReadTickets)) {
       setSurveys([]);
+      setTicketVisits([]);
       setLoading(false);
       return;
     }
@@ -39,22 +53,26 @@ export default function Schedule() {
     setError(null);
 
     try {
-      const result = await listSiteSurveys(companyId);
-      setSurveys(result);
+      const [surveyResult, ticketResult] = await Promise.all([
+        canReadSurveys ? listSiteSurveys(companyId) : Promise.resolve([]),
+        canReadTickets ? listTicketTechnicalVisits(companyId) : Promise.resolve([]),
+      ]);
+      setSurveys(surveyResult);
+      setTicketVisits(ticketResult);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error cargando levantamientos.";
+      const message = err instanceof Error ? err.message : "Error cargando agenda.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [companyId, canReadSurveys]);
+  }, [companyId, canReadSurveys, canReadTickets]);
 
   useEffect(() => {
-    void loadSurveys();
-  }, [loadSurveys]);
+    void loadSchedule();
+  }, [loadSchedule]);
 
   const calendarEvents = useMemo(() => {
-    return surveys
+    const surveyEvents = surveys
       .filter((survey) => survey.scheduledStart)
       .map((survey) => {
         const dateOnly = toLocalDateString(survey.scheduledStart);
@@ -68,10 +86,33 @@ export default function Schedule() {
           textColor: "#ffffff",
           extendedProps: {
             technicianName: survey.technicianName ?? "Sin tecnico",
+            eventType: "survey",
           },
         };
       });
-  }, [surveys]);
+
+    const ticketEvents = ticketVisits
+      .filter((visit) => visit.scheduledStart && visit.ticketId)
+      .map((visit) => {
+        const dateOnly = toLocalDateString(visit.scheduledStart);
+        return {
+          id: `ticket-${visit.id}`,
+          title: visit.siteName ?? "Sitio",
+          start: dateOnly ?? visit.scheduledStart ?? undefined,
+          allDay: true,
+          backgroundColor: "#f59e0b",
+          borderColor: "#d97706",
+          textColor: "#ffffff",
+          extendedProps: {
+            technicianName: visit.technicianName ?? "Sin tecnico",
+            scheduledEnd: visit.scheduledEnd ?? null,
+            eventType: "ticket",
+          },
+        };
+      });
+
+    return [...surveyEvents, ...ticketEvents];
+  }, [surveys, ticketVisits]);
 
   return (
     <section className="space-y-6">
@@ -91,12 +132,16 @@ export default function Schedule() {
                 <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
                 Levantamiento
               </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                Ticket
+              </span>
             </div>
           </div>
           {error ? (
             <Button
               type="button"
-              onClick={() => void loadSurveys()}
+              onClick={() => void loadSchedule()}
               className="border-red-300 bg-white text-red-700 hover:bg-red-100"
             >
               Reintentar
@@ -104,9 +149,9 @@ export default function Schedule() {
           ) : null}
         </div>
 
-        {!canReadSurveys ? (
+        {!canReadSurveys && !canReadTickets ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-            No tienes permisos para ver levantamientos en la agenda.
+            No tienes permisos para ver eventos en la agenda.
           </div>
         ) : null}
 
@@ -124,6 +169,26 @@ export default function Schedule() {
             locale={esLocale}
             eventContent={(arg) => {
               const technicianName = arg.event.extendedProps?.technicianName as string | undefined;
+              const scheduledEnd = arg.event.extendedProps?.scheduledEnd as string | undefined;
+              const eventType = arg.event.extendedProps?.eventType as string | undefined;
+              if (eventType === "ticket") {
+                const endLabel = formatShortDate(scheduledEnd);
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold leading-tight">{arg.event.title}</span>
+                    {technicianName ? (
+                      <span className="text-[10px] leading-tight text-white/90">
+                        Técnico: {technicianName}
+                      </span>
+                    ) : null}
+                    {endLabel ? (
+                      <span className="text-[10px] leading-tight text-white/90">
+                        Finaliza: {endLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              }
               return (
                 <div className="space-y-0.5">
                   <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
