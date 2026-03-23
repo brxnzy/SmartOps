@@ -3,7 +3,6 @@ import type { Customer } from "../types/customer.types";
 import type { CustomerType } from "../types/customer.types";
 import type { CustomerInput } from "../types/customer.types";
 import type { Supplier, SupplierInput } from "../types/supplier.types";
-import type { CustomerInput} from "../types/customer.types";
 import type { Customer360BasicProfile, Customer360Kpis, CustomerSite, CustomerSiteZone } from "./customerProfile360.types";
 
 export interface CustomerSubmitOptions {

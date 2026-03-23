@@ -1,12 +1,12 @@
 ﻿import { useMemo, useState, type FormEvent } from "react";
 import { IdCard, Mail } from "lucide-react";
-import Button from "./Button";
-import Field from "./Field";
-import Input from "./Input";
-import type { Role } from "../types/Role";
-import type { CompanyUser, CompanyUserInput, UserFormValues } from "../types/userManagement.types";
-import { formatIdCardDigits } from "../utils/formatters";
-import { hasUserFormErrors, toUserInput, validateUserForm } from "../utils/user";
+import Button from "../Button";
+import Field from "../Field";
+import Input from "../Input";
+import type { Role } from "../../types/Role";
+import type { CompanyUser, CompanyUserInput, UserFormValues } from "../../types/userManagement.types";
+import { formatIdCardDigits } from "../../utils/formatters";
+import { hasUserFormErrors, toUserInput, validateUserForm } from "../../utils/user";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

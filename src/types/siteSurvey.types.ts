@@ -14,6 +14,7 @@ export interface SiteSurveySummary {
   risks: string | null;
   visitId: number | null;
   scheduledStart: string | null;
+  scheduledEnd: string | null;
   technicianId: string | null;
   technicianName: string | null;
   visitStatus: string | null;
@@ -36,6 +37,7 @@ export interface SiteSurveyCreateInput {
   siteId: string;
   technicianId: string;
   scheduledStart: string;
+  scheduledEnd?: string | null;
 }
 
 export interface SiteSurveyUpdateInput {

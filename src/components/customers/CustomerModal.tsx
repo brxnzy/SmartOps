@@ -1,25 +1,16 @@
-﻿import { X } from "lucide-react";
-import UserForm from "./UserForm";
-import type { Role } from "../types/Role";
-import type { CompanyUser, CompanyUserInput } from "../types/userManagement.types";
+import { X } from "lucide-react";
+import CustomerForm from "./CustomerForm";
+import type{ CustomerModalProps } from "../../types/interfaces";
 
-interface UserModalProps {
-  open: boolean;
-  user: CompanyUser | null;
-  roles: Role[];
-  submitting: boolean;
-  onClose: () => void;
-  onSubmit: (payload: CompanyUserInput, options: { invitationEmail?: string }) => Promise<void>;
-}
 
-export default function UserModal({
+
+export default function CustomerModal({
   open,
-  user,
-  roles,
+  customer,
   submitting,
   onClose,
   onSubmit,
-}: UserModalProps) {
+}: CustomerModalProps) {
   if (!open) return null;
 
   return (
@@ -33,10 +24,8 @@ export default function UserModal({
         >
           <X size={16} />
         </button>
-
-        <UserForm
-          initialData={user}
-          roles={roles}
+        <CustomerForm
+          initialData={customer}
           submitting={submitting}
           onCancel={onClose}
           onSubmit={onSubmit}

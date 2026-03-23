@@ -1,15 +1,15 @@
 import { AlertTriangle, X } from "lucide-react";
-import Button from "./Button";
-import type { CustomerDeleteModalProps } from "../types/interfaces";
+import Button from "../Button";
+import type { SupplierDeleteModalProps } from "../../types/interfaces";
 
-export default function CustomerDeleteModal({
+export default function SupplierDeleteModal({
   open,
-  customer,
+  supplier,
   submitting,
   onClose,
   onConfirm,
-}: CustomerDeleteModalProps) {
-  if (!open || !customer) return null;
+}: SupplierDeleteModalProps) {
+  if (!open || !supplier) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/65 px-4 py-8 backdrop-blur-[2px]">
@@ -30,10 +30,10 @@ export default function CustomerDeleteModal({
 
         <h3 className="text-lg font-semibold text-slate-900">Confirmar eliminacion</h3>
         <p className="mt-2 text-sm text-slate-600">
-          Vas a eliminar el cliente <span className="font-semibold text-slate-900">{customer.name}</span>.
+          Vas a eliminar el proveedor <span className="font-semibold text-slate-900">{supplier.name}</span>.
         </p>
         <p className="mt-1 text-sm text-slate-500">
-          Esta accion oculta el cliente del listado actual y solo soporte podria revertirla.
+          Esta accion oculta el proveedor del listado actual y solo soporte podria revertirla.
         </p>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -51,7 +51,7 @@ export default function CustomerDeleteModal({
             disabled={submitting}
             className="border-red-600 bg-red-600 text-white hover:bg-red-700"
           >
-            {submitting ? "Eliminando..." : "Eliminar cliente"}
+            {submitting ? "Eliminando..." : "Eliminar proveedor"}
           </Button>
         </div>
       </div>
