@@ -356,11 +356,21 @@ export default function SiteSurvey() {
               const statusClass = STATUS_STYLES[statusKey] ?? "border-slate-200 bg-slate-50 text-slate-700";
 
               return (
-                <article key={survey.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+                <article
+                  key={survey.id}
+                  className="rounded-2xl border border-blue-200 bg-linear-to-br from-white via-blue-50 to-cyan-50 p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        Levantamiento
+                      </span>
+
+                      <div>
                       <p className="text-sm font-semibold text-slate-900">{survey.customerName ?? "Cliente sin nombre"}</p>
                       <p className="mt-1 text-xs text-slate-500">{survey.siteName ?? "Sitio sin nombre"}</p>
+                      </div>
                     </div>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass}`}>
                       {survey.status ?? "Pendiente"}

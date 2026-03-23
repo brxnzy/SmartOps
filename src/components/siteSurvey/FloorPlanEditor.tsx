@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Group, Layer, Line, Rect, Stage, Text } from "react-konva";
+import { Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { notifications } from "../../services/notification.service";
 import type {
@@ -15,6 +15,7 @@ import Toolbar, { type FloorPlanMode } from "./Toolbar";
 const GRID = 24;
 const CANVAS_WIDTH = 1248;
 const CANVAS_HEIGHT = 840;
+const MIN_ZONE_SIZE = GRID * 2;
 
 const ZONE_PALETTE = [
   { fill: "rgba(219,234,254,0.55)", stroke: "#60a5fa", text: "#1d4ed8" },
@@ -46,6 +47,7 @@ interface LayoutSnapshot {
 }
 
 const snap = (value: number) => Math.round(value / GRID) * GRID;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 function findZoneAtPoint(x: number, y: number, zones: SurveyZoneLayout[]): SurveyZoneLayout | null {
   return zones.find((zone) => x >= zone.x && x <= zone.x + zone.width && y >= zone.y && y <= zone.y + zone.height) ?? null;
@@ -99,6 +101,10 @@ function resolveDeviceLabel(deviceId: string, catalog: SurveyCatalogDevice[]): s
   return match?.name ?? "Equipo";
 }
 
+function isPointInsideZone(x: number, y: number, zone: Pick<SurveyZoneLayout, "x" | "y" | "width" | "height">): boolean {
+  return x >= zone.x && x <= zone.x + zone.width && y >= zone.y && y <= zone.y + zone.height;
+}
+
 export default function FloorPlanEditor({
   surveyId,
   layout,
@@ -110,6 +116,8 @@ export default function FloorPlanEditor({
   autosaveLabel,
 }: FloorPlanEditorProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
+  const zoneTransformerRef = useRef<Konva.Transformer | null>(null);
+  const zoneNodeRefs = useRef<Record<string, Konva.Group | null>>({});
 
   const [mode, setMode] = useState<FloorPlanMode>("select");
   const [showGrid, setShowGrid] = useState(true);
@@ -162,6 +170,27 @@ export default function FloorPlanEditor({
   useEffect(() => {
     onLayoutChange({ walls, zones, devices });
   }, [walls, zones, devices, onLayoutChange]);
+
+  useEffect(() => {
+    const transformer = zoneTransformerRef.current;
+    if (!transformer) return;
+
+    if (selectedType !== "zone" || !selectedId || mode !== "select") {
+      transformer.nodes([]);
+      transformer.getLayer()?.batchDraw();
+      return;
+    }
+
+    const node = zoneNodeRefs.current[selectedId];
+    if (!node) {
+      transformer.nodes([]);
+      transformer.getLayer()?.batchDraw();
+      return;
+    }
+
+    transformer.nodes([node]);
+    transformer.getLayer()?.batchDraw();
+  }, [mode, selectedId, selectedType, zones]);
 
   const setLayout = useCallback(
     (nextWalls: SurveyWall[], nextZones: SurveyZoneLayout[], nextDevices: SurveyDeviceLayout[], recordHistory = true) => {
@@ -255,15 +284,12 @@ export default function FloorPlanEditor({
       const nextWalls = walls.map((wall) => {
         if (wall.id !== wallId) return wall;
         const movedPoints: [number, number, number, number] = [
-          wall.points[0] + dx,
-          wall.points[1] + dy,
-          wall.points[2] + dx,
-          wall.points[3] + dy,
+          snap(wall.points[0] + dx),
+          snap(wall.points[1] + dy),
+          snap(wall.points[2] + dx),
+          snap(wall.points[3] + dy),
         ];
-        return {
-          ...wall,
-          points: movedPoints,
-        };
+        return { ...wall, points: movedPoints };
       });
       setLayout(nextWalls, zones, devices, true);
     },
@@ -271,23 +297,80 @@ export default function FloorPlanEditor({
   );
 
   const commitZoneDrag = useCallback(
-    (zoneId: string, dx: number, dy: number) => {
+    (zoneId: string, nextX: number, nextY: number) => {
+      const currentZone = zones.find((zone) => zone.id === zoneId);
+      if (!currentZone) return;
+
+      const clampedX = clamp(snap(nextX), 0, CANVAS_WIDTH - currentZone.width);
+      const clampedY = clamp(snap(nextY), 0, CANVAS_HEIGHT - currentZone.height);
+      const dx = clampedX - currentZone.x;
+      const dy = clampedY - currentZone.y;
+
       const nextZones = zones.map((zone) => {
         if (zone.id !== zoneId) return zone;
+        return { ...zone, x: clampedX, y: clampedY };
+      });
+
+      const nextDevices = devices.map((device) => {
+        if (device.zoneId !== zoneId) return device;
         return {
-          ...zone,
-          x: snap(zone.x + dx),
-          y: snap(zone.y + dy),
+          ...device,
+          x: snap(device.x + dx),
+          y: snap(device.y + dy),
         };
       });
+
+      setLayout(walls, nextZones, nextDevices, true);
+    },
+    [devices, setLayout, walls, zones]
+  );
+
+  const commitZoneResize = useCallback(
+    (zoneId: string, nextZone: Pick<SurveyZoneLayout, "x" | "y" | "width" | "height">) => {
+      const clampedX = clamp(snap(nextZone.x), 0, CANVAS_WIDTH - MIN_ZONE_SIZE);
+      const clampedY = clamp(snap(nextZone.y), 0, CANVAS_HEIGHT - MIN_ZONE_SIZE);
+      const clampedWidth = clamp(snap(nextZone.width), MIN_ZONE_SIZE, CANVAS_WIDTH - clampedX);
+      const clampedHeight = clamp(snap(nextZone.height), MIN_ZONE_SIZE, CANVAS_HEIGHT - clampedY);
+
+      const resizedZone = { x: clampedX, y: clampedY, width: clampedWidth, height: clampedHeight };
+
+      const devicesOutsideZone = devices.some((device) => {
+        if (device.zoneId !== zoneId) return false;
+        return !isPointInsideZone(device.x, device.y, resizedZone);
+      });
+
+      if (devicesOutsideZone) {
+        notifications.warning({
+          title: "No se pudo redimensionar",
+          description: "La zona no puede encogerse dejando dispositivos fuera.",
+        });
+        setLayout(walls, zones.map((zone) => ({ ...zone })), devices, false);
+        return;
+      }
+
+      const nextZones = zones.map((zone) => {
+        if (zone.id !== zoneId) return zone;
+        return { ...zone, ...resizedZone };
+      });
+
       setLayout(walls, nextZones, devices, true);
     },
     [devices, setLayout, walls, zones]
   );
 
+  // FIX: Los dispositivos tienen posición absoluta en el estado (device.x, device.y).
+  // Konva mueve el nodo relativamente al hacer drag, por lo que event.target.x() es un
+  // delta acumulado, NO la posición absoluta. Calculamos la posición real sumando ese
+  // delta a la posición original en el estado, y luego reseteamos el nodo a (0,0).
   const commitDeviceDrag = useCallback(
-    (deviceId: string, x: number, y: number) => {
-      const targetZone = findZoneAtPoint(x, y, zones);
+    (deviceId: string, deltaX: number, deltaY: number) => {
+      const currentDevice = devices.find((d) => d.id === deviceId);
+      if (!currentDevice) return;
+
+      const absoluteX = snap(currentDevice.x + deltaX);
+      const absoluteY = snap(currentDevice.y + deltaY);
+
+      const targetZone = findZoneAtPoint(absoluteX, absoluteY, zones);
       if (!targetZone) {
         notifications.warning({
           title: "Zona requerida",
@@ -298,12 +381,7 @@ export default function FloorPlanEditor({
 
       const nextDevices = devices.map((device) => {
         if (device.id !== deviceId) return device;
-        return {
-          ...device,
-          x: snap(x),
-          y: snap(y),
-          zoneId: targetZone.id,
-        };
+        return { ...device, x: absoluteX, y: absoluteY, zoneId: targetZone.id };
       });
 
       setLayout(walls, zones, nextDevices, true);
@@ -454,9 +532,7 @@ export default function FloorPlanEditor({
 
     setDrawingZone(null);
 
-    if (width < GRID * 2 || height < GRID * 2) {
-      return;
-    }
+    if (width < GRID * 2 || height < GRID * 2) return;
 
     const zoneCatalog = selectedZoneId ? zonesCatalog.find((zone) => zone.id === selectedZoneId) : null;
 
@@ -548,7 +624,7 @@ export default function FloorPlanEditor({
     if (!selectedId || !selectedType) return "Sin seleccion";
     if (selectedType === "zone") {
       const zone = zones.find((item) => item.id === selectedId);
-      return zone ? `Zona: ${zone.name}` : "Zona";
+      return zone ? `Zona: ${zone.name} (${zone.width} x ${zone.height})` : "Zona";
     }
     if (selectedType === "device") {
       const device = devices.find((item) => item.id === selectedId);
@@ -647,7 +723,7 @@ export default function FloorPlanEditor({
             <p className="text-[11px] font-semibold text-slate-600">Seleccion</p>
             <p className="text-xs text-slate-700">{selectedInfo}</p>
             <p className="text-[11px] text-slate-500">
-              Tip: arrastra zonas/dispositivos al plano o usa los modos de la barra superior.
+              Tip: arrastra zonas/dispositivos al plano y usa las esquinas azules para cambiar el tamano.
             </p>
           </div>
         </aside>
@@ -679,12 +755,26 @@ export default function FloorPlanEditor({
                   return (
                     <Group
                       key={zone.id}
+                      ref={(node) => {
+                        zoneNodeRefs.current[zone.id] = node;
+                      }}
+                      x={zone.x}
+                      y={zone.y}
                       draggable={mode === "select"}
                       onDragEnd={(event) => {
-                        const dx = snap(event.target.x());
-                        const dy = snap(event.target.y());
-                        commitZoneDrag(zone.id, dx, dy);
-                        event.target.position({ x: 0, y: 0 });
+                        commitZoneDrag(zone.id, event.target.x(), event.target.y());
+                      }}
+                      onTransformEnd={(event) => {
+                        const node = event.target as Konva.Group;
+                        const nextZone = {
+                          x: node.x(),
+                          y: node.y(),
+                          width: zone.width * node.scaleX(),
+                          height: zone.height * node.scaleY(),
+                        };
+                        node.scaleX(1);
+                        node.scaleY(1);
+                        commitZoneResize(zone.id, nextZone);
                       }}
                       onClick={() => {
                         setSelectedId(zone.id);
@@ -696,8 +786,6 @@ export default function FloorPlanEditor({
                       }}
                     >
                       <Rect
-                        x={zone.x}
-                        y={zone.y}
                         width={zone.width}
                         height={zone.height}
                         fill={palette.fill}
@@ -706,16 +794,16 @@ export default function FloorPlanEditor({
                         cornerRadius={4}
                       />
                       <Text
-                        x={zone.x + 8}
-                        y={zone.y + 8}
+                        x={8}
+                        y={8}
                         text={zone.name}
                         fontSize={11}
                         fill={palette.text}
                         listening={false}
                       />
                       <Text
-                        x={zone.x + 8}
-                        y={zone.y + zone.height - 16}
+                        x={8}
+                        y={zone.height - 16}
                         text={`#${index + 1}`}
                         fontSize={10}
                         fill={palette.stroke}
@@ -724,6 +812,34 @@ export default function FloorPlanEditor({
                     </Group>
                   );
                 })}
+                <Transformer
+                  ref={zoneTransformerRef}
+                  rotateEnabled={false}
+                  flipEnabled={false}
+                  enabledAnchors={[
+                    "top-left",
+                    "top-center",
+                    "top-right",
+                    "middle-right",
+                    "bottom-right",
+                    "bottom-center",
+                    "bottom-left",
+                    "middle-left",
+                  ]}
+                  borderStroke="#2563eb"
+                  borderStrokeWidth={1.5}
+                  anchorStroke="#2563eb"
+                  anchorFill="#ffffff"
+                  anchorCornerRadius={999}
+                  anchorSize={10}
+                  boundBoxFunc={(_, newBox) => {
+                    const x = clamp(snap(newBox.x), 0, CANVAS_WIDTH - MIN_ZONE_SIZE);
+                    const y = clamp(snap(newBox.y), 0, CANVAS_HEIGHT - MIN_ZONE_SIZE);
+                    const width = clamp(snap(newBox.width), MIN_ZONE_SIZE, CANVAS_WIDTH - x);
+                    const height = clamp(snap(newBox.height), MIN_ZONE_SIZE, CANVAS_HEIGHT - y);
+                    return { ...newBox, x, y, width, height };
+                  }}
+                />
                 {ghostZone}
               </Layer>
 
@@ -740,10 +856,12 @@ export default function FloorPlanEditor({
                       lineJoin="round"
                       draggable={mode === "select"}
                       onDragEnd={(event) => {
+                        // FIX: igual que dispositivos, Konva acumula el desplazamiento
+                        // relativo en x()/y(). Pasamos el delta y reseteamos el nodo.
                         const dx = snap(event.target.x());
                         const dy = snap(event.target.y());
-                        commitWallDrag(wall.id, dx, dy);
                         event.target.position({ x: 0, y: 0 });
+                        commitWallDrag(wall.id, dx, dy);
                       }}
                       onClick={() => {
                         setSelectedId(wall.id);
@@ -770,10 +888,12 @@ export default function FloorPlanEditor({
                       y={device.y}
                       draggable={mode === "select"}
                       onDragEnd={(event) => {
-                        const x = snap(event.target.x());
-                        const y = snap(event.target.y());
-                        commitDeviceDrag(device.id, x, y);
-                        event.target.position({ x: 0, y: 0 });
+                        // FIX: capturamos el delta antes de resetear,
+                        // commitDeviceDrag suma ese delta a la posición original del estado.
+                        const deltaX = event.target.x() - device.x;
+                        const deltaY = event.target.y() - device.y;
+                        event.target.position({ x: device.x, y: device.y });
+                        commitDeviceDrag(device.id, deltaX, deltaY);
                       }}
                       onClick={() => {
                         setSelectedId(device.id);

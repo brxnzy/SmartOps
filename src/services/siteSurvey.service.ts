@@ -146,6 +146,7 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
   const { error: visitError } = await supabase
     .from("technical_visits")
     .insert({
+      company_id: companyId,
       site_survey_id: surveyRow.id,
       technician_id: input.technicianId,
       scheduled_start: input.scheduledStart,
