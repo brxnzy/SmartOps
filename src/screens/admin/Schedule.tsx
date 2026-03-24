@@ -10,19 +10,6 @@ import { CalendarDays } from "lucide-react";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
-import { listSiteSurveys } from "../../services/siteSurvey.service";
-import { listTicketTechnicalVisits } from "../../services/tickets.service";
-import Button from "../../components/Button";
-import type { SiteSurveySummary } from "../../types/siteSurvey.types";
-import type { TechnicalVisitSummary } from "../../types/ticketing.types";
-
-function toLocalDateString(value?: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 import { listCompanyVisits } from "../../services/siteSurveyExecution.service";
 import type { SurveyCalendarEvent } from "../../types/siteSurveyExecution.types";
 
@@ -56,8 +43,6 @@ export default function Schedule() {
   const canReadSurveys = canAccess(PERMISSIONS.siteSurveyRead);
   const canReadTickets = canAccess(PERMISSIONS.ticketsRead);
 
-  const [surveys, setSurveys] = useState<SiteSurveySummary[]>([]);
-  const [ticketVisits, setTicketVisits] = useState<TechnicalVisitSummary[]>([]);
   const [visits, setVisits] = useState<SurveyCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +50,6 @@ export default function Schedule() {
 
   const loadSchedule = useCallback(async () => {
     if (!companyId || (!canReadSurveys && !canReadTickets)) {
-      setSurveys([]);
-      setTicketVisits([]);
-  const loadVisits = useCallback(async () => {
-    if (!companyId || !canReadSurveys) {
       setVisits([]);
       setLoading(false);
       return;
@@ -78,12 +59,6 @@ export default function Schedule() {
     setError(null);
 
     try {
-      const [surveyResult, ticketResult] = await Promise.all([
-        canReadSurveys ? listSiteSurveys(companyId) : Promise.resolve([]),
-        canReadTickets ? listTicketTechnicalVisits(companyId) : Promise.resolve([]),
-      ]);
-      setSurveys(surveyResult);
-      setTicketVisits(ticketResult);
       const data = await listCompanyVisits(companyId);
       setVisits(data);
 
@@ -97,59 +72,11 @@ export default function Schedule() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, canReadSurveys, canReadTickets]);
+  }, [companyId, canReadSurveys, canReadTickets, selectedVisit]);
 
   useEffect(() => {
     void loadSchedule();
   }, [loadSchedule]);
-
-  const calendarEvents = useMemo(() => {
-    const surveyEvents = surveys
-      .filter((survey) => survey.scheduledStart)
-      .map((survey) => {
-        const dateOnly = toLocalDateString(survey.scheduledStart);
-        return {
-          id: survey.visitId ? String(survey.visitId) : survey.id,
-          title: `${survey.customerName ?? "Cliente"} - ${survey.siteName ?? "Sitio"}`,
-          start: dateOnly ?? survey.scheduledStart ?? undefined,
-          allDay: true,
-          backgroundColor: "#3b82f6",
-          borderColor: "#2563eb",
-          textColor: "#ffffff",
-          extendedProps: {
-            technicianName: survey.technicianName ?? "Sin tecnico",
-            eventType: "survey",
-          },
-        };
-      });
-
-    const ticketEvents = ticketVisits
-      .filter((visit) => visit.scheduledStart && visit.ticketId)
-      .map((visit) => {
-        const dateOnly = toLocalDateString(visit.scheduledStart);
-        return {
-          id: `ticket-${visit.id}`,
-          title: visit.siteName ?? "Sitio",
-          start: dateOnly ?? visit.scheduledStart ?? undefined,
-          allDay: true,
-          backgroundColor: "#f59e0b",
-          borderColor: "#d97706",
-          textColor: "#ffffff",
-          extendedProps: {
-            technicianName: visit.technicianName ?? "Sin tecnico",
-            scheduledEnd: visit.scheduledEnd ?? null,
-            eventType: "ticket",
-          },
-        };
-      });
-
-    return [...surveyEvents, ...ticketEvents];
-  }, [surveys, ticketVisits]);
-  }, [canReadSurveys, companyId, selectedVisit]);
-
-  useEffect(() => {
-    void loadVisits();
-  }, [loadVisits]);
 
   const events = useMemo(() => {
     return visits.map((visit) => {
@@ -160,7 +87,7 @@ export default function Schedule() {
 
       return {
         id: String(visit.visitId),
-        title: `${visit.customerName ?? "Cliente"} Â· ${visit.siteName ?? "Sitio"}`,
+        title: `${visit.customerName ?? "Cliente"} · ${visit.siteName ?? "Sitio"}`,
         start: visit.scheduledStart,
         end: endDate,
         backgroundColor: colors.bg,
@@ -168,8 +95,9 @@ export default function Schedule() {
         textColor: "#ffffff",
         extendedProps: {
           surveyId: visit.surveyId,
-          technicianName: visit.technicianName ?? "Sin tecnico",
+          technicianName: visit.technicianName ?? "Sin técnico",
           status: visit.status ?? "Pendiente",
+          scheduledEnd: visit.scheduledEnd ?? null,
         },
       };
     });
@@ -185,7 +113,7 @@ export default function Schedule() {
     <section className="space-y-6">
       <header>
         <h1 className="text-3xl font-bold text-slate-800">Agenda</h1>
-        <p className="mt-2 text-slate-600">Calendario general por dia/semana con horario de visitas tecnicas.</p>
+        <p className="mt-2 text-slate-600">Calendario general por día/semana con horario de visitas técnicas.</p>
       </header>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -223,7 +151,7 @@ export default function Schedule() {
 
           <Button
             type="button"
-            onClick={() => void loadVisits()}
+            onClick={() => void loadSchedule()}
             disabled={loading}
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
           >
@@ -253,7 +181,7 @@ export default function Schedule() {
             }}
             buttonText={{
               today: "Hoy",
-              day: "Dia",
+              day: "Día",
               week: "Semana",
               month: "Mes",
             }}
@@ -269,32 +197,19 @@ export default function Schedule() {
             eventContent={(arg) => {
               const technicianName = arg.event.extendedProps?.technicianName as string | undefined;
               const scheduledEnd = arg.event.extendedProps?.scheduledEnd as string | undefined;
-              const eventType = arg.event.extendedProps?.eventType as string | undefined;
-              if (eventType === "ticket") {
-                const endLabel = formatShortDate(scheduledEnd);
-                return (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-semibold leading-tight">{arg.event.title}</span>
-                    {technicianName ? (
-                      <span className="text-[10px] leading-tight text-white/90">
-                        TÃ©cnico: {technicianName}
-                      </span>
-                    ) : null}
-                    {endLabel ? (
-                      <span className="text-[10px] leading-tight text-white/90">
-                        Finaliza: {endLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                );
-              }
               const status = arg.event.extendedProps?.status as string | undefined;
+              const endLabel = formatShortDate(scheduledEnd);
 
               return (
                 <div className="space-y-0.5">
                   <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
-                  <p className="text-[10px] leading-tight text-white/90">{technicianName}</p>
+                  {technicianName ? (
+                    <p className="text-[10px] leading-tight text-white/90">Técnico: {technicianName}</p>
+                  ) : null}
                   <p className="text-[10px] leading-tight text-white/90">{status}</p>
+                  {endLabel ? (
+                    <p className="text-[10px] leading-tight text-white/90">Finaliza: {endLabel}</p>
+                  ) : null}
                 </div>
               );
             }}
@@ -320,7 +235,7 @@ export default function Schedule() {
               <span className="font-medium">Sitio:</span> {selectedVisit.siteName ?? "Sin nombre"}
             </p>
             <p>
-              <span className="font-medium">Tecnico:</span> {selectedVisit.technicianName ?? "Sin tecnico"}
+              <span className="font-medium">Técnico:</span> {selectedVisit.technicianName ?? "Sin técnico"}
             </p>
             <p>
               <span className="font-medium">Estado:</span> {selectedVisit.status ?? "Pendiente"}
