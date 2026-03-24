@@ -1,9 +1,9 @@
 ﻿import { ShieldCheck, Users } from "lucide-react";
 import { useMemo } from "react";
 import Button from "../../components/Button";
-import UserFilters from "../../components/UserFilters";
-import UserModal from "../../components/UserModal";
-import UserTable from "../../components/UserTable";
+import UserFilters from "../../components/users/UserFilters";
+import UserModal from "../../components/users/UserModal";
+import UserTable from "../../components/users/UserTable";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsers } from "../../hooks/useUsers";

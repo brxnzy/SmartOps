@@ -1,11 +1,9 @@
-
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, ClipboardCheck, Plus, User } from "lucide-react";
+import { CalendarClock, ClipboardCheck, Plus, UserRound } from "lucide-react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
-import Checkbox from "../../components/Checkbox";
 import EmptyState from "../../components/EmptyState";
 import Field from "../../components/Field";
-import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
@@ -14,14 +12,12 @@ import { notifications } from "../../services/notification.service";
 import {
   createSiteSurvey,
   listCustomerSites,
-  listSiteSurveyChecklistItems,
   listSiteSurveys,
-  updateSiteSurvey,
-  upsertSiteSurveyChecklistItems,
 } from "../../services/siteSurvey.service";
+import { startSurveyVisit } from "../../services/siteSurveyExecution.service";
 import { listUsers } from "../../services/users.service";
-import type { CompanyUser } from "../../types/userManagement.types";
-import type { SimpleOption, SiteSurveyChecklistItem, SiteSurveySummary } from "../../types/siteSurvey.types";
+import SurveyExecutionPage from "../../components/siteSurvey/SurveyExecutionPage";
+import type { SiteSurveySummary, SimpleOption } from "../../types/siteSurvey.types";
 
 const STATUS_STYLES: Record<string, string> = {
   pendiente: "border-amber-200 bg-amber-50 text-amber-700",
@@ -29,76 +25,71 @@ const STATUS_STYLES: Record<string, string> = {
   completado: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-function formatDate(value?: string | null): string {
+function formatDateTime(value?: string | null): string {
   if (!value) return "Sin fecha";
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("es-DO", { dateStyle: "medium" }).format(date);
+  return new Date(value).toLocaleString("es-DO");
 }
 
-function toLocalDateString(value?: string | null): string | null {
-  if (!value) return null;
+function toDateTimeLocalValue(value?: string | null): string {
+  if (!value) return "";
   const date = new Date(value);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function isDateReached(value?: string | null): boolean {
-  if (!value) return false;
-  const date = new Date(value);
-  const now = new Date();
-  const visitDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return visitDay <= today;
+function isCompleted(survey: SiteSurveySummary): boolean {
+  const normalized = (survey.status ?? "").trim().toLowerCase();
+  return normalized === "completado" || Boolean(survey.completedAt);
 }
 
-function isCompletedSurvey(survey: SiteSurveySummary): boolean {
-  if (survey.completedAt) return true;
-  const normalized = (survey.status ?? "").toLowerCase();
-  return normalized === "completado";
+function canStartSurvey(survey: SiteSurveySummary, userId: string | null): boolean {
+  if (!userId) return false;
+  if (survey.technicianId !== userId) return false;
+  if (isCompleted(survey)) return false;
+  if (!survey.scheduledStart) return false;
+  return Date.now() >= new Date(survey.scheduledStart).getTime();
 }
 
 export default function SiteSurvey() {
+  const navigate = useNavigate();
+  const { surveyId } = useParams();
   const { authUser, companyProfile, canAccess } = useAuth();
+
   const companyId = companyProfile?.id ?? null;
+  const userId = authUser?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.siteSurveyCreate);
 
-  const [surveys, setSurveys] = useState<SiteSurveySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [surveys, setSurveys] = useState<SiteSurveySummary[]>([]);
 
-  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [formValues, setFormValues] = useState({
-    customerId: "",
-    siteId: "",
-    technicianId: "",
-    date: "",
-  });
 
   const [customerOptions, setCustomerOptions] = useState<SimpleOption[]>([]);
   const [siteOptions, setSiteOptions] = useState<SimpleOption[]>([]);
   const [technicianOptions, setTechnicianOptions] = useState<SimpleOption[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
 
-  const [activeSurvey, setActiveSurvey] = useState<SiteSurveySummary | null>(null);
-  const [startModalOpen, setStartModalOpen] = useState(false);
-  const [checklistItems, setChecklistItems] = useState<SiteSurveyChecklistItem[]>([]);
-  const [checklistLoading, setChecklistLoading] = useState(false);
-  const [executionValues, setExecutionValues] = useState({
-    requirements: "",
-    observations: "",
-    recomendations: "",
-    risks: "",
+  const [startingSurveyId, setStartingSurveyId] = useState<string | null>(null);
+
+  const [formValues, setFormValues] = useState({
+    customerId: "",
+    siteId: "",
+    technicianId: "",
+    scheduledStart: toDateTimeLocalValue(new Date().toISOString()),
+    scheduledEnd: "",
   });
-  const [savingExecution, setSavingExecution] = useState(false);
 
   const loadSurveys = useCallback(async () => {
     if (!companyId) {
-      setSurveys([]);
       setLoading(false);
-      setError("No se encontro la compania del usuario autenticado.");
+      setSurveys([]);
+      setError("No se encontro la compania activa.");
       return;
     }
 
@@ -106,46 +97,42 @@ export default function SiteSurvey() {
     setError(null);
 
     try {
-      const result = await listSiteSurveys(companyId);
-      setSurveys(result);
+      const data = await listSiteSurveys(companyId);
+      setSurveys(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error cargando levantamientos.";
+      const message = err instanceof Error ? err.message : "No se pudieron cargar los levantamientos.";
       setError(message);
     } finally {
       setLoading(false);
     }
   }, [companyId]);
 
-  const loadOptions = useCallback(async () => {
+  const loadCreateOptions = useCallback(async () => {
     if (!companyId) return;
-    setOptionsLoading(true);
 
+    setOptionsLoading(true);
     try {
-      const [customersResult, usersResult] = await Promise.all([
-        listCustomers(companyId, { page: 1, pageSize: 200 }),
-        listUsers(companyId, { page: 1, pageSize: 200 }),
+      const [customers, users] = await Promise.all([
+        listCustomers(companyId, { page: 1, pageSize: 300 }),
+        listUsers(companyId, { page: 1, pageSize: 300 }),
       ]);
 
-      const customers = customersResult.items.map((customer) => ({
-        id: customer.id,
-        name: customer.name,
-      }));
+      setCustomerOptions(customers.items.map((customer) => ({ id: customer.id, name: customer.name })));
 
       const technicianMap = new Map<string, SimpleOption>();
-      usersResult.items
-        .filter((user) => user.roleName?.toLowerCase() !== "customer")
-        .forEach((user: CompanyUser) => {
+      users.items
+        .filter((user) => user.roleName?.trim().toLowerCase() !== "customer")
+        .forEach((user) => {
           if (!technicianMap.has(user.id)) {
             technicianMap.set(user.id, { id: user.id, name: user.name });
           }
         });
 
-      setCustomerOptions(customers);
       setTechnicianOptions(Array.from(technicianMap.values()));
-    } catch (err) {
+    } catch {
       notifications.error({
         title: "Error cargando opciones",
-        description: "No se pudieron cargar clientes o tecnicos.",
+        description: "No se pudieron cargar clientes y tecnicos.",
       });
     } finally {
       setOptionsLoading(false);
@@ -157,11 +144,12 @@ export default function SiteSurvey() {
   }, [loadSurveys]);
 
   useEffect(() => {
-    void loadOptions();
-  }, [loadOptions]);
+    if (!createOpen) return;
+    void loadCreateOptions();
+  }, [createOpen, loadCreateOptions]);
 
   useEffect(() => {
-    if (!companyId || !formValues.customerId) {
+    if (!companyId || !formValues.customerId || !createOpen) {
       setSiteOptions([]);
       return;
     }
@@ -173,12 +161,13 @@ export default function SiteSurvey() {
         const sites = await listCustomerSites(companyId, formValues.customerId);
         if (!active) return;
         setSiteOptions(sites);
+
         if (sites.length === 0) {
-          setFormValues((prev) => ({ ...prev, siteId: "" }));
-        } else if (!sites.find((site) => site.id === formValues.siteId)) {
-          setFormValues((prev) => ({ ...prev, siteId: sites[0].id }));
+          setFormValues((current) => ({ ...current, siteId: "" }));
+        } else if (!sites.some((site) => site.id === formValues.siteId)) {
+          setFormValues((current) => ({ ...current, siteId: sites[0].id }));
         }
-      } catch (err) {
+      } catch {
         if (!active) return;
         notifications.error({
           title: "Error cargando sitios",
@@ -192,19 +181,14 @@ export default function SiteSurvey() {
     return () => {
       active = false;
     };
-  }, [companyId, formValues.customerId, formValues.siteId]);
+  }, [companyId, createOpen, formValues.customerId, formValues.siteId]);
 
   const stats = useMemo(() => {
     const total = surveys.length;
-    const completed = surveys.filter((survey) => isCompletedSurvey(survey)).length;
-    const pending = total - completed;
-    const today = surveys.filter((survey) => {
-      const scheduled = toLocalDateString(survey.scheduledStart);
-      const now = toLocalDateString(new Date().toISOString());
-      return scheduled && now ? scheduled === now : false;
-    }).length;
-
-    return { total, completed, pending, today };
+    const completed = surveys.filter((survey) => isCompleted(survey)).length;
+    const inProgress = surveys.filter((survey) => (survey.status ?? "").trim().toLowerCase() === "en progreso").length;
+    const pending = total - completed - inProgress;
+    return { total, pending, inProgress, completed };
   }, [surveys]);
 
   const openCreateModal = () => {
@@ -212,28 +196,40 @@ export default function SiteSurvey() {
       customerId: "",
       siteId: "",
       technicianId: "",
-      date: "",
+      scheduledStart: toDateTimeLocalValue(new Date().toISOString()),
+      scheduledEnd: "",
     });
-    setCreateModalOpen(true);
+    setCreateOpen(true);
   };
 
   const closeCreateModal = () => {
     if (creating) return;
-    setCreateModalOpen(false);
+    setCreateOpen(false);
   };
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     if (!companyId) return;
-    if (!formValues.customerId || !formValues.siteId || !formValues.technicianId || !formValues.date) {
+
+    if (!formValues.customerId || !formValues.siteId || !formValues.technicianId || !formValues.scheduledStart) {
       notifications.warning({
         title: "Campos requeridos",
-        description: "Completa cliente, sitio, tecnico y fecha.",
+        description: "Completa cliente, sitio, tecnico y fecha/hora de inicio.",
       });
       return;
     }
 
-    const scheduledStart = new Date(`${formValues.date}T09:00:00`).toISOString();
+    const scheduledStart = new Date(formValues.scheduledStart).toISOString();
+    const scheduledEnd = formValues.scheduledEnd ? new Date(formValues.scheduledEnd).toISOString() : null;
+
+    if (scheduledEnd && new Date(scheduledEnd).getTime() <= new Date(scheduledStart).getTime()) {
+      notifications.warning({
+        title: "Rango invalido",
+        description: "La hora fin debe ser mayor a la hora inicio.",
+      });
+      return;
+    }
 
     setCreating(true);
     try {
@@ -242,12 +238,15 @@ export default function SiteSurvey() {
         siteId: formValues.siteId,
         technicianId: formValues.technicianId,
         scheduledStart,
+        scheduledEnd,
       });
+
       notifications.success({
         title: "Levantamiento creado",
-        description: "El levantamiento fue agendado correctamente.",
+        description: "Se registro y agendo correctamente.",
       });
-      setCreateModalOpen(false);
+
+      setCreateOpen(false);
       await loadSurveys();
     } catch (err) {
       notifications.error({
@@ -259,131 +258,79 @@ export default function SiteSurvey() {
     }
   };
 
-  const openStartModal = async (survey: SiteSurveySummary) => {
-    setActiveSurvey(survey);
-    setExecutionValues({
-      requirements: survey.requirements ?? "",
-      observations: survey.observations ?? "",
-      recomendations: survey.recomendations ?? "",
-      risks: survey.risks ?? "",
-    });
-    setStartModalOpen(true);
-    setChecklistLoading(true);
-    try {
-      const items = await listSiteSurveyChecklistItems(survey.id);
-      setChecklistItems(items);
-    } catch (err) {
-      notifications.error({
-        title: "Error cargando checklist",
-        description: err instanceof Error ? err.message : "No se pudo cargar el checklist.",
-      });
-    } finally {
-      setChecklistLoading(false);
+  const handleStartSurvey = async (survey: SiteSurveySummary) => {
+    if (!survey.visitId) {
+      navigate(`/admin/site_surveys/${survey.id}`);
+      return;
     }
-  };
 
-  const closeStartModal = () => {
-    if (savingExecution) return;
-    setStartModalOpen(false);
-    setActiveSurvey(null);
-    setChecklistItems([]);
-  };
-
-  const updateChecklistItem = (id: string, patch: Partial<SiteSurveyChecklistItem>) => {
-    setChecklistItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-    );
-  };
-
-  const saveExecution = async (markCompleted = false) => {
-    if (!activeSurvey) return;
-    setSavingExecution(true);
+    setStartingSurveyId(survey.id);
     try {
-      await updateSiteSurvey(activeSurvey.id, {
-        requirements: executionValues.requirements || null,
-        observations: executionValues.observations || null,
-        recomendations: executionValues.recomendations || null,
-        risks: executionValues.risks || null,
-        status: markCompleted ? "Completado" : activeSurvey.status ?? undefined,
-        completedAt: markCompleted ? new Date().toISOString() : activeSurvey.completedAt ?? undefined,
-      });
-      await upsertSiteSurveyChecklistItems(checklistItems);
+      await startSurveyVisit(survey.visitId, survey.id);
       notifications.success({
-        title: markCompleted ? "Levantamiento completado" : "Levantamiento actualizado",
-        description: markCompleted ? "Se marco como completado." : "Cambios guardados correctamente.",
+        title: "Levantamiento iniciado",
+        description: "Se actualizo el estado a En Progreso.",
       });
-      setStartModalOpen(false);
-      setActiveSurvey(null);
-      await loadSurveys();
+      navigate(`/admin/site_surveys/${survey.id}`);
     } catch (err) {
       notifications.error({
-        title: "Error guardando levantamiento",
-        description: err instanceof Error ? err.message : "No se pudieron guardar los cambios.",
+        title: "Error iniciando levantamiento",
+        description: err instanceof Error ? err.message : "No se pudo iniciar el levantamiento.",
       });
     } finally {
-      setSavingExecution(false);
+      setStartingSurveyId(null);
     }
   };
+
+  if (!companyId || !userId) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (surveyId) {
+    return <SurveyExecutionPage surveyId={surveyId} companyId={companyId} onBack={() => navigate("/admin/site_surveys")} />;
+  }
 
   return (
     <section className="space-y-6">
       <header className="rounded-2xl border border-slate-200 bg-linear-to-r from-slate-900 via-slate-800 to-blue-900 p-6 text-white shadow-sm">
         <h1 className="text-3xl font-semibold tracking-tight">Levantamientos</h1>
-        <p className="mt-2 text-sm text-slate-200">
-          Agenda y ejecucion de levantamientos tecnicos para {companyProfile?.name ?? "tu compania"}.
-        </p>
+        <p className="mt-2 text-sm text-slate-200">Desde aqui puedes crear, iniciar y ejecutar levantamientos tecnicos.</p>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-slate-500">Total</p>
-            <ClipboardCheck size={16} className="text-slate-400" />
-          </div>
+          <p className="text-sm font-medium text-slate-500">Total</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">{stats.total}</p>
         </article>
-
         <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-amber-700">Pendientes</p>
-            <CalendarDays size={16} className="text-amber-700" />
-          </div>
+          <p className="text-sm font-medium text-amber-700">Pendientes</p>
           <p className="mt-2 text-2xl font-semibold text-amber-800">{stats.pending}</p>
         </article>
-
-        <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-emerald-700">Completados</p>
-            <ClipboardCheck size={16} className="text-emerald-700" />
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-emerald-800">{stats.completed}</p>
-        </article>
-
         <article className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-blue-700">Hoy</p>
-            <CalendarDays size={16} className="text-blue-700" />
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-blue-800">{stats.today}</p>
+          <p className="text-sm font-medium text-blue-700">En progreso</p>
+          <p className="mt-2 text-2xl font-semibold text-blue-800">{stats.inProgress}</p>
+        </article>
+        <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+          <p className="text-sm font-medium text-emerald-700">Completados</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-800">{stats.completed}</p>
         </article>
       </div>
 
       <div className="flex items-center justify-end">
-        {canCreate && (
+        {canCreate ? (
           <Button
             type="button"
             onClick={openCreateModal}
-            disabled={optionsLoading || creating}
-            icon={<Plus size={16} />}
             className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+            icon={<Plus size={16} />}
           >
             Nuevo levantamiento
           </Button>
-        )}
+        ) : null}
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Listado de levantamientos</h2>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
             {surveys.length} registros
@@ -396,15 +343,6 @@ export default function SiteSurvey() {
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <p className="font-semibold">Error cargando levantamientos</p>
             <p className="mt-1">{error}</p>
-            <div className="mt-3">
-              <Button
-                type="button"
-                onClick={() => void loadSurveys()}
-                className="border-red-300 bg-white text-red-700 hover:bg-red-100"
-              >
-                Reintentar
-              </Button>
-            </div>
           </div>
         ) : surveys.length === 0 ? (
           <div className="mt-4">
@@ -413,21 +351,26 @@ export default function SiteSurvey() {
         ) : (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {surveys.map((survey) => {
-              const isAssigned = Boolean(authUser?.id && survey.technicianId === authUser.id);
-              const canStart = isAssigned && isDateReached(survey.scheduledStart) && !isCompletedSurvey(survey);
-              const statusKey = (survey.status ?? "Pendiente").toLowerCase();
+              const canStart = canStartSurvey(survey, userId);
+              const statusKey = (survey.status ?? "Pendiente").trim().toLowerCase();
               const statusClass = STATUS_STYLES[statusKey] ?? "border-slate-200 bg-slate-50 text-slate-700";
 
               return (
-                <article key={survey.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {survey.customerName ?? "Cliente sin nombre"}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {survey.siteName ?? "Sitio sin nombre"}
-                      </p>
+                <article
+                  key={survey.id}
+                  className="rounded-2xl border border-blue-200 bg-linear-to-br from-white via-blue-50 to-cyan-50 p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        Levantamiento
+                      </span>
+
+                      <div>
+                      <p className="text-sm font-semibold text-slate-900">{survey.customerName ?? "Cliente sin nombre"}</p>
+                      <p className="mt-1 text-xs text-slate-500">{survey.siteName ?? "Sitio sin nombre"}</p>
+                      </div>
                     </div>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass}`}>
                       {survey.status ?? "Pendiente"}
@@ -436,27 +379,39 @@ export default function SiteSurvey() {
 
                   <div className="mt-3 grid gap-2 text-xs text-slate-600">
                     <div className="flex items-center gap-2">
-                      <CalendarDays size={14} className="text-slate-400" />
-                      <span>{formatDate(survey.scheduledStart)}</span>
+                      <CalendarClock size={14} className="text-slate-400" />
+                      <span>{formatDateTime(survey.scheduledStart)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <User size={14} className="text-slate-400" />
+                      <UserRound size={14} className="text-slate-400" />
                       <span>{survey.technicianName ?? "Tecnico no asignado"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ClipboardCheck size={14} className="text-slate-400" />
+                      <span>{survey.visitStatus ?? "Sin estado de visita"}</span>
                     </div>
                   </div>
 
-                  {canStart ? (
-                    <div className="mt-4">
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => navigate(`/admin/site_surveys/${survey.id}`)}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    >
+                      Abrir
+                    </Button>
+
+                    {canStart ? (
                       <Button
                         type="button"
-                        onClick={() => void openStartModal(survey)}
+                        onClick={() => void handleStartSurvey(survey)}
+                        disabled={startingSurveyId === survey.id}
                         className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                        fullWidth
                       >
-                        Empezar levantamiento
+                        {startingSurveyId === survey.id ? "Iniciando..." : "Iniciar levantamiento"}
                       </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </article>
               );
             })}
@@ -465,48 +420,44 @@ export default function SiteSurvey() {
       </section>
 
       <Modal
-        open={createModalOpen}
+        open={createOpen}
         onClose={closeCreateModal}
         title="Nuevo levantamiento"
-        subtitle="Selecciona cliente, sitio, tecnico y fecha."
+        subtitle="Registra cliente, sitio, tecnico y horario de visita."
         footer={
           <>
             <Button
               type="button"
               onClick={closeCreateModal}
               disabled={creating}
-              className="border-slate-300 text-slate-700 hover:bg-slate-100"
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              form="create-site-survey-form"
+              form="create-survey-form"
               disabled={
                 creating ||
                 optionsLoading ||
                 !formValues.customerId ||
                 !formValues.siteId ||
                 !formValues.technicianId ||
-                !formValues.date
+                !formValues.scheduledStart
               }
               className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
             >
-              Crear levantamiento
+              {creating ? "Creando..." : "Crear levantamiento"}
             </Button>
           </>
         }
       >
-        <form id="create-site-survey-form" onSubmit={handleCreate} className="space-y-3">
+        <form id="create-survey-form" onSubmit={handleCreate} className="space-y-3">
           <Field label="Cliente">
             <select
               value={formValues.customerId}
               onChange={(event) => {
-                setFormValues((prev) => ({
-                  ...prev,
-                  customerId: event.target.value,
-                  siteId: "",
-                }));
+                setFormValues((current) => ({ ...current, customerId: event.target.value, siteId: "" }));
               }}
               disabled={optionsLoading}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
@@ -523,7 +474,7 @@ export default function SiteSurvey() {
           <Field label="Sitio">
             <select
               value={formValues.siteId}
-              onChange={(event) => setFormValues((prev) => ({ ...prev, siteId: event.target.value }))}
+              onChange={(event) => setFormValues((current) => ({ ...current, siteId: event.target.value }))}
               disabled={optionsLoading || !formValues.customerId}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             >
@@ -539,7 +490,7 @@ export default function SiteSurvey() {
           <Field label="Tecnico asignado">
             <select
               value={formValues.technicianId}
-              onChange={(event) => setFormValues((prev) => ({ ...prev, technicianId: event.target.value }))}
+              onChange={(event) => setFormValues((current) => ({ ...current, technicianId: event.target.value }))}
               disabled={optionsLoading}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             >
@@ -552,115 +503,26 @@ export default function SiteSurvey() {
             </select>
           </Field>
 
-          <Field label="Fecha del levantamiento">
-            <Input
-              type="date"
-              value={formValues.date}
-              onChange={(event) => setFormValues((prev) => ({ ...prev, date: event.target.value }))}
-              disabled={optionsLoading}
-            />
-          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Inicio">
+              <input
+                type="datetime-local"
+                value={formValues.scheduledStart}
+                onChange={(event) => setFormValues((current) => ({ ...current, scheduledStart: event.target.value }))}
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </Field>
+
+            <Field label="Fin (opcional)">
+              <input
+                type="datetime-local"
+                value={formValues.scheduledEnd}
+                onChange={(event) => setFormValues((current) => ({ ...current, scheduledEnd: event.target.value }))}
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </Field>
+          </div>
         </form>
-      </Modal>
-
-      <Modal
-        open={startModalOpen}
-        onClose={closeStartModal}
-        title="Ejecutar levantamiento"
-        subtitle={activeSurvey ? `${activeSurvey.customerName ?? "Cliente"} - ${activeSurvey.siteName ?? "Sitio"}` : ""}
-        size="lg"
-        footer={
-          <>
-            <Button
-              type="button"
-              onClick={closeStartModal}
-              disabled={savingExecution}
-              className="border-slate-300 text-slate-700 hover:bg-slate-100"
-            >
-              Cerrar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void saveExecution(false)}
-              disabled={savingExecution}
-              className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Guardar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void saveExecution(true)}
-              disabled={savingExecution}
-              className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              Finalizar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Requerimientos">
-              <textarea
-                value={executionValues.requirements}
-                onChange={(event) => setExecutionValues((prev) => ({ ...prev, requirements: event.target.value }))}
-                className="min-h-[100px] w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-            <Field label="Observaciones">
-              <textarea
-                value={executionValues.observations}
-                onChange={(event) => setExecutionValues((prev) => ({ ...prev, observations: event.target.value }))}
-                className="min-h-[100px] w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-            <Field label="Recomendaciones">
-              <textarea
-                value={executionValues.recomendations}
-                onChange={(event) => setExecutionValues((prev) => ({ ...prev, recomendations: event.target.value }))}
-                className="min-h-[100px] w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-            <Field label="Riesgos">
-              <textarea
-                value={executionValues.risks}
-                onChange={(event) => setExecutionValues((prev) => ({ ...prev, risks: event.target.value }))}
-                className="min-h-[100px] w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-900">Checklist</h3>
-            {checklistLoading ? (
-              <p className="text-sm text-slate-500">Cargando checklist...</p>
-            ) : checklistItems.length === 0 ? (
-              <EmptyState text="No hay items de checklist para este levantamiento." />
-            ) : (
-              <div className="space-y-2">
-                {checklistItems.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={item.checked}
-                        onChange={(event) => updateChecklistItem(item.id, { checked: event.target.checked })}
-                      />
-                      <div className="flex-1 space-y-2">
-                        <p className="text-sm font-medium text-slate-800">{item.text}</p>
-                        <Input
-                          value={item.notes ?? ""}
-                          onChange={(event) => updateChecklistItem(item.id, { notes: event.target.value })}
-                          placeholder="Notas del tecnico (opcional)"
-                          className="py-2"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </Modal>
     </section>
   );

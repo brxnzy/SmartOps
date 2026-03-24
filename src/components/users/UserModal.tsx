@@ -1,14 +1,25 @@
-import { X } from "lucide-react";
-import SupplierForm from "./SupplierForm";
-import type { SupplierModalProps } from "../types/interfaces";
+﻿import { X } from "lucide-react";
+import UserForm from "./UserForm";
+import type { Role } from "../../types/Role";
+import type { CompanyUser, CompanyUserInput } from "../../types/userManagement.types";
 
-export default function SupplierModal({
+interface UserModalProps {
+  open: boolean;
+  user: CompanyUser | null;
+  roles: Role[];
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (payload: CompanyUserInput, options: { invitationEmail?: string }) => Promise<void>;
+}
+
+export default function UserModal({
   open,
-  supplier,
+  user,
+  roles,
   submitting,
   onClose,
   onSubmit,
-}: SupplierModalProps) {
+}: UserModalProps) {
   if (!open) return null;
 
   return (
@@ -22,8 +33,10 @@ export default function SupplierModal({
         >
           <X size={16} />
         </button>
-        <SupplierForm
-          initialData={supplier}
+
+        <UserForm
+          initialData={user}
+          roles={roles}
           submitting={submitting}
           onCancel={onClose}
           onSubmit={onSubmit}

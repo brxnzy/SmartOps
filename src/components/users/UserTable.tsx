@@ -1,6 +1,6 @@
 import { BadgeCheck, UserCog, UserRound } from "lucide-react";
-import Button from "./Button";
-import type { CompanyUser } from "../types/userManagement.types";
+import Button from "../Button";
+import type { CompanyUser } from "../../types/userManagement.types";
 
 interface UserTableProps {
   items: CompanyUser[];

@@ -1,16 +1,14 @@
 import { X } from "lucide-react";
-import CustomerForm from "./CustomerForm";
-import type{ CustomerModalProps } from "../types/interfaces";
+import SupplierForm from "./SupplierForm";
+import type { SupplierModalProps } from "../../types/interfaces";
 
-
-
-export default function CustomerModal({
+export default function SupplierModal({
   open,
-  customer,
+  supplier,
   submitting,
   onClose,
   onSubmit,
-}: CustomerModalProps) {
+}: SupplierModalProps) {
   if (!open) return null;
 
   return (
@@ -24,8 +22,8 @@ export default function CustomerModal({
         >
           <X size={16} />
         </button>
-        <CustomerForm
-          initialData={customer}
+        <SupplierForm
+          initialData={supplier}
           submitting={submitting}
           onCancel={onClose}
           onSubmit={onSubmit}

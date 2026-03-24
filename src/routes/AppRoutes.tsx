@@ -172,7 +172,15 @@ export default function AppRoutes() {
 
         <Route path="schedule" element={<Schedule />} />
         <Route
-          path="operaciones/visitas-tecnicas"
+          path="site_surveys"
+          element={
+            <PermissionRoute permission={PERMISSIONS.siteSurveyRead}>
+              <VisitsCalendar />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="site_surveys/:surveyId"
           element={
             <PermissionRoute permission={PERMISSIONS.siteSurveyRead}>
               <VisitsCalendar />
