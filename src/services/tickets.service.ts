@@ -2,11 +2,13 @@ import { supabase } from "../libs/supabase";
 import type {
   CreateTicketCommentInput,
   CreateTicketInput,
+  CreateTechnicalVisitInput,
   Ticket,
   TicketAttachment,
   TicketComment,
   TicketListItem,
   TicketSla,
+  TechnicalVisitSummary,
 } from "../types/ticketing.types";
 
 const TICKET_ATTACHMENT_BUCKET = "ticket-attachments";
@@ -27,6 +29,15 @@ function safeNullableText(value: unknown): string | null {
 function safeDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value ? value : null;
+}
+
+function safeNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function computeSlaDueAt(slaType: TicketSla): string {
@@ -99,6 +110,29 @@ function mapAttachment(row: Record<string, unknown>): TicketAttachment {
   };
 }
 
+function mapTechnicalVisit(row: Record<string, unknown>): TechnicalVisitSummary {
+  const ticket =
+    typeof row.ticket === "object" && row.ticket
+      ? (row.ticket as { id?: unknown; code?: unknown; site?: { name?: unknown } | null })
+      : null;
+  const technician =
+    typeof row.technician === "object" && row.technician
+      ? (row.technician as { id?: unknown; name?: unknown })
+      : null;
+
+  return {
+    id: safeNumber(row.id) ?? 0,
+    ticketId: safeNullableText(row.ticket_id),
+    ticketCode: safeNullableText(ticket?.code),
+    siteName: safeNullableText(ticket?.site?.name),
+    scheduledStart: safeNullableText(row.scheduled_start),
+    scheduledEnd: safeNullableText(row.scheduled_end),
+    technicianId: safeNullableText(row.technician_id),
+    technicianName: safeNullableText(technician?.name),
+    status: safeNullableText(row.status),
+  };
+}
+
 async function resolveAttachmentUrls(attachments: TicketAttachment[]): Promise<TicketAttachment[]> {
   return Promise.all(
     attachments.map(async (attachment) => {
@@ -125,7 +159,7 @@ export async function listCompanyTickets(companyId: string): Promise<TicketListI
   const { data, error } = await supabase
     .from("tickets")
     .select(
-      "id, code, company_id, customer_id, site_id, zone_id, category_id, status, description, sla_type, sla_due_at, assigned_to, created_at, updated_at, category:ticket_categories ( id, name )"
+      "id, code, company_id, customer_id, site_id, zone_id, category_id, status, description, sla_type, sla_due_at, assigned_to, created_at, updated_at, category:ticket_categories ( id, name ), site:customer_sites ( id, name )"
     )
     .eq("company_id", companyId)
     .order("created_at", { ascending: false });
@@ -144,7 +178,7 @@ export async function listCustomerTickets(
   const { data, error } = await supabase
     .from("tickets")
     .select(
-      "id, code, company_id, customer_id, site_id, zone_id, category_id, status, description, sla_type, sla_due_at, assigned_to, created_at, updated_at, category:ticket_categories ( id, name )"
+      "id, code, company_id, customer_id, site_id, zone_id, category_id, status, description, sla_type, sla_due_at, assigned_to, created_at, updated_at, category:ticket_categories ( id, name ), site:customer_sites ( id, name )"
     )
     .eq("company_id", companyId)
     .eq("customer_id", customerId)
@@ -307,4 +341,67 @@ export async function addTicketComment(
   if (files.length > 0) {
     await uploadTicketAttachments(companyId, ticketId, authorId, files, data.id as string);
   }
+}
+
+export async function listTechnicians(companyId: string): Promise<Array<{ id: string; name: string }>> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("users:user_id ( id, name ), roles:role_id ( name )")
+    .eq("company_id", companyId);
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar los tecnicos.");
+  }
+
+  const mapped =
+    (data ?? [])
+      .map((row) => {
+        const user = (row as { users?: { id?: string; name?: string } | null }).users ?? null;
+        const role = (row as { roles?: { name?: string } | null }).roles ?? null;
+        if (!user?.id || !user.name) return null;
+        const roleName = role?.name?.toLowerCase() ?? "";
+        if (!["tecnico", "técnico", "technician", "admin"].some((key) => roleName.includes(key))) {
+          return null;
+        }
+        return { id: user.id, name: user.name };
+      })
+      .filter((item): item is { id: string; name: string } => Boolean(item)) ?? [];
+
+  return mapped;
+}
+
+export async function createTicketTechnicalVisit(
+  companyId: string,
+  ticketId: string,
+  input: CreateTechnicalVisitInput
+): Promise<void> {
+  const { error } = await supabase.from("technical_visits").insert({
+    company_id: companyId,
+    ticket_id: ticketId,
+    technician_id: input.technicianId,
+    scheduled_start: input.scheduledStart,
+    scheduled_end: input.scheduledEnd,
+    status: input.status ?? null,
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo programar la visita tecnica.");
+  }
+}
+
+export async function listTicketTechnicalVisits(companyId: string): Promise<TechnicalVisitSummary[]> {
+  const { data, error } = await supabase
+    .from("technical_visits")
+    .select(
+      "id, scheduled_start, scheduled_end, technician_id, status, ticket_id, ticket:tickets ( id, code, site:customer_sites ( name ) ), technician:users ( id, name )"
+    )
+    .eq("company_id", companyId)
+    .not("ticket_id", "is", null)
+    .order("scheduled_start", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar las visitas tecnicas.");
+  }
+
+  return (data ?? []).map((row) => mapTechnicalVisit(row as Record<string, unknown>));
 }

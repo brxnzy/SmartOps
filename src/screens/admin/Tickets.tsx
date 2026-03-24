@@ -80,18 +80,19 @@ export default function AdminTickets() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return tickets.filter((ticket) => {
-      if (statusFilter !== "all" && ticket.status !== statusFilter) return false;
-      if (!query) return true;
-      return (
-        ticket.code.toLowerCase().includes(query) ||
-        ticket.description.toLowerCase().includes(query) ||
-        ticket.customerId.toLowerCase().includes(query) ||
-        (ticket.customerName ?? "").toLowerCase().includes(query) ||
-        (ticket.categoryName ?? "").toLowerCase().includes(query)
-      );
-    });
-  }, [tickets, statusFilter, search]);
+      return tickets.filter((ticket) => {
+        if (statusFilter !== "all" && ticket.status !== statusFilter) return false;
+        if (!query) return true;
+        return (
+          ticket.code.toLowerCase().includes(query) ||
+          ticket.description.toLowerCase().includes(query) ||
+          ticket.customerId.toLowerCase().includes(query) ||
+          (ticket.customerName ?? "").toLowerCase().includes(query) ||
+          (ticket.categoryName ?? "").toLowerCase().includes(query) ||
+          (ticket.siteName ?? "").toLowerCase().includes(query)
+        );
+      });
+    }, [tickets, statusFilter, search]);
 
   const summary = useMemo(() => {
     const base = {
@@ -191,6 +192,7 @@ export default function AdminTickets() {
                 <tr>
                   <th className="px-4 py-3">Codigo</th>
                   <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Sitio</th>
                   <th className="px-4 py-3">Categoria</th>
                   <th className="px-4 py-3">Descripcion</th>
                   <th className="px-4 py-3">Estado</th>
@@ -205,6 +207,9 @@ export default function AdminTickets() {
                     <td className="px-4 py-3 font-semibold text-slate-900">{ticket.code}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {ticket.customerName ?? ticket.customerId.slice(0, 8)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {ticket.siteName ?? "Sin sitio"}
                     </td>
                     <td className="px-4 py-3 text-slate-700">
                       {ticket.categoryName ?? ticket.categoryId.slice(0, 6)}
