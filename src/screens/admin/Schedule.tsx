@@ -87,7 +87,7 @@ export default function Schedule() {
 
       return {
         id: String(visit.visitId),
-        title: `${visit.customerName ?? "Cliente"} · ${visit.siteName ?? "Sitio"}`,
+        title: `${visit.customerName ?? "Cliente"} ï¿½ ${visit.siteName ?? "Sitio"}`,
         start: visit.scheduledStart,
         end: endDate,
         backgroundColor: colors.bg,
@@ -95,7 +95,7 @@ export default function Schedule() {
         textColor: "#ffffff",
         extendedProps: {
           surveyId: visit.surveyId,
-          technicianName: visit.technicianName ?? "Sin técnico",
+          technicianName: visit.technicianName ?? "Sin tï¿½cnico",
           status: visit.status ?? "Pendiente",
           scheduledEnd: visit.scheduledEnd ?? null,
         },
@@ -113,7 +113,7 @@ export default function Schedule() {
     <section className="space-y-6">
       <header>
         <h1 className="text-3xl font-bold text-slate-800">Agenda</h1>
-        <p className="mt-2 text-slate-600">Calendario general por día/semana con horario de visitas técnicas.</p>
+        <p className="mt-2 text-slate-600">Calendario general por dï¿½a/semana con horario de visitas tï¿½cnicas.</p>
       </header>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -181,7 +181,7 @@ export default function Schedule() {
             }}
             buttonText={{
               today: "Hoy",
-              day: "Día",
+              day: "Dï¿½a",
               week: "Semana",
               month: "Mes",
             }}
@@ -204,7 +204,7 @@ export default function Schedule() {
                 <div className="space-y-0.5">
                   <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
                   {technicianName ? (
-                    <p className="text-[10px] leading-tight text-white/90">Técnico: {technicianName}</p>
+                    <p className="text-[10px] leading-tight text-white/90">Tï¿½cnico: {technicianName}</p>
                   ) : null}
                   <p className="text-[10px] leading-tight text-white/90">{status}</p>
                   {endLabel ? (
@@ -235,7 +235,7 @@ export default function Schedule() {
               <span className="font-medium">Sitio:</span> {selectedVisit.siteName ?? "Sin nombre"}
             </p>
             <p>
-              <span className="font-medium">Técnico:</span> {selectedVisit.technicianName ?? "Sin técnico"}
+              <span className="font-medium">Tï¿½cnico:</span> {selectedVisit.technicianName ?? "Sin tï¿½cnico"}
             </p>
             <p>
               <span className="font-medium">Estado:</span> {selectedVisit.status ?? "Pendiente"}
@@ -262,3 +262,6 @@ export default function Schedule() {
     </section>
   );
 }
+
+
+//Sistema de turno que se muestre en pantalla

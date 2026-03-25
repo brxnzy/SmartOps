@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useMemo, useState } from "react";
 import Button from "../../components/Button";
 import Checkbox from "../../components/Checkbox";
 import ConfirmModal from "../../components/ConfirmModal";
@@ -7,6 +7,72 @@ import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import useRoles from "../../hooks/useRoles";
 import { formatPermissionCode } from "../../utils/permissions";
+
+type PermissionGroup = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+const PERMISSION_GROUPS: Array<{
+  key: string;
+  label: string;
+  match: (code: string) => boolean;
+}> = [
+  {
+    key: "operaciones",
+    label: "Operaciones",
+    match: (code) => code.startsWith("tickets.") || code.startsWith("site_survey."),
+  },
+  {
+    key: "usuarios",
+    label: "Usuarios",
+    match: (code) => code.startsWith("users.") || code.startsWith("roles.") || code.startsWith("account."),
+  },
+  { key: "clientes", label: "Clientes", match: (code) => code.startsWith("customers") },
+  {
+    key: "inventario",
+    label: "Inventario",
+    match: (code) =>
+      code.startsWith("devices.") ||
+      code.startsWith("device-inventory.") ||
+      code.startsWith("inventory.") ||
+      code.startsWith("kits.") ||
+      code.startsWith("suppliers."),
+  },
+  { key: "configuracion", label: "Configuracion", match: (code) => code.startsWith("settings.") },
+  { key: "dashboard", label: "Dashboard", match: (code) => code.startsWith("dashboard.") },
+];
+
+function getPermissionGroupKey(code: string): string {
+  const matched = PERMISSION_GROUPS.find((group) => group.match(code));
+  return matched?.key ?? "others";
+}
+
+function buildPermissionGroupOptions(codes: string[]): PermissionGroup[] {
+  const counts = new Map<string, number>();
+
+  codes.forEach((code) => {
+    const key = getPermissionGroupKey(code);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+
+  const options: PermissionGroup[] = [
+    { key: "all", label: "Todos", count: codes.length },
+    ...PERMISSION_GROUPS.filter((group) => (counts.get(group.key) ?? 0) > 0).map((group) => ({
+      key: group.key,
+      label: group.label,
+      count: counts.get(group.key) ?? 0,
+    })),
+  ];
+
+  const othersCount = counts.get("others") ?? 0;
+  if (othersCount > 0) {
+    options.push({ key: "others", label: "Otros", count: othersCount });
+  }
+
+  return options;
+}
 
 export default function Roles() {
   const {
@@ -42,6 +108,12 @@ export default function Roles() {
 
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [activePermissionGroupByRole, setActivePermissionGroupByRole] = useState<Record<string, string>>({});
+
+  const allPermissionGroupOptions = useMemo(
+    () => buildPermissionGroupOptions(allPermissions.map((permission) => permission.code)),
+    [allPermissions]
+  );
 
   const toggleAccordion = (roleId: string) => {
     if (editingRoleId === roleId) {
@@ -115,6 +187,21 @@ export default function Roles() {
             const isGlobalAdmin = role.companyId === null && role.name.toLowerCase() === "admin";
             const rolePermissionCodes = rolePermissions[role.id] ?? [];
             const summaryPermissionCount = rolePermissionCodes.length;
+            const roleGroupOptions = buildPermissionGroupOptions(rolePermissionCodes);
+            const groupOptions = isEditing ? allPermissionGroupOptions : roleGroupOptions;
+            const activeGroupKey =
+              activePermissionGroupByRole[role.id] &&
+              groupOptions.some((group) => group.key === activePermissionGroupByRole[role.id])
+                ? activePermissionGroupByRole[role.id]
+                : "all";
+            const visiblePermissionCodes =
+              activeGroupKey === "all"
+                ? rolePermissionCodes
+                : rolePermissionCodes.filter((code) => getPermissionGroupKey(code) === activeGroupKey);
+            const visiblePermissions =
+              activeGroupKey === "all"
+                ? allPermissions
+                : allPermissions.filter((permission) => getPermissionGroupKey(permission.code) === activeGroupKey);
 
             return (
               <article
@@ -191,32 +278,81 @@ export default function Roles() {
                     )}
 
                     <div className="space-y-2">
-                      <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Permisos</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Permisos</p>
+                        <p className="text-xs text-slate-500">
+                          Mostrando {isEditing ? visiblePermissions.length : visiblePermissionCodes.length} de{" "}
+                          {isEditing ? allPermissions.length : rolePermissionCodes.length}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 via-white to-slate-50 p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {groupOptions.map((group) => {
+                            const isActive = activeGroupKey === group.key;
+
+                            return (
+                              <button
+                                key={group.key}
+                                type="button"
+                                onClick={() =>
+                                  setActivePermissionGroupByRole((current) => ({
+                                    ...current,
+                                    [role.id]: group.key,
+                                  }))
+                                }
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                  isActive
+                                    ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                                    : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50/60 hover:text-slate-900"
+                                }`}
+                              >
+                                <span>{group.label}</span>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] ${
+                                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                                  }`}
+                                >
+                                  {group.count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       {allPermissions.length === 0 ? (
                         <p className="text-sm text-slate-500">No hay permisos disponibles.</p>
                       ) : isEditing ? (
                         <div className="space-y-2">
-                          {allPermissions.map((permission) => {
-                            const checked = editingPermissionCodes.includes(permission.code);
+                          {visiblePermissions.length === 0 ? (
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                              No hay permisos en este grupo.
+                            </div>
+                          ) : (
+                            visiblePermissions.map((permission) => {
+                              const checked = editingPermissionCodes.includes(permission.code);
 
-                            return (
-                              <label
-                                key={permission.id}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2"
-                              >
-                                <span className="text-sm text-slate-700">{formatPermissionCode(permission.code)}</span>
-                                <Checkbox
-                                  checked={checked}
-                                  onChange={() => toggleEditingPermission(permission.code)}
-                                />
-                              </label>
-                            );
-                          })}
+                              return (
+                                <label
+                                  key={permission.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2"
+                                >
+                                  <span className="text-sm text-slate-700">
+                                    {formatPermissionCode(permission.code)}
+                                  </span>
+                                  <Checkbox
+                                    checked={checked}
+                                    onChange={() => toggleEditingPermission(permission.code)}
+                                  />
+                                </label>
+                              );
+                            })
+                          )}
                         </div>
-                      ) : rolePermissionCodes.length > 0 ? (
+                      ) : visiblePermissionCodes.length > 0 ? (
                         <div className="space-y-2">
-                          {rolePermissionCodes.map((permissionCode) => (
+                          {visiblePermissionCodes.map((permissionCode) => (
                             <div
                               key={permissionCode}
                               className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
@@ -226,7 +362,11 @@ export default function Roles() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-slate-500">Este rol no tiene permisos asignados.</p>
+                        <p className="text-sm text-slate-500">
+                          {rolePermissionCodes.length === 0
+                            ? "Este rol no tiene permisos asignados."
+                            : "No hay permisos en este grupo."}
+                        </p>
                       )}
                     </div>
 
@@ -308,3 +448,4 @@ export default function Roles() {
     </section>
   );
 }
+
