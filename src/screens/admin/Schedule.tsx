@@ -77,16 +77,16 @@ export default function Schedule() {
 
       return {
         id: String(visit.visitId),
-        title: "Visita tecnica",
+        title: "Proyecto",
         start: visit.scheduledStart,
         end: endDate,
         backgroundColor: colors.bg,
         borderColor: colors.border,
         textColor: "#ffffff",
         extendedProps: {
-          surveyId: visit.surveyId,
+          name: `${visit.customerName ?? "Cliente"} - ${visit.siteName ?? "Sitio"}`,
           technicianName: visit.technicianName ?? "Sin t�cnico",
-          status: visit.status ?? "Pendiente",
+
           scheduledEnd: visit.scheduledEnd ?? null,
         },
       };
@@ -106,16 +106,8 @@ export default function Schedule() {
             <h2 className="text-base font-semibold text-slate-900">Calendario de visitas</h2>
             <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
               <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                En progreso
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                Pendiente
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                Completada
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+                Proyecto
               </span>
               <span className="inline-flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
@@ -180,16 +172,23 @@ export default function Schedule() {
             eventContent={(arg) => {
               const technicianName = arg.event.extendedProps?.technicianName as string | undefined;
               const scheduledEnd = arg.event.extendedProps?.scheduledEnd as string | undefined;
-              const status = arg.event.extendedProps?.status as string | undefined;
               const endLabel = formatShortDate(scheduledEnd);
 
               return (
                 <div className="space-y-0.5">
-                  <p className="text-[11px] font-semibold leading-tight">Visita tecnica</p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: arg.event.backgroundColor as string }}
+                    />
+                    <p className="text-[10px] font-semibold leading-tight text-white/90">
+                      {arg.event.extendedProps?.name as string | undefined}
+                    </p>
+                  </div>
+                  <p className="text-[11px] font-semibold leading-tight">Proyecto</p>
                   {technicianName ? (
                     <p className="text-[10px] leading-tight text-white/90">T�cnico: {technicianName}</p>
                   ) : null}
-                  <p className="text-[10px] leading-tight text-white/90">{status}</p>
                   {endLabel ? (
                     <p className="text-[10px] leading-tight text-white/90">Finaliza: {endLabel}</p>
                   ) : null}
@@ -212,5 +211,7 @@ export default function Schedule() {
 
 
 //Sistema de turno que se muestre en pantalla
+
+
 
 
