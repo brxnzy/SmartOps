@@ -113,6 +113,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <Tag size={19} />,
       },
       {
+        name: "Companias",
+        to: "/admin/companies",
+        permission: PERMISSIONS.companiesRead,
+        icon: <Building2 size={19} />,
+      },
+      {
         name: "Mi cuenta",
         to: "/admin/account",
         icon: <User size={19} />
@@ -129,11 +135,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         permission: PERMISSIONS.settingsChecklistTemplatesRead,
         icon: <Check size={19} />,
       },
-      {
-        name: "Mi cuenta",
-        to: "/admin/account",
-        icon: <User size={19} />,
-       },
       {
         name: "Logs",
         to: "/admin/logs",
