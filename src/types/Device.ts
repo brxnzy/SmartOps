@@ -57,6 +57,7 @@ export interface Device {
   name: string;
   model: string;
   price: number;
+  installationPrice: number | null;
   protocolId: string;
   deviceTypeId: string;
   companyId: string;
@@ -69,6 +70,7 @@ export interface CreateDevicePayload {
   name: string;
   model: string;
   price: number;
+  installationPrice: number | null;
   protocolId: string;
   deviceTypeId: string;
   companyId: string;
@@ -81,6 +83,7 @@ export interface UpdateDevicePayload {
   name: string;
   model: string;
   price: number;
+  installationPrice: number | null;
   protocolId: string;
   deviceTypeId: string;
   brandId: string;

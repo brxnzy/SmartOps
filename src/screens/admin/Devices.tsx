@@ -18,6 +18,7 @@ export default function Devices() {
     name,
     model,
     price,
+    installationPrice,
     compatibility,
     quantity,
     searchTerm,
@@ -37,6 +38,7 @@ export default function Devices() {
     setName,
     setModel,
     setPrice,
+    setInstallationPrice,
     setCompatibility,
     setQuantity,
     setSearchTerm,
@@ -95,6 +97,10 @@ export default function Devices() {
                   <p className="text-sm text-slate-600">Modelo: {device.model}</p>
                   <p className="text-sm text-slate-600">Precio: {device.price.toFixed(2)}</p>
                   <p className="text-sm text-slate-600">
+                    Precio instalacion:{" "}
+                    {device.installationPrice === null ? "No definido" : device.installationPrice.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-slate-600">
                     Cantidad: {inventoryQuantityByDeviceId.get(device.id) ?? 0}
                   </p>
                   {device.compatibility && (
@@ -145,6 +151,13 @@ export default function Devices() {
         open={isModalOpen}
         onClose={closeModal}
         title={editingDevice ? "Editar dispositivo" : "Crear dispositivo"}
+        subtitle="Completa los datos principales, tecnicos y comerciales del dispositivo."
+        size="xl"
+        overlayClassName="items-start overflow-y-auto py-5 md:py-8"
+        containerClassName="max-h-[92vh] overflow-hidden border border-slate-200 bg-white"
+        bodyClassName="max-h-[calc(92vh-152px)] overflow-y-auto bg-slate-50/40"
+        headerClassName="bg-white"
+        footerClassName="bg-white"
         footer={
           <>
             <Button
@@ -163,6 +176,8 @@ export default function Devices() {
                 !name.trim() ||
                 !model.trim() ||
                 !price.trim() ||
+                (installationPrice.trim() &&
+                  (Number.isNaN(Number(installationPrice)) || Number(installationPrice) < 0)) ||
                 (!editingDevice && !quantity.trim()) ||
                 !protocolId ||
                 !deviceTypeId ||
@@ -176,7 +191,7 @@ export default function Devices() {
           </>
         }
       >
-        <form id="device-form" onSubmit={handleSubmit} className="grid gap-3 lg:grid-cols-2">
+        <form id="device-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-3">
             <Field label="Nombre">
               <Input
@@ -204,6 +219,17 @@ export default function Devices() {
                 value={price}
                 onChange={(event) => setPrice(event.target.value)}
                 placeholder="Ejemplo: 199.99"
+              />
+            </Field>
+
+            <Field label="Precio instalacion">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={installationPrice}
+                onChange={(event) => setInstallationPrice(event.target.value)}
+                placeholder="Ejemplo: 49.99"
               />
             </Field>
 

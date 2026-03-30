@@ -113,6 +113,7 @@ export type DeviceRow = {
   name: string;
   model: string;
   price: number | string;
+  installation_price: number | string | null;
   protocol_id: string;
   device_type_id: string;
   company_id: string;
