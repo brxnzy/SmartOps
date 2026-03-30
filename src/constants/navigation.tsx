@@ -121,6 +121,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
       {
         name: "Mi cuenta",
         to: "/admin/account",
+        permission: PERMISSIONS.accountUpdate,
         icon: <User size={19} />
       },
       {
