@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700;800&family=Mulish:wght@300;400;500;600&display=swap");
 
 @theme {
   --font-sans: "Inter", sans-serif;
@@ -6,4 +7,88 @@
 
 body {
   font-family: var(--font-sans);
+}
+
+.site-modal {
+  font-family: var(--font-sans);
+}
+
+.site-modal-title {
+  font-family: var(--font-sans);
+}
+
+.site-cards,
+.site-detail {
+  font-family: var(--font-sans);
+}
+
+.site-card-title,
+.site-detail-title,
+.site-section-title {
+  font-family: var(--font-sans);
+}
+
+.smartops-calendar .fc {
+  --fc-border-color: #e2e8f0;
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f8fafc;
+  --fc-neutral-text-color: #64748b;
+  --fc-today-bg-color: #eff6ff;
+  --fc-button-bg-color: #0f172a;
+  --fc-button-border-color: #0f172a;
+  --fc-button-text-color: #ffffff;
+  --fc-button-hover-bg-color: #1e293b;
+  --fc-button-hover-border-color: #1e293b;
+  --fc-button-active-bg-color: #1e293b;
+  --fc-button-active-border-color: #1e293b;
+  --fc-event-bg-color: #3b82f6;
+  --fc-event-border-color: #2563eb;
+  --fc-event-text-color: #ffffff;
+}
+
+.smartops-calendar .fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.smartops-calendar .fc .fc-button {
+  border-radius: 9999px;
+  padding: 0.35rem 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.smartops-calendar .fc .fc-button:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.smartops-calendar .fc .fc-col-header-cell-cushion {
+  padding: 6px 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.smartops-calendar .fc .fc-daygrid-day-number {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.smartops-calendar .fc .fc-daygrid-day.fc-day-today {
+  background: var(--fc-today-bg-color);
+}
+
+.smartops-calendar .fc .fc-daygrid-event {
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.smartops-calendar .fc .fc-daygrid-event .fc-event-main {
+  padding: 0;
 }

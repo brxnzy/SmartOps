@@ -3,4 +3,5 @@ export interface UserProfile {
   id: string;
   name: string;
   idCard: string | null;
+  photoUrl: string | null;
 }

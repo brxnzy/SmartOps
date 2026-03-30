@@ -1,19 +1,47 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
-import Sidebar from "../layouts/Sidebar";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
+import DeviceInventory from "../screens/admin/DeviceInventory";
+import Devices from "../screens/admin/Devices";
+import Suppliers from "../screens/admin/Suppliers";
+import InventoryLoads from "../screens/admin/InventoryLoads";
+import AutomationKits from "../screens/admin/AutomationKits";
 import Forbidden from "../screens/errors/Forbidden";
 import ForgotPassword from "../screens/auth/ForgotPassword";
 import Login from "../screens/auth/Login";
 import Register from "../screens/auth/Register";
 import UpdatePassword from "../screens/auth/UpdatePassword";
 import VerifyEmail from "../screens/auth/VerifyEmail";
-import Landing from "../screens/Landing";
+import Landing from "../screens/landing";
 import AdminDefaultRoute from "./AdminDefaultRoute";
+import AdminAreaRoute from "./AdminAreaRoute";
+import AppEntryRoute from "./AppEntryRoute";
+import CustomerAreaRoute from "./CustomerAreaRoute";
+import CustomerDefaultRoute from "./CustomerDefaultRoute";
 import PermissionRoute from "./PermissionRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import Roles from "../screens/admin/Roles";
+import SettingsProtocols from "../screens/admin/settings/SettingsProtocols";
+import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
+import SettingsTicketCategories from "../screens/admin/settings/SettingsTicketCategories";
+import SettingsBrands from "../screens/admin/settings/SettingsBrands";
+import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
+import SettingsLogs from "../screens/admin/settings/SettingsLogs";
+import UsersAdmin from "../screens/admin/Users";
+import CustomerProfile360 from "../screens/admin/CustomerProfile360";
+import Account from "../screens/admin/Account";
+import Companies from "../screens/admin/Companies";
+import VisitsCalendar from "../screens/admin/SiteSurvey";
+import Schedule from "../screens/admin/Schedule";
+import AdminTickets from "../screens/admin/Tickets";
+import AdminTicketDetail from "../screens/admin/TicketDetail";
+import CustomerTickets from "../screens/customer/CustomerTickets";
+import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
+import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
+import CustomerProfile from "../screens/customer/CustomerProfile";
+
 
 export default function AppRoutes() {
   return (
@@ -21,6 +49,14 @@ export default function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/update-password" element={<UpdatePassword />} />
+      <Route
+        path="/app"
+        element={
+          <ProtectedRoute>
+            <AppEntryRoute />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/login"
@@ -53,11 +89,12 @@ export default function AppRoutes() {
         path="/admin"
         element={
           <ProtectedRoute>
-            <Sidebar />
+            <AdminAreaRoute />
           </ProtectedRoute>
         }
       >
         <Route index element={<AdminDefaultRoute />} />
+
         <Route
           path="dashboard"
           element={
@@ -75,6 +112,191 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route
+          path="customers/:customerId/profile-360"
+          element={
+            <PermissionRoute permission={PERMISSIONS.customersRead}>
+              <CustomerProfile360 />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="devices"
+          element={
+            <PermissionRoute permission={PERMISSIONS.devicesRead}>
+              <Devices />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="suppliers"
+          element={
+            <PermissionRoute permission={PERMISSIONS.suppliersRead}>
+              <Suppliers />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/devices"
+          element={
+            <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
+              <DeviceInventory />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/loads"
+          element={
+            <PermissionRoute permission={PERMISSIONS.inventoryLoadsRead}>
+              <InventoryLoads />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="inventory/kits"
+          element={
+            <PermissionRoute permission={PERMISSIONS.kitsRead}>
+              <AutomationKits />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="roles"
+          element={
+            <PermissionRoute permission={PERMISSIONS.rolesRead}>
+              <Roles />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="companies"
+          element={
+            <PermissionRoute permission={PERMISSIONS.companiesRead}>
+              <Companies />
+            </PermissionRoute>
+          }
+        />
+
+        <Route path="schedule" element={<Schedule />} />
+        <Route
+          path="site_surveys"
+          element={
+            <PermissionRoute permission={PERMISSIONS.siteSurveyRead}>
+              <VisitsCalendar />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="site_surveys/:surveyId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.siteSurveyRead}>
+              <VisitsCalendar />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="users"
+          element={
+            <PermissionRoute permission={PERMISSIONS.usersRead}>
+              <UsersAdmin />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="protocols"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsProtocolsRead}>
+              <SettingsProtocols />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="devices-types"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsDeviceTypesRead}>
+              <SettingsDeviceTypes />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="ticket-categories"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsTicketCategoriesRead}>
+              <SettingsTicketCategories />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="account"
+          element={
+            <PermissionRoute permission={PERMISSIONS.accountUpdate}>
+              <Account />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="brands"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsBrandsRead}>
+              <SettingsBrands />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="checklist-templates"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsChecklistTemplatesRead}>
+              <SettingsChecklistTemplates />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="logs"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
+              <SettingsLogs />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="tickets"
+          element={
+            <PermissionRoute permission={PERMISSIONS.ticketsRead}>
+              <AdminTickets />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="tickets/:ticketId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.ticketsRead}>
+              <AdminTicketDetail />
+            </PermissionRoute>
+          }
+        />
+      </Route>
+
+      <Route
+        path="/customer"
+        element={
+          <ProtectedRoute>
+            <CustomerAreaRoute />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<CustomerDefaultRoute />} />
+        <Route path="tickets" element={<CustomerTickets />} />
+        <Route path="tickets/new" element={<CustomerTicketCreate />} />
+        <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
+        <Route path="profile" element={<CustomerProfile />} />
       </Route>
 
       <Route
@@ -86,7 +308,7 @@ export default function AppRoutes() {
         }
       />
 
-      <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/app" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

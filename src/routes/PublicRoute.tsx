@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import useAuth from "../hooks/useAuth";
 import RouteLoading from "./RouteLoading";
 
 interface Props {
@@ -11,7 +11,7 @@ export default function PublicRoute({ children }: Props) {
   const { session, initializing } = useAuth();
 
   if (initializing) return <RouteLoading />;
-  if (session) return <Navigate to="/admin" replace />;
+  if (session) return <Navigate to="/app" replace />;
 
   return <>{children}</>;
 }
