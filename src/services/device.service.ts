@@ -59,6 +59,10 @@ function mapDevice(row: DeviceRow): Device {
     name: row.name,
     model: row.model,
     price: Number(row.price),
+    installationPrice:
+      row.installation_price === null || row.installation_price === undefined
+        ? null
+        : Number(row.installation_price),
     protocolId: row.protocol_id,
     deviceTypeId: row.device_type_id,
     companyId: row.company_id,
@@ -322,7 +326,7 @@ export async function getDevicesByCompany(companyId: string | null): Promise<Dev
   const { data, error } = await supabase
     .from("devices")
     .select(
-      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+      "id, name, model, price, installation_price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
     )
     .eq("company_id", companyId)
     .order("created_at", { ascending: false })
@@ -340,6 +344,7 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
       name: payload.name,
       model: payload.model,
       price: payload.price,
+      installation_price: payload.installationPrice,
       protocol_id: payload.protocolId,
       device_type_id: payload.deviceTypeId,
       company_id: payload.companyId,
@@ -347,7 +352,7 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
       compatibility: payload.compatibility,
     })
     .select(
-      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility, installation_price"
     )
     .single<DeviceRow>();
 
@@ -362,6 +367,7 @@ export async function createDevice(payload: CreateDevicePayload): Promise<Device
       name: created.name,
       model: created.model,
       price: created.price,
+      installationPrice: created.installationPrice,
       protocolId: created.protocolId,
       deviceTypeId: created.deviceTypeId,
       brandId: created.brandId,
@@ -377,6 +383,7 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
       name: payload.name,
       model: payload.model,
       price: payload.price,
+      installation_price: payload.installationPrice,
       protocol_id: payload.protocolId,
       device_type_id: payload.deviceTypeId,
       brand_id: payload.brandId,
@@ -384,7 +391,7 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
     })
     .eq("id", payload.id)
     .select(
-      "id, name, model, price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
+      "id, name, model, price, installation_price, protocol_id, device_type_id, company_id, created_at, brand_id, compatibility"
     )
     .single<DeviceRow>();
 
@@ -399,6 +406,7 @@ export async function updateDevice(payload: UpdateDevicePayload): Promise<Device
       name: updated.name,
       model: updated.model,
       price: updated.price,
+      installationPrice: updated.installationPrice,
       protocolId: updated.protocolId,
       deviceTypeId: updated.deviceTypeId,
       brandId: updated.brandId,

@@ -40,6 +40,7 @@ const useDevices = () => {
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
   const [price, setPrice] = useState("");
+  const [installationPrice, setInstallationPrice] = useState("");
   const [compatibility, setCompatibility] = useState("");
   const [quantity, setQuantity] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -168,6 +169,7 @@ const useDevices = () => {
     const cleanName = name.trim();
     const cleanModel = model.trim();
     const cleanPrice = Number(price);
+    const cleanInstallationPrice = installationPrice.trim() ? Number(installationPrice) : null;
     const cleanQuantity = Number(quantity);
     const cleanCompatibility = compatibility.trim();
 
@@ -190,18 +192,20 @@ const useDevices = () => {
       cleanName !== editingDevice.name.trim() ||
       cleanModel !== editingDevice.model.trim() ||
       cleanPrice !== editingDevice.price ||
+      cleanInstallationPrice !== editingDevice.installationPrice ||
       cleanCompatibility !== (editingDevice.compatibility ?? "").trim() ||
       protocolId !== editingDevice.protocolId ||
       deviceTypeId !== editingDevice.deviceTypeId ||
       brandId !== editingDevice.brandId
     );
-  }, [brandId, compatibility, deviceTypeId, editingDevice, model, name, price, protocolId, quantity]);
+  }, [brandId, compatibility, deviceTypeId, editingDevice, installationPrice, model, name, price, protocolId, quantity]);
 
   const openCreateModal = () => {
     setEditingDevice(null);
     setName("");
     setModel("");
     setPrice("");
+    setInstallationPrice("");
     setCompatibility("");
     setQuantity("");
     setProtocolId("");
@@ -215,6 +219,7 @@ const useDevices = () => {
     setName(device.name);
     setModel(device.model);
     setPrice(String(device.price));
+    setInstallationPrice(device.installationPrice === null ? "" : String(device.installationPrice));
     setCompatibility(device.compatibility ?? "");
     setQuantity("");
     setProtocolId(device.protocolId);
@@ -230,6 +235,7 @@ const useDevices = () => {
     setName("");
     setModel("");
     setPrice("");
+    setInstallationPrice("");
     setCompatibility("");
     setQuantity("");
     setProtocolId("");
@@ -245,17 +251,21 @@ const useDevices = () => {
     const cleanPrice = Number(price);
     const cleanQuantity = Number(quantity);
     const cleanCompatibility = compatibility.trim();
+    const cleanInstallationPrice = installationPrice.trim() ? Number(installationPrice) : null;
 
     const invalidBaseFields =
       !cleanName || !cleanModel || !price.trim() || Number.isNaN(cleanPrice) || cleanPrice < 0;
+    const invalidInstallationPrice =
+      installationPrice.trim() !== "" &&
+      (Number.isNaN(Number(installationPrice)) || Number(installationPrice) < 0);
     const invalidQuantity = !quantity.trim() || Number.isNaN(cleanQuantity) || cleanQuantity < 0;
 
-    if (invalidBaseFields || (!editingDevice && invalidQuantity)) {
+    if (invalidBaseFields || invalidInstallationPrice || (!editingDevice && invalidQuantity)) {
       notifications.warning({
         title: "Datos invalidos",
         description: editingDevice
-          ? "Nombre, modelo y precio valido son obligatorios."
-          : "Nombre, modelo, precio y cantidad valida son obligatorios.",
+          ? "Nombre, modelo y precio valido son obligatorios. El precio de instalacion debe ser valido si se indica."
+          : "Nombre, modelo, precio y cantidad valida son obligatorios. El precio de instalacion debe ser valido si se indica.",
       });
       return;
     }
@@ -284,6 +294,7 @@ const useDevices = () => {
           name: cleanName,
           model: cleanModel,
           price: cleanPrice,
+          installationPrice: cleanInstallationPrice,
           protocolId,
           deviceTypeId,
           brandId,
@@ -301,6 +312,7 @@ const useDevices = () => {
           name: cleanName,
           model: cleanModel,
           price: cleanPrice,
+          installationPrice: cleanInstallationPrice,
           protocolId,
           deviceTypeId,
           companyId: companyId as string,
@@ -379,6 +391,7 @@ const useDevices = () => {
     name,
     model,
     price,
+    installationPrice,
     compatibility,
     quantity,
     searchTerm,
@@ -398,6 +411,7 @@ const useDevices = () => {
     setName,
     setModel,
     setPrice,
+    setInstallationPrice,
     setCompatibility,
     setQuantity,
     setSearchTerm,
