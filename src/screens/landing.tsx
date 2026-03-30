@@ -186,7 +186,7 @@ const Landing: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6">
+            <div className="rounded-2xl border border-slate-200 bg-to-br from-blue-50 via-white to-slate-50 p-6">
               <h3 className="text-lg font-semibold text-slate-900">Listo para equipos en crecimiento</h3>
               <p className="mt-3 text-sm text-slate-600">
                 SmartOps acompana desde empresas pequeñas hasta operaciones con multiples tecnicos,

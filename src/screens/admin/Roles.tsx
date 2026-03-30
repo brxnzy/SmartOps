@@ -29,6 +29,7 @@ const PERMISSION_GROUPS: Array<{
     label: "Usuarios",
     match: (code) => code.startsWith("users.") || code.startsWith("roles.") || code.startsWith("account."),
   },
+  { key: "companias", label: "Companias", match: (code) => code.startsWith("companies.") },
   { key: "clientes", label: "Clientes", match: (code) => code.startsWith("customers") },
   {
     key: "inventario",

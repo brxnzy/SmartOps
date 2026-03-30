@@ -32,6 +32,7 @@ import SettingsLogs from "../screens/admin/settings/SettingsLogs";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
+import Companies from "../screens/admin/Companies";
 import VisitsCalendar from "../screens/admin/SiteSurvey";
 import Schedule from "../screens/admin/Schedule";
 import AdminTickets from "../screens/admin/Tickets";
@@ -166,6 +167,15 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.rolesRead}>
               <Roles />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="companies"
+          element={
+            <PermissionRoute permission={PERMISSIONS.companiesRead}>
+              <Companies />
             </PermissionRoute>
           }
         />
