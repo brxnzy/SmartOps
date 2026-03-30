@@ -1,6 +1,27 @@
 import { PERMISSIONS } from "./permissions";
 import type { DefaultAdminRoute, SidebarItem} from "../types/Navigation";
-import { Building2, ClipboardList, Cpu, HardDrive, LifeBuoy, Tag, User, UsersRound, LayoutDashboard, Package, Settings, Shield, UserCheck2, Waypoints, CalendarDays, Workflow,ClipboardCheck,Truck,PackagePlus,PackageOpen,Check } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ClipboardCheck,
+  ClipboardList,
+  Cpu,
+  HardDrive,
+  LayoutDashboard,
+  Package,
+  PackageOpen,
+  PackagePlus,
+  Settings,
+  Shield,
+  Tag,
+  Truck,
+  User,
+  UserCheck2,
+  UsersRound,
+  Waypoints,
+  Workflow,
+  CalendarDays,
+} from "lucide-react";
 
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
@@ -10,12 +31,29 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     permission: PERMISSIONS.dashboardRead,
     icon: <LayoutDashboard />,
   },
-
   {
-    name: "Usuarios",
-    to: "/admin/users",
-    permission: PERMISSIONS.usersRead,
-    icon: <UsersRound />,
+    name: "Administracion",
+    icon: <Shield />,
+    children: [
+      {
+        name: "Usuarios",
+        to: "/admin/users",
+        permission: PERMISSIONS.usersRead,
+        icon: <UsersRound size={19} />,
+      },
+      {
+        name: "Roles",
+        to: "/admin/roles",
+        permission: PERMISSIONS.rolesRead,
+        icon: <Shield size={19} />,
+      },
+      {
+        name: "Proveedores",
+        to: "/admin/suppliers",
+        permission: PERMISSIONS.suppliersRead,
+        icon: <Truck size={19} />,
+      },
+    ],
   },
   {
     name: "Clientes",
@@ -23,22 +61,21 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     permission: PERMISSIONS.customersRead,
     icon: <UserCheck2 />,
   },
-
-  {
-    name: "Roles",
-    to: "/admin/roles",
-    permission: PERMISSIONS.rolesRead,
-    icon: <Shield />,
-  },
-  {
-    name: "Agenda",
-    to: "/admin/schedule",
-    icon: <CalendarDays />,
-  },
   {
     name: "Operaciones",
     icon: <Workflow />,
     children: [
+      {
+        name: "Tickets",
+        to: "/admin/tickets",
+        permission: PERMISSIONS.ticketsRead,
+        icon: <ClipboardList size={19} />,
+      },
+      {
+        name: "Agenda",
+        to: "/admin/schedule",
+        icon: <CalendarDays size={19} />,
+      },
       {
         name: "Levantamiento",
         to: "/admin/site_surveys",
@@ -53,16 +90,16 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     icon: <Package />,
     children: [
       {
+        name: "Inventario",
+        to: "/admin/inventory/devices",
+        permission: PERMISSIONS.deviceInventoryRead,
+        icon: <Package size={19} />,
+      },
+      {
         name: "Dispositivos",
         to: "/admin/devices",
         permission: PERMISSIONS.devicesRead,
         icon: <Cpu size={19} />,
-      },
-      {
-        name: "Proveedores",
-        to: "/admin/suppliers",
-        permission: PERMISSIONS.suppliersRead,
-        icon: <Truck size={19} />,
       },
       {
         name: "Cargas",
@@ -75,18 +112,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/inventory/kits",
         permission: PERMISSIONS.kitsRead,
         icon: <PackageOpen size={19} />,
-      },
-    ],
-  },
-  {
-    name: "Soporte",
-    icon: <LifeBuoy />,
-    children: [
-      {
-        name: "Tickets",
-        to: "/admin/tickets",
-        permission: PERMISSIONS.ticketsRead,
-        icon: <ClipboardList size={19} />,
       },
     ],
   },
@@ -129,11 +154,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         permission: PERMISSIONS.settingsChecklistTemplatesRead,
         icon: <Check size={19} />,
       },
-      {
-        name: "Mi cuenta",
-        to: "/admin/account",
-        icon: <User size={19} />,
-       },
       {
         name: "Logs",
         to: "/admin/logs",
