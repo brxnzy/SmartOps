@@ -1,11 +1,16 @@
 import type { DefaultAdminRoute, SidebarItem } from "../types/Navigation";
-import { ClipboardList, UserRound } from "lucide-react";
+import { ClipboardList, FileText, UserRound } from "lucide-react";
 
 const CUSTOMER_SIDEBAR_ITEMS: SidebarItem[] = [
   {
     name: "Mis tickets",
     to: "/customer/tickets",
     icon: <ClipboardList />,
+  },
+  {
+    name: "Cotizaciones",
+    to: "/customer/quotes",
+    icon: <FileText />,
   },
   {
     name: "Mi perfil",

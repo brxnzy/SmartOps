@@ -94,6 +94,8 @@ export interface SurveyCatalogDevice {
   name: string;
   model: string;
   label: string;
+  price?: number;
+  installationPrice?: number | null;
 }
 
 export interface SurveyMediaItem {

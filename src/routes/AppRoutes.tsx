@@ -37,10 +37,15 @@ import VisitsCalendar from "../screens/admin/SiteSurvey";
 import Schedule from "../screens/admin/Schedule";
 import AdminTickets from "../screens/admin/Tickets";
 import AdminTicketDetail from "../screens/admin/TicketDetail";
+import BudgetList from "../screens/admin/BudgetList";
+import BudgetDetail from "../screens/admin/BudgetDetail";
 import CustomerTickets from "../screens/customer/CustomerTickets";
 import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
 import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
 import CustomerProfile from "../screens/customer/CustomerProfile";
+import CustomerQuotes from "../screens/customer/CustomerQuotes";
+import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
+import BudgetApprovalPublic from "../screens/public/BudgetApprovalPublic";
 
 
 export default function AppRoutes() {
@@ -49,6 +54,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/update-password" element={<UpdatePassword />} />
+      <Route path="/quote/:token" element={<BudgetApprovalPublic />} />
       <Route
         path="/app"
         element={
@@ -282,6 +288,22 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="budgets"
+          element={
+            <PermissionRoute permission={PERMISSIONS.budgetsRead}>
+              <BudgetList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="budgets/:budgetId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.budgetsRead}>
+              <BudgetDetail />
+            </PermissionRoute>
+          }
+        />
       </Route>
 
       <Route
@@ -296,6 +318,8 @@ export default function AppRoutes() {
         <Route path="tickets" element={<CustomerTickets />} />
         <Route path="tickets/new" element={<CustomerTicketCreate />} />
         <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
+        <Route path="quotes" element={<CustomerQuotes />} />
+        <Route path="quotes/:budgetId" element={<CustomerQuoteDetail />} />
         <Route path="profile" element={<CustomerProfile />} />
       </Route>
 

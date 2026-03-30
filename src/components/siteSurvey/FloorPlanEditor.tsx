@@ -38,6 +38,8 @@ interface FloorPlanEditorProps {
   onManualSave: () => void;
   manualSaving: boolean;
   autosaveLabel: string;
+  showSave?: boolean;
+  restrictToDevices?: boolean;
 }
 
 interface LayoutSnapshot {
@@ -114,6 +116,8 @@ export default function FloorPlanEditor({
   onManualSave,
   manualSaving,
   autosaveLabel,
+  showSave = true,
+  restrictToDevices = false,
 }: FloorPlanEditorProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const zoneTransformerRef = useRef<Konva.Transformer | null>(null);
@@ -242,6 +246,9 @@ export default function FloorPlanEditor({
 
       if ((event.key === "Delete" || event.key === "Backspace") && selectedId && selectedType) {
         event.preventDefault();
+        if (restrictToDevices && (selectedType === "wall" || selectedType === "zone")) {
+          return;
+        }
         let nextWalls = walls;
         let nextZones = zones;
         let nextDevices = devices;
@@ -483,6 +490,7 @@ export default function FloorPlanEditor({
     if (!pointer) return;
 
     if (mode === "draw-wall" && isCanvas) {
+      if (restrictToDevices) return;
       if (!drawingWall) {
         setDrawingWall({ start: pointer, end: pointer });
       } else {
@@ -513,6 +521,7 @@ export default function FloorPlanEditor({
 
   const handleStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
     if (mode !== "draw-zone") return;
+    if (restrictToDevices) return;
     const stage = stageRef.current;
     if (!stage || event.target !== stage) return;
 
@@ -524,6 +533,10 @@ export default function FloorPlanEditor({
 
   const handleStageMouseUp = () => {
     if (!drawingZone) return;
+    if (restrictToDevices) {
+      setDrawingZone(null);
+      return;
+    }
 
     const x = Math.min(drawingZone.start.x, drawingZone.end.x);
     const y = Math.min(drawingZone.start.y, drawingZone.end.y);
@@ -571,7 +584,7 @@ export default function FloorPlanEditor({
     const pointer = getPointer(stage);
     if (!pointer) return;
 
-    if (draggingZoneId) {
+    if (draggingZoneId && !restrictToDevices) {
       addZoneFromCatalog(draggingZoneId, pointer.x, pointer.y);
       setDraggingZoneId(null);
       return;
@@ -640,7 +653,10 @@ export default function FloorPlanEditor({
     <section className="h-full rounded-2xl border border-slate-200 bg-white shadow-sm">
       <Toolbar
         mode={mode}
-        onModeChange={setMode}
+        onModeChange={(next) => {
+          if (restrictToDevices && (next === "draw-wall" || next === "draw-zone")) return;
+          setMode(next);
+        }}
         showGrid={showGrid}
         onToggleGrid={() => setShowGrid((current) => !current)}
         onUndo={undo}
@@ -656,6 +672,10 @@ export default function FloorPlanEditor({
         onManualSave={onManualSave}
         manualSaving={manualSaving}
         autosaveLabel={autosaveLabel}
+        showSave={showSave}
+        showWallTools={!restrictToDevices}
+        showZoneTools={!restrictToDevices}
+        showZoneSelector={!restrictToDevices}
       />
 
       <div className="grid min-h-[760px] grid-cols-[260px_1fr]">
@@ -672,9 +692,15 @@ export default function FloorPlanEditor({
                   <button
                     key={zone.id}
                     type="button"
-                    draggable
-                    onDragStart={() => setDraggingZoneId(zone.id)}
-                    onDragEnd={() => setDraggingZoneId(null)}
+                    draggable={!restrictToDevices}
+                    onDragStart={() => {
+                      if (restrictToDevices) return;
+                      setDraggingZoneId(zone.id);
+                    }}
+                    onDragEnd={() => {
+                      if (restrictToDevices) return;
+                      setDraggingZoneId(null);
+                    }}
                     onClick={() => setSelectedZoneId(zone.id)}
                     className={`w-full rounded-lg border bg-white px-2 py-2 text-left text-xs font-medium transition ${
                       selectedZoneId === zone.id
@@ -760,11 +786,13 @@ export default function FloorPlanEditor({
                       }}
                       x={zone.x}
                       y={zone.y}
-                      draggable={mode === "select"}
+                      draggable={mode === "select" && !restrictToDevices}
                       onDragEnd={(event) => {
+                        if (restrictToDevices) return;
                         commitZoneDrag(zone.id, event.target.x(), event.target.y());
                       }}
                       onTransformEnd={(event) => {
+                        if (restrictToDevices) return;
                         const node = event.target as Konva.Group;
                         const nextZone = {
                           x: node.x(),
@@ -854,8 +882,9 @@ export default function FloorPlanEditor({
                       strokeWidth={isSelected ? 4 : 3}
                       lineCap="round"
                       lineJoin="round"
-                      draggable={mode === "select"}
+                      draggable={mode === "select" && !restrictToDevices}
                       onDragEnd={(event) => {
+                        if (restrictToDevices) return;
                         // FIX: igual que dispositivos, Konva acumula el desplazamiento
                         // relativo en x()/y(). Pasamos el delta y reseteamos el nodo.
                         const dx = snap(event.target.x());
