@@ -266,7 +266,7 @@ create or replace function public.create_budget_approval_link(
 ) returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_link_id uuid;
@@ -299,7 +299,7 @@ create or replace function public.approve_budget_by_token(
 ) returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_link record;

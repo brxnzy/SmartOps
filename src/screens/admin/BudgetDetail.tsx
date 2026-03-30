@@ -1,17 +1,20 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
+import Field from "../../components/Field";
+import Modal from "../../components/Modal";
 import FloorPlanEditor from "../../components/siteSurvey/FloorPlanEditor";
 import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import {
-  createBudgetApprovalLink,
   getBudgetDetail,
   replaceBudgetItems,
   saveBudgetDraft,
   updateBudgetStatus,
 } from "../../services/budget.service";
+import { createInstallationProject } from "../../services/installation.service";
 import { getSurveyExecutionData } from "../../services/siteSurveyExecution.service";
+import { listTechnicians } from "../../services/tickets.service";
 import type {
   SurveyCatalogDevice,
   SurveyDeviceLayout,
@@ -59,8 +62,9 @@ function cloneLayout(layout: SurveyLayout): SurveyLayout {
 export default function BudgetDetail() {
   const navigate = useNavigate();
   const { budgetId } = useParams<{ budgetId: string }>();
-  const { companyProfile } = useAuth();
+  const { companyProfile, authUser } = useAuth();
   const companyId = companyProfile?.id ?? null;
+  const userId = authUser?.id ?? null;
 
   const [loadingSurvey, setLoadingSurvey] = useState(false);
   const [surveyError, setSurveyError] = useState<string | null>(null);
@@ -78,8 +82,20 @@ export default function BudgetDetail() {
   });
   const [taxRate, setTaxRate] = useState(DEFAULT_TAX_RATE);
 
-  const [approvalLinkUrl, setApprovalLinkUrl] = useState<string | null>(null);
-  const [linkDays, setLinkDays] = useState(7);
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([]);
+  const [techniciansLoading, setTechniciansLoading] = useState(false);
+  const [technicianId, setTechnicianId] = useState("");
+  const [scheduledStart, setScheduledStart] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  });
+  const [scheduledEnd, setScheduledEnd] = useState("");
 
   const layoutSignatureRef = useRef<string>("");
   const hydratedRef = useRef(false);
@@ -125,6 +141,7 @@ export default function BudgetDetail() {
   useEffect(() => {
     void loadBudget();
   }, [loadBudget]);
+
 
   const zoneById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones]);
   const deviceById = useMemo(() => new Map(devicesCatalog.map((device) => [device.id, device])), [devicesCatalog]);
@@ -228,30 +245,57 @@ export default function BudgetDetail() {
       .catch(() => undefined);
   }, [budget]);
 
-  const handleGenerateLink = async () => {
+  const openInstallationModal = async () => {
     if (!budget) return;
-    const expiresAt = new Date(Date.now() + linkDays * 24 * 60 * 60 * 1000).toISOString();
+    setInstallModalOpen(true);
+    if (!companyId) return;
+
+    setTechniciansLoading(true);
     try {
-      const result = await createBudgetApprovalLink({ budgetId: budget.id, expiresAt });
-      setApprovalLinkUrl(result.url);
-      setBudget((current) =>
-        current
-          ? {
-              ...current,
-              status: "enviada",
-              sentAt: new Date().toISOString(),
-              expiresAt,
-            }
-          : current
-      );
-      notifications.success({
-        title: "Link generado",
-        description: "Se creo el link seguro de aprobacion.",
-      });
+      const options = await listTechnicians(companyId);
+      setTechnicians(options);
+      if (!technicianId && options.length > 0) {
+        setTechnicianId(options[0].id);
+      }
     } catch (err) {
       notifications.error({
-        title: "Error creando link",
-        description: err instanceof Error ? err.message : "No se pudo generar el link.",
+        title: "Error cargando tecnicos",
+        description: err instanceof Error ? err.message : "No se pudieron cargar los tecnicos.",
+      });
+    } finally {
+      setTechniciansLoading(false);
+    }
+  };
+
+  const handleCreateInstallation = async () => {
+    if (!companyId || !budget) return;
+    if (!scheduledStart) {
+      notifications.warning({
+        title: "Fecha requerida",
+        description: "Selecciona la fecha y hora de inicio.",
+      });
+      return;
+    }
+
+    try {
+      await createInstallationProject({
+        companyId,
+        budgetId: budget.id,
+        surveyId: budget.surveyId,
+        technicianId: technicianId || null,
+        scheduledStart: new Date(scheduledStart).toISOString(),
+        scheduledEnd: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+        createdBy: userId,
+      });
+      notifications.success({
+        title: "Orden creada",
+        description: "Se creo el proyecto y la visita tecnica en agenda.",
+      });
+      setInstallModalOpen(false);
+    } catch (err) {
+      notifications.error({
+        title: "Error creando orden",
+        description: err instanceof Error ? err.message : "No se pudo crear la orden de trabajo.",
       });
     }
   };
@@ -360,51 +404,26 @@ export default function BudgetDetail() {
               </article>
 
               <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-slate-900">Aprobacion de cotizacion</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Orden de trabajo</h3>
                 <div className="mt-3 space-y-3 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
                     <span>Estado</span>
                     <span className="font-semibold text-slate-800">{budget?.status ?? "borrador"}</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-slate-500">Expira en</label>
-                    <select
-                      value={linkDays}
-                      onChange={(event) => setLinkDays(Number(event.target.value))}
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700"
-                    >
-                      <option value={3}>3 dias</option>
-                      <option value={7}>7 dias</option>
-                      <option value={15}>15 dias</option>
-                      <option value={30}>30 dias</option>
-                    </select>
-                  </div>
-
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      onClick={handleGenerateLink}
-                      className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                      disabled={budget?.status === "aprobada" || budget?.status === "rechazada"}
+                      onClick={openInstallationModal}
+                      className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={budget?.status !== "aprobada"}
                     >
-                      Generar link seguro
+                      Orden de trabajo
                     </Button>
+                    {budget?.status !== "aprobada" ? (
+                      <span className="text-xs text-slate-500">Disponible cuando la cotizacion este aprobada.</span>
+                    ) : null}
                   </div>
-
-                  {approvalLinkUrl ? (
-                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
-                      <p className="font-semibold">Link seguro generado:</p>
-                      <p className="mt-1 break-all">{approvalLinkUrl}</p>
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(approvalLinkUrl)}
-                        className="mt-2 text-xs font-semibold text-blue-700"
-                      >
-                        Copiar link
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               </article>
             </aside>
@@ -491,8 +510,71 @@ export default function BudgetDetail() {
               </div>
             </div>
           </section>
+
         </>
       )}
+
+      <Modal
+        open={installModalOpen}
+        onClose={() => setInstallModalOpen(false)}
+        title="Orden de trabajo"
+        subtitle="Programa la instalacion y crea la visita tecnica."
+        footer={
+          <>
+            <Button
+              type="button"
+              onClick={() => setInstallModalOpen(false)}
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateInstallation}
+              className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Crear orden
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="Tecnico asignado">
+            <select
+              value={technicianId}
+              onChange={(event) => setTechnicianId(event.target.value)}
+              disabled={techniciansLoading}
+              className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Selecciona un tecnico</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Inicio">
+              <input
+                type="datetime-local"
+                value={scheduledStart}
+                onChange={(event) => setScheduledStart(event.target.value)}
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </Field>
+            <Field label="Fin (opcional)">
+              <input
+                type="datetime-local"
+                value={scheduledEnd}
+                onChange={(event) => setScheduledEnd(event.target.value)}
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </Field>
+          </div>
+        </div>
+      </Modal>
 
     </section>
   );

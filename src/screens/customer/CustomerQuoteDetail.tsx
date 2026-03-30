@@ -70,7 +70,12 @@ export default function CustomerQuoteDetail() {
     };
   }, [budget]);
 
-  const canRespond = budget?.status === "enviada" || budget?.status === "borrador";
+  const isExpired = useMemo(() => {
+    if (!budget?.expiresAt) return false;
+    return new Date(budget.expiresAt).getTime() <= Date.now();
+  }, [budget?.expiresAt]);
+
+  const canRespond = !isExpired && (budget?.status === "enviada" || budget?.status === "borrador");
 
   const openDecisionModal = (nextDecision: "aprobar" | "rechazar") => {
     setDecision(nextDecision);
@@ -163,6 +168,10 @@ export default function CustomerQuoteDetail() {
                     Rechazar
                   </Button>
                 </div>
+              ) : isExpired ? (
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                  Cotizacion expirada
+                </span>
               ) : null}
             </div>
 
@@ -187,8 +196,10 @@ export default function CustomerQuoteDetail() {
                   ) : (
                     budget.items.map((item) => (
                       <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                        <td className="px-3 py-3 text-slate-800">{item.deviceId}</td>
-                        <td className="px-3 py-3 text-slate-600">{item.zoneId ?? "Sin zona"}</td>
+                        <td className="px-3 py-3 text-slate-800">
+                          {item.deviceName ?? item.deviceModel ?? item.deviceId}
+                        </td>
+                        <td className="px-3 py-3 text-slate-600">{item.zoneName ?? "Sin zona"}</td>
                         <td className="px-3 py-3 text-slate-600">{item.quantity}</td>
                         <td className="px-3 py-3 text-slate-600">{formatCurrency(item.unitPrice)}</td>
                         <td className="px-3 py-3 font-semibold text-slate-800">

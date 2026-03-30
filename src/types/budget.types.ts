@@ -8,6 +8,9 @@ export interface BudgetItem {
   budgetId: string;
   deviceId: string;
   zoneId: string | null;
+  deviceName?: string | null;
+  deviceModel?: string | null;
+  zoneName?: string | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;

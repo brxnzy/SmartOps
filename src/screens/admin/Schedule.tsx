@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import interactionPlugin from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import esLocale from "@fullcalendar/core/locales/es";
-import type { EventClickArg } from "@fullcalendar/core";
 import { CalendarDays } from "lucide-react";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
@@ -37,7 +35,6 @@ function formatShortDate(value?: string | null): string | null {
 }
 
 export default function Schedule() {
-  const navigate = useNavigate();
   const { companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const canReadSurveys = canAccess(PERMISSIONS.siteSurveyRead);
@@ -46,8 +43,6 @@ export default function Schedule() {
   const [visits, setVisits] = useState<SurveyCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedVisit, setSelectedVisit] = useState<SurveyCalendarEvent | null>(null);
-
   const loadSchedule = useCallback(async () => {
     if (!companyId || (!canReadSurveys && !canReadTickets)) {
       setVisits([]);
@@ -61,18 +56,13 @@ export default function Schedule() {
     try {
       const data = await listCompanyVisits(companyId);
       setVisits(data);
-
-      if (selectedVisit) {
-        const next = data.find((visit) => visit.visitId === selectedVisit.visitId) ?? null;
-        setSelectedVisit(next);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error cargando agenda.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [companyId, canReadSurveys, canReadTickets, selectedVisit]);
+  }, [companyId, canReadSurveys, canReadTickets]);
 
   useEffect(() => {
     void loadSchedule();
@@ -87,7 +77,7 @@ export default function Schedule() {
 
       return {
         id: String(visit.visitId),
-        title: `${visit.customerName ?? "Cliente"} � ${visit.siteName ?? "Sitio"}`,
+        title: "Visita tecnica",
         start: visit.scheduledStart,
         end: endDate,
         backgroundColor: colors.bg,
@@ -102,12 +92,6 @@ export default function Schedule() {
       };
     });
   }, [visits]);
-
-  const onEventClick = (arg: EventClickArg) => {
-    const visitId = Number(arg.event.id);
-    const found = visits.find((visit) => visit.visitId === visitId) ?? null;
-    setSelectedVisit(found);
-  };
 
   return (
     <section className="space-y-6">
@@ -192,7 +176,6 @@ export default function Schedule() {
             selectable={false}
             editable={false}
             events={events}
-            eventClick={onEventClick}
             height="auto"
             eventContent={(arg) => {
               const technicianName = arg.event.extendedProps?.technicianName as string | undefined;
@@ -202,7 +185,7 @@ export default function Schedule() {
 
               return (
                 <div className="space-y-0.5">
-                  <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
+                  <p className="text-[11px] font-semibold leading-tight">Visita tecnica</p>
                   {technicianName ? (
                     <p className="text-[10px] leading-tight text-white/90">T�cnico: {technicianName}</p>
                   ) : null}
@@ -223,45 +206,11 @@ export default function Schedule() {
           </div>
         ) : null}
       </div>
-
-      {selectedVisit ? (
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900">Visita seleccionada</h3>
-          <div className="mt-2 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-            <p>
-              <span className="font-medium">Cliente:</span> {selectedVisit.customerName ?? "Sin nombre"}
-            </p>
-            <p>
-              <span className="font-medium">Sitio:</span> {selectedVisit.siteName ?? "Sin nombre"}
-            </p>
-            <p>
-              <span className="font-medium">T�cnico:</span> {selectedVisit.technicianName ?? "Sin t�cnico"}
-            </p>
-            <p>
-              <span className="font-medium">Estado:</span> {selectedVisit.status ?? "Pendiente"}
-            </p>
-            <p>
-              <span className="font-medium">Inicio:</span> {new Date(selectedVisit.scheduledStart).toLocaleString("es-DO")}
-            </p>
-            <p>
-              <span className="font-medium">Fin:</span> {selectedVisit.scheduledEnd ? new Date(selectedVisit.scheduledEnd).toLocaleString("es-DO") : "No definido"}
-            </p>
-          </div>
-
-          <div className="mt-3">
-            <Button
-              type="button"
-              onClick={() => navigate(`/admin/site_surveys/${selectedVisit.surveyId}`)}
-              className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Abrir levantamiento
-            </Button>
-          </div>
-        </article>
-      ) : null}
     </section>
   );
 }
 
 
 //Sistema de turno que se muestre en pantalla
+
+

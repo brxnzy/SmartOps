@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
@@ -678,7 +679,7 @@ export default function FloorPlanEditor({
         showZoneSelector={!restrictToDevices}
       />
 
-      <div className="grid min-h-[760px] grid-cols-[260px_1fr]">
+      <div className="grid min-h-760px grid-cols-[260px_1fr]">
         <aside className="border-r border-slate-200 bg-slate-50 p-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Zonas del sitio</h3>
@@ -759,7 +760,7 @@ export default function FloorPlanEditor({
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleCanvasDrop}
         >
-          <div className="min-w-[1248px] p-3">
+          <div className="min-w-1248px p-3">
             <Stage
               ref={(node) => {
                 stageRef.current = node;

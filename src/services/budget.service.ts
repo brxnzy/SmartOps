@@ -300,7 +300,16 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
         customer_sites:site_id ( id, name ),
         customers:customer_id ( user_id, users:users!customers_user_id_fkey ( id, name ) )
       ),
-      budget_items ( id, device_id, zone_id, quantity, unit_price, subtotal )
+      budget_items (
+        id,
+        device_id,
+        zone_id,
+        quantity,
+        unit_price,
+        subtotal,
+        devices:device_id ( id, name, model ),
+        zones:zone_id ( id, name )
+      )
     `
     )
     .eq("id", budgetId)
@@ -340,15 +349,23 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
     rejectedAt: safeNullableText(data.rejected_at),
     expiresAt: safeNullableText(data.expires_at),
     layout: normalizeLayout(data.layout_json),
-    items: items.map((row) => ({
+    items: items.map((row) => {
+      const deviceRow = pickSingle(row.devices as unknown);
+      const zoneRow = pickSingle(row.zones as unknown);
+
+      return {
       id: safeText(row.id),
       budgetId: safeText(data.id),
       deviceId: safeText(row.device_id),
       zoneId: safeNullableText(row.zone_id),
+      deviceName: safeNullableText((deviceRow as any)?.name),
+      deviceModel: safeNullableText((deviceRow as any)?.model),
+      zoneName: safeNullableText((zoneRow as any)?.name),
       quantity: safeNumber(row.quantity, 0),
       unitPrice: safeNumber(row.unit_price, 0),
       subtotal: safeNumber(row.subtotal, 0),
-    })),
+      };
+    }),
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
@@ -389,7 +406,16 @@ export async function getBudgetDetailForCustomer(
         customer_sites:site_id ( id, name ),
         customers:customer_id ( user_id, users:users!customers_user_id_fkey ( id, name ) )
       ),
-      budget_items ( id, device_id, zone_id, quantity, unit_price, subtotal )
+      budget_items (
+        id,
+        device_id,
+        zone_id,
+        quantity,
+        unit_price,
+        subtotal,
+        devices:device_id ( id, name, model ),
+        zones:zone_id ( id, name )
+      )
     `
     )
     .eq("id", budgetId)
@@ -430,19 +456,53 @@ export async function getBudgetDetailForCustomer(
     rejectedAt: safeNullableText(data.rejected_at),
     expiresAt: safeNullableText(data.expires_at),
     layout: normalizeLayout(data.layout_json),
-    items: items.map((row) => ({
+    items: items.map((row) => {
+      const deviceRow = pickSingle(row.devices as unknown);
+      const zoneRow = pickSingle(row.zones as unknown);
+
+      return {
       id: safeText(row.id),
       budgetId: safeText(data.id),
       deviceId: safeText(row.device_id),
       zoneId: safeNullableText(row.zone_id),
+      deviceName: safeNullableText((deviceRow as any)?.name),
+      deviceModel: safeNullableText((deviceRow as any)?.model),
+      zoneName: safeNullableText((zoneRow as any)?.name),
       quantity: safeNumber(row.quantity, 0),
       unitPrice: safeNumber(row.unit_price, 0),
       subtotal: safeNumber(row.subtotal, 0),
-    })),
+      };
+    }),
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
   } satisfies BudgetDetail;
+}
+
+async function ensureBudgetNotExpired(budgetId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("budgets")
+    .select("id, status, expires_at")
+    .eq("id", budgetId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "No se pudo validar el vencimiento de la cotizacion.");
+  }
+
+  if (!data?.expires_at) return;
+
+  const expired = new Date(data.expires_at).getTime() <= Date.now();
+  if (!expired) return;
+
+  if (safeText(data.status, "").toLowerCase() !== "expirada") {
+    await supabase
+      .from("budgets")
+      .update({ status: "expirada", updated_at: new Date().toISOString() })
+      .eq("id", budgetId);
+  }
+
+  throw new Error("La cotizacion esta expirada.");
 }
 
 export async function saveBudgetDraft(input: {
@@ -553,6 +613,7 @@ export async function approveBudgetAsCustomer(input: {
   decision: "aprobar" | "rechazar";
   notes: string | null;
 }): Promise<void> {
+  await ensureBudgetNotExpired(input.budgetId);
   const status: BudgetStatus = input.decision === "aprobar" ? "aprobada" : "rechazada";
 
   const { error } = await supabase

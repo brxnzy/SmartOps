@@ -2,11 +2,11 @@
 import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
-import Field from "../../components/Field";
 import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import { listSiteSurveys } from "../../services/siteSurvey.service";
+import Field from "../../components/Field";
 import type { SiteSurveySummary } from "../../types/siteSurvey.types";
 import { createBudgetFromSurvey, listBudgets } from "../../services/budget.service";
 import type { BudgetSummary } from "../../types/budget.types";
@@ -143,18 +143,18 @@ export default function BudgetList() {
                       {budget.status}
                     </span>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => navigate(`/admin/budgets/${budget.id}`)}
-                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                    >
-                      Abrir
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => navigate(`/admin/budgets/${budget.id}`)}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Abrir
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
           </div>
         )}
       </section>
@@ -204,6 +204,7 @@ export default function BudgetList() {
           )}
         </div>
       </Modal>
+
     </section>
   );
 }

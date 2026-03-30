@@ -17,9 +17,10 @@ export default function BudgetApprovalPublic() {
       await approveBudgetByToken({ token, decision, notes: notes.trim() || null });
       setResult(decision === "aprobar" ? "Aprobada" : "Rechazada");
     } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo procesar la aprobacion.";
       notifications.error({
         title: "No se pudo procesar",
-        description: err instanceof Error ? err.message : "No se pudo procesar la aprobacion.",
+        description: message,
       });
     } finally {
       setSubmitting(false);
