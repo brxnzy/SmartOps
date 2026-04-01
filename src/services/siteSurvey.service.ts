@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { sendEmailNotification } from "./email-notification.service";
 import type {
   SiteSurveyChecklistItem,
   SiteSurveyCreateInput,
@@ -37,6 +38,30 @@ function safeBoolean(value: unknown): boolean {
 function buildErrorMessage(error: PostgrestError | null, fallback: string): string {
   if (!error) return fallback;
   return error.message || fallback;
+}
+
+function isValidEmail(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  return normalized.length > 3 && normalized.includes("@");
+}
+
+function formatDateTimeForEmail(value: string | null): string {
+  if (!value) return "Sin fecha definida";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return "Sin fecha definida";
+  return new Intl.DateTimeFormat("es-DO", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function getSurveyUrl(surveyId: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}/admin/site_surveys/${surveyId}`;
 }
 
 function pickFirst<T>(value: T | T[] | null | undefined): T | null {
@@ -156,6 +181,40 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
   if (visitError) {
     await supabase.from("site_surveys").delete().eq("id", surveyRow.id);
     throw new Error(buildErrorMessage(visitError, "No se pudo agendar la visita tecnica."));
+  }
+
+  const [{ data: userData }, { data: siteData }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("name, email")
+      .eq("id", input.customerId)
+      .maybeSingle<{ name: string | null; email: string | null }>(),
+    supabase
+      .from("customer_sites")
+      .select("name")
+      .eq("id", input.siteId)
+      .maybeSingle<{ name: string | null }>(),
+  ]);
+
+  if (isValidEmail(userData?.email ?? null)) {
+    void sendEmailNotification({
+      companyId,
+      to: userData?.email ?? "",
+      type: "event",
+      title: "Visita tecnica programada",
+      message: `Hola ${userData?.name ?? "cliente"}, tu visita tecnica fue programada para ${formatDateTimeForEmail(
+        input.scheduledStart
+      )}.`,
+      actionUrl: getSurveyUrl(surveyRow.id),
+      metadata: {
+        levantamientoId: surveyRow.id,
+        sitio: siteData?.name ?? "No definido",
+        inicio: input.scheduledStart,
+        fin: input.scheduledEnd ?? null,
+      },
+    }).catch((notifyError) => {
+      console.error("[siteSurvey.service] visit_scheduled_email_error", notifyError);
+    });
   }
 }
 

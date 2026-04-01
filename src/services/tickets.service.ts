@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { sendEmailNotification } from "./email-notification.service";
 import type {
   CreateTicketCommentInput,
   CreateTicketInput,
@@ -8,6 +9,7 @@ import type {
   TicketComment,
   TicketListItem,
   TicketSla,
+  TicketStatus,
   TechnicalVisitSummary,
 } from "../types/ticketing.types";
 
@@ -16,6 +18,14 @@ const SLA_HOURS: Record<TicketSla, number> = {
   urgente: 4,
   "24h": 24,
   "48h": 48,
+};
+
+type TicketDbContext = {
+  id: string;
+  code: string;
+  status: TicketStatus;
+  customer_id: string;
+  site_id: string | null;
 };
 
 function safeText(value: unknown, fallback = ""): string {
@@ -45,6 +55,67 @@ function computeSlaDueAt(slaType: TicketSla): string {
   const hours = SLA_HOURS[slaType] ?? 24;
   base.setHours(base.getHours() + hours);
   return base.toISOString();
+}
+
+function isValidEmail(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  return normalized.length > 3 && normalized.includes("@");
+}
+
+function formatDateTimeForEmail(value: string | null): string {
+  if (!value) return "Sin fecha definida";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return "Sin fecha definida";
+  return new Intl.DateTimeFormat("es-DO", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function getTicketUrl(ticketId: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}/customer/tickets/${ticketId}`;
+}
+
+async function getCustomerEmailData(
+  customerId: string
+): Promise<{ email: string | null; name: string | null }> {
+  const { data } = await supabase
+    .from("users")
+    .select("email, name")
+    .eq("id", customerId)
+    .maybeSingle<{ email: string | null; name: string | null }>();
+
+  return {
+    email: data?.email ?? null,
+    name: data?.name ?? null,
+  };
+}
+
+async function getTicketDbContext(companyId: string, ticketId: string): Promise<TicketDbContext | null> {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("id, code, status, customer_id, site_id")
+    .eq("company_id", companyId)
+    .eq("id", ticketId)
+    .maybeSingle<TicketDbContext>();
+
+  if (error || !data) return null;
+  return data;
+}
+
+async function getSiteName(siteId: string | null): Promise<string | null> {
+  if (!siteId) return null;
+  const { data } = await supabase
+    .from("customer_sites")
+    .select("name")
+    .eq("id", siteId)
+    .maybeSingle<{ name: string | null }>();
+  return data?.name ?? null;
 }
 
 function mapTicket(row: Record<string, unknown>): TicketListItem {
@@ -270,6 +341,25 @@ export async function createTicket(
     await uploadTicketAttachments(companyId, data.id as string, customerId, files, null);
   }
 
+  const customer = await getCustomerEmailData(customerId);
+  if (isValidEmail(customer.email)) {
+    void sendEmailNotification({
+      companyId,
+      to: customer.email,
+      type: "transaction",
+      title: `Ticket ${code} creado`,
+      message: `Hola ${customer.name ?? "cliente"}, recibimos tu ticket ${code}. Nuestro equipo lo revisara pronto.`,
+      actionUrl: getTicketUrl(String(data.id)),
+      metadata: {
+        ticketCode: code,
+        estado: "abierto",
+        sla: input.slaType,
+      },
+    }).catch((notifyError) => {
+      console.error("[tickets.service] ticket_created_email_error", notifyError);
+    });
+  }
+
   return mapTicket(data as Record<string, unknown>);
 }
 
@@ -341,6 +431,37 @@ export async function addTicketComment(
   if (files.length > 0) {
     await uploadTicketAttachments(companyId, ticketId, authorId, files, data.id as string);
   }
+
+  if (input.isInternal) return;
+
+  const ticketContext = await getTicketDbContext(companyId, ticketId);
+  if (!ticketContext) return;
+
+  const customer = await getCustomerEmailData(ticketContext.customer_id);
+  if (!isValidEmail(customer.email)) return;
+
+  const isResolved = ticketContext.status === "resuelto" || ticketContext.status === "cerrado";
+  const title = isResolved
+    ? `Ticket ${ticketContext.code} resuelto`
+    : `Ticket ${ticketContext.code} actualizado`;
+  const message = isResolved
+    ? `Hola ${customer.name ?? "cliente"}, tu ticket ${ticketContext.code} fue marcado como ${ticketContext.status}.`
+    : `Hola ${customer.name ?? "cliente"}, hay una actualizacion en tu ticket ${ticketContext.code}.`;
+
+  void sendEmailNotification({
+    companyId,
+    to: customer.email,
+    type: "transaction",
+    title,
+    message,
+    actionUrl: getTicketUrl(ticketId),
+    metadata: {
+      ticketCode: ticketContext.code,
+      estado: ticketContext.status,
+    },
+  }).catch((notifyError) => {
+    console.error("[tickets.service] ticket_updated_email_error", notifyError);
+  });
 }
 
 export async function listTechnicians(companyId: string): Promise<Array<{ id: string; name: string }>> {
@@ -387,6 +508,86 @@ export async function createTicketTechnicalVisit(
   if (error) {
     throw new Error(error.message || "No se pudo programar la visita tecnica.");
   }
+
+  const ticketContext = await getTicketDbContext(companyId, ticketId);
+  if (!ticketContext) return;
+
+  const customer = await getCustomerEmailData(ticketContext.customer_id);
+  if (!isValidEmail(customer.email)) return;
+
+  const normalizedVisitStatus = (input.status ?? "").trim().toLowerCase();
+  const isConfirmed =
+    normalizedVisitStatus.includes("confirm") || normalizedVisitStatus.includes("confirmad");
+  const siteName = await getSiteName(ticketContext.site_id);
+
+  void sendEmailNotification({
+    companyId,
+    to: customer.email,
+    type: "event",
+    title: isConfirmed ? "Visita tecnica confirmada" : "Visita tecnica programada",
+    message: isConfirmed
+      ? `Hola ${customer.name ?? "cliente"}, confirmamos la visita tecnica del ticket ${
+          ticketContext.code
+        } para ${formatDateTimeForEmail(input.scheduledStart)}.`
+      : `Hola ${customer.name ?? "cliente"}, programamos una visita tecnica para el ticket ${
+          ticketContext.code
+        } el ${formatDateTimeForEmail(input.scheduledStart)}.`,
+    actionUrl: getTicketUrl(ticketId),
+    metadata: {
+      ticketCode: ticketContext.code,
+      sitio: siteName ?? "No definido",
+      inicio: input.scheduledStart ?? null,
+      fin: input.scheduledEnd ?? null,
+      estadoVisita: input.status ?? "programada",
+    },
+  }).catch((notifyError) => {
+    console.error("[tickets.service] visit_email_error", notifyError);
+  });
+}
+
+export async function updateTicketStatus(
+  companyId: string,
+  ticketId: string,
+  status: TicketStatus
+): Promise<TicketListItem> {
+  const { data, error } = await supabase
+    .from("tickets")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", companyId)
+    .eq("id", ticketId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "No se pudo actualizar el estado del ticket.");
+  }
+
+  const mapped = mapTicket(data as Record<string, unknown>);
+  const customer = await getCustomerEmailData(mapped.customerId);
+  if (isValidEmail(customer.email)) {
+    const isResolved = status === "resuelto" || status === "cerrado";
+    void sendEmailNotification({
+      companyId,
+      to: customer.email,
+      type: "transaction",
+      title: isResolved ? `Ticket ${mapped.code} resuelto` : `Ticket ${mapped.code} actualizado`,
+      message: isResolved
+        ? `Hola ${customer.name ?? "cliente"}, tu ticket ${mapped.code} fue marcado como ${status}.`
+        : `Hola ${customer.name ?? "cliente"}, tu ticket ${mapped.code} ahora esta en estado ${status}.`,
+      actionUrl: getTicketUrl(mapped.id),
+      metadata: {
+        ticketCode: mapped.code,
+        estado: status,
+      },
+    }).catch((notifyError) => {
+      console.error("[tickets.service] ticket_status_email_error", notifyError);
+    });
+  }
+
+  return mapped;
 }
 
 export async function listTicketTechnicalVisits(companyId: string): Promise<TechnicalVisitSummary[]> {
