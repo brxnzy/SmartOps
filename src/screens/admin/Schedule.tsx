@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import interactionPlugin from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import esLocale from "@fullcalendar/core/locales/es";
-import type { EventClickArg } from "@fullcalendar/core";
 import { CalendarDays } from "lucide-react";
 import Button from "../../components/Button";
 import { PERMISSIONS } from "../../constants/permissions";
@@ -37,7 +35,6 @@ function formatShortDate(value?: string | null): string | null {
 }
 
 export default function Schedule() {
-  const navigate = useNavigate();
   const { companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const canReadSurveys = canAccess(PERMISSIONS.siteSurveyRead);
@@ -46,8 +43,6 @@ export default function Schedule() {
   const [visits, setVisits] = useState<SurveyCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedVisit, setSelectedVisit] = useState<SurveyCalendarEvent | null>(null);
-
   const loadSchedule = useCallback(async () => {
     if (!companyId || (!canReadSurveys && !canReadTickets)) {
       setVisits([]);
@@ -61,18 +56,13 @@ export default function Schedule() {
     try {
       const data = await listCompanyVisits(companyId);
       setVisits(data);
-
-      if (selectedVisit) {
-        const next = data.find((visit) => visit.visitId === selectedVisit.visitId) ?? null;
-        setSelectedVisit(next);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error cargando agenda.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [companyId, canReadSurveys, canReadTickets, selectedVisit]);
+  }, [companyId, canReadSurveys, canReadTickets]);
 
   useEffect(() => {
     void loadSchedule();
@@ -87,27 +77,21 @@ export default function Schedule() {
 
       return {
         id: String(visit.visitId),
-        title: `${visit.customerName ?? "Cliente"} � ${visit.siteName ?? "Sitio"}`,
+        title: "Proyecto",
         start: visit.scheduledStart,
         end: endDate,
         backgroundColor: colors.bg,
         borderColor: colors.border,
         textColor: "#ffffff",
         extendedProps: {
-          surveyId: visit.surveyId,
+          name: `${visit.customerName ?? "Cliente"} - ${visit.siteName ?? "Sitio"}`,
           technicianName: visit.technicianName ?? "Sin t�cnico",
-          status: visit.status ?? "Pendiente",
+
           scheduledEnd: visit.scheduledEnd ?? null,
         },
       };
     });
   }, [visits]);
-
-  const onEventClick = (arg: EventClickArg) => {
-    const visitId = Number(arg.event.id);
-    const found = visits.find((visit) => visit.visitId === visitId) ?? null;
-    setSelectedVisit(found);
-  };
 
   return (
     <section className="space-y-6">
@@ -122,16 +106,8 @@ export default function Schedule() {
             <h2 className="text-base font-semibold text-slate-900">Calendario de visitas</h2>
             <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
               <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                En progreso
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                Pendiente
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                Completada
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+                Proyecto
               </span>
               <span className="inline-flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
@@ -192,21 +168,27 @@ export default function Schedule() {
             selectable={false}
             editable={false}
             events={events}
-            eventClick={onEventClick}
             height="auto"
             eventContent={(arg) => {
               const technicianName = arg.event.extendedProps?.technicianName as string | undefined;
               const scheduledEnd = arg.event.extendedProps?.scheduledEnd as string | undefined;
-              const status = arg.event.extendedProps?.status as string | undefined;
               const endLabel = formatShortDate(scheduledEnd);
 
               return (
                 <div className="space-y-0.5">
-                  <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: arg.event.backgroundColor as string }}
+                    />
+                    <p className="text-[10px] font-semibold leading-tight text-white/90">
+                      {arg.event.extendedProps?.name as string | undefined}
+                    </p>
+                  </div>
+                  <p className="text-[11px] font-semibold leading-tight">Proyecto</p>
                   {technicianName ? (
                     <p className="text-[10px] leading-tight text-white/90">T�cnico: {technicianName}</p>
                   ) : null}
-                  <p className="text-[10px] leading-tight text-white/90">{status}</p>
                   {endLabel ? (
                     <p className="text-[10px] leading-tight text-white/90">Finaliza: {endLabel}</p>
                   ) : null}
@@ -223,45 +205,13 @@ export default function Schedule() {
           </div>
         ) : null}
       </div>
-
-      {selectedVisit ? (
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900">Visita seleccionada</h3>
-          <div className="mt-2 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-            <p>
-              <span className="font-medium">Cliente:</span> {selectedVisit.customerName ?? "Sin nombre"}
-            </p>
-            <p>
-              <span className="font-medium">Sitio:</span> {selectedVisit.siteName ?? "Sin nombre"}
-            </p>
-            <p>
-              <span className="font-medium">T�cnico:</span> {selectedVisit.technicianName ?? "Sin t�cnico"}
-            </p>
-            <p>
-              <span className="font-medium">Estado:</span> {selectedVisit.status ?? "Pendiente"}
-            </p>
-            <p>
-              <span className="font-medium">Inicio:</span> {new Date(selectedVisit.scheduledStart).toLocaleString("es-DO")}
-            </p>
-            <p>
-              <span className="font-medium">Fin:</span> {selectedVisit.scheduledEnd ? new Date(selectedVisit.scheduledEnd).toLocaleString("es-DO") : "No definido"}
-            </p>
-          </div>
-
-          <div className="mt-3">
-            <Button
-              type="button"
-              onClick={() => navigate(`/admin/site_surveys/${selectedVisit.surveyId}`)}
-              className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Abrir levantamiento
-            </Button>
-          </div>
-        </article>
-      ) : null}
     </section>
   );
 }
 
 
 //Sistema de turno que se muestre en pantalla
+
+
+
+

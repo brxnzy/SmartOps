@@ -22,7 +22,7 @@ const PERMISSION_GROUPS: Array<{
   {
     key: "operaciones",
     label: "Operaciones",
-    match: (code) => code.startsWith("tickets.") || code.startsWith("site_survey."),
+    match: (code) => code.startsWith("tickets.") || code.startsWith("site_survey.") || code.startsWith("budgets."),
   },
   {
     key: "usuarios",

@@ -805,7 +805,7 @@ export async function listCompanyCatalogDevices(
 ): Promise<SurveyCatalogDevice[]> {
   const { data, error } = await supabase
     .from("devices")
-    .select("id, name, model")
+    .select("id, name, model, price, installation_price")
     .eq("company_id", companyId)
     .order("name", { ascending: true });
 
@@ -821,6 +821,11 @@ export async function listCompanyCatalogDevices(
       name,
       model,
       label: model ? `${name} (${model})` : name,
+      price: safeNumber(row.price, 0),
+      installationPrice:
+        row.installation_price === null || row.installation_price === undefined
+          ? null
+          : safeNumber(row.installation_price, 0),
     };
   });
 }

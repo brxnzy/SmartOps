@@ -21,6 +21,7 @@ import {
   Waypoints,
   Workflow,
   CalendarDays,
+  FileText,
 } from "lucide-react";
 
 
@@ -81,6 +82,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/site_surveys",
         permission: PERMISSIONS.siteSurveyRead,
         icon: <ClipboardCheck size={19} />,
+      },
+      {
+        name: "Presupuestos",
+        to: "/admin/budgets",
+        permission: PERMISSIONS.budgetsRead,
+        icon: <FileText size={19} />,
       },
     ],
   },
