@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
@@ -358,7 +359,10 @@ Deno.serve(async (req: Request) => {
     let warning: string | null = null;
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey && customerEmail) {
+    const resendFrom = Deno.env.get("RESEND_FROM") ?? "SmartOps <onboarding@resend.dev>";
+    const resendToOverride = Deno.env.get("RESEND_TO_OVERRIDE") ?? "";
+    const targetEmail = resendToOverride || customerEmail || "";
+    if (resendKey && targetEmail) {
       try {
         const attachmentBase64 = bytesToBase64(pdfBytes);
         const html = `
@@ -393,8 +397,8 @@ Deno.serve(async (req: Request) => {
             Authorization: `Bearer ${resendKey}`,
           },
           body: JSON.stringify({
-            from: "SmartOps <no-reply@smartops.local>",
-            to: [customerEmail],
+            from: resendFrom,
+            to: [targetEmail],
             subject: `Cotizacion ${quoteNumber}`,
             html,
             attachments: [
@@ -408,28 +412,36 @@ Deno.serve(async (req: Request) => {
         });
         emailSent = emailResponse.ok;
         if (!emailResponse.ok) {
+          const errorBody = await emailResponse.text().catch(() => "");
+          console.log(`[quote_formal] resend_error status=${emailResponse.status} body=${errorBody}`);
           warning = "El PDF fue generado pero el email no pudo enviarse.";
         }
       } catch (error) {
-        warning = "El PDF fue generado pero el email no pudo enviarse.";
+        console.log(`[quote_formal] resend_exception ${(error as Error)?.message ?? String(error)}`);
+        warning = "El PDF fue generado pero el email no pudo enviarse";
       }
     } else if (!resendKey) {
       warning = "RESEND_API_KEY no configurada. El PDF fue generado sin enviar email.";
-    } else if (!customerEmail) {
-      warning = "El cliente no tiene un email registrado. El PDF fue generado sin enviar email.";
+    } else if (!targetEmail) {
+      warning = "No hay email destino configurado. El PDF fue generado sin enviar email.";
     }
 
     return jsonResponse(200, {
       quoteId: budgetId,
       pdfUrl: signed?.signedUrl ?? null,
       emailSent,
-      warning,
+      warning: resendToOverride ? `${warning ?? ""}`.trim() || "Email enviado a destinatario de prueba." : warning,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return jsonResponse(500, { error: message });
   }
 });
+
+
+
+
+
 
 
 
