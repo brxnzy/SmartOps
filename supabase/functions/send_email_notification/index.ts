@@ -25,6 +25,11 @@ type SendEmailPayload = {
   companyId?: string;
   to: string | string[];
   type?: NotificationType;
+  eventKey?: string;
+  templateKey?: string;
+  entityType?: string;
+  entityId?: string;
+  retryOf?: string;
   subject?: string;
   title?: string;
   message?: string;
@@ -197,8 +202,68 @@ function normalizeAttachments(input: EmailAttachmentInput[] | undefined): Array<
   });
 }
 
+function sanitizePayloadForLog(payload: Partial<SendEmailPayload> | null): Record<string, unknown> | null {
+  if (!payload) return null;
+  const attachments = payload.attachments?.map((attachment) => ({
+    filename: attachment.filename,
+    contentType: attachment.contentType ?? null,
+    contentBytes: estimateBase64Bytes(attachment.contentBase64 ?? ""),
+  })) ?? [];
+
+  return {
+    ...payload,
+    attachments,
+  };
+}
+
+async function insertEmailLog(input: {
+  adminClient: ReturnType<typeof createClient>;
+  companyId: string | null;
+  payload: Partial<SendEmailPayload> | null;
+  recipients: string[];
+  subject: string;
+  status: "sent" | "failed";
+  providerMessageId?: string | null;
+  lastError?: string | null;
+  responsePayload?: Record<string, unknown> | null;
+}) {
+  const nowIso = new Date().toISOString();
+
+  await input.adminClient
+    .from("email_dispatch_history")
+    .insert({
+      company_id: input.companyId,
+      event_key: input.payload?.eventKey ?? null,
+      template_key: input.payload?.templateKey ?? null,
+      entity_type: input.payload?.entityType ?? null,
+      entity_id: input.payload?.entityId ?? null,
+      to_emails: input.recipients,
+      subject: input.subject,
+      status: input.status,
+      provider: "smtp",
+      provider_message_id: input.providerMessageId ?? null,
+      attempt_count: 1,
+      retry_of: input.payload?.retryOf ?? null,
+      last_error: input.lastError ?? null,
+      request_payload: sanitizePayloadForLog(input.payload),
+      response_payload: input.responsePayload ?? null,
+      sent_at: input.status === "sent" ? nowIso : null,
+      updated_at: nowIso,
+    })
+    .then(() => undefined)
+    .catch((error) => {
+      console.error(`[send_email_notification] email_log_insert_failed -> ${(error as Error)?.message ?? String(error)}`);
+    });
+}
+
 Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
+  let adminClient: ReturnType<typeof createClient> | null = null;
+  let payload: Partial<SendEmailPayload> | null = null;
+  let companyId: string | null = null;
+  let recipients: string[] = [];
+  let subject = "Notificacion SmartOps";
+
   try {
     console.log(`[send_email_notification] request_id=${requestId} method=${req.method}`);
 
@@ -224,12 +289,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!smtpUser || !smtpPassword || !senderEmail) {
-      return jsonResponse(500, {
-        error: "Missing GMAIL_SMTP_USER, GMAIL_SMTP_APP_PASSWORD or MAIL_SENDER_EMAIL env vars.",
-      });
-    }
-
     const authHeader = req.headers.get("Authorization") ?? "";
     const accessToken = authHeader.replace("Bearer ", "").trim();
     if (!accessToken) {
@@ -243,7 +302,7 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -259,15 +318,15 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(401, { error: "Invalid access token" });
     }
 
-    const payload = (await req.json().catch(() => ({}))) as Partial<SendEmailPayload>;
-    const companyId = payload.companyId?.trim();
+    payload = (await req.json().catch(() => ({}))) as Partial<SendEmailPayload>;
+    companyId = payload.companyId?.trim() ?? null;
     const to = payload.to;
 
     if (!to) {
       return jsonResponse(400, { error: "to es requerido (string o string[])." });
     }
 
-    const recipients = normalizeRecipients(to);
+    recipients = normalizeRecipients(to);
     if (recipients.length === 0) {
       return jsonResponse(400, { error: "No hay destinatarios validos." });
     }
@@ -293,7 +352,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const subject = buildSubject(payload as SendEmailPayload);
+    if (!smtpUser || !smtpPassword || !senderEmail) {
+      throw new Error("Missing GMAIL_SMTP_USER, GMAIL_SMTP_APP_PASSWORD or MAIL_SENDER_EMAIL env vars.");
+    }
+
+    subject = buildSubject(payload as SendEmailPayload);
     const html = buildHtml(payload as SendEmailPayload);
     const attachments = normalizeAttachments(payload.attachments);
 
@@ -319,6 +382,20 @@ Deno.serve(async (req: Request) => {
       requestId
     );
 
+    await insertEmailLog({
+      adminClient,
+      companyId,
+      payload,
+      recipients,
+      subject,
+      status: "sent",
+      providerMessageId: sendResult.messageId,
+      responsePayload: {
+        accepted: sendResult.accepted ?? [],
+        rejected: sendResult.rejected ?? [],
+      },
+    });
+
     return jsonResponse(200, {
       success: true,
       messageId: sendResult.messageId,
@@ -328,6 +405,23 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[send_email_notification] request_id=${requestId} unhandled -> ${message}`);
+
+    if (adminClient) {
+      await insertEmailLog({
+        adminClient,
+        companyId,
+        payload,
+        recipients,
+        subject,
+        status: "failed",
+        lastError: message,
+        responsePayload: {
+          requestId,
+          error: message,
+        },
+      });
+    }
+
     return jsonResponse(500, { error: "No se pudo enviar el correo.", details: message });
   }
 });

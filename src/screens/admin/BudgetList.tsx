@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
+import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import { listSiteSurveys } from "../../services/siteSurvey.service";
@@ -17,9 +18,11 @@ function formatDate(value: string) {
 
 export default function BudgetList() {
   const navigate = useNavigate();
-  const { companyProfile, authUser } = useAuth();
+  const { companyProfile, authUser, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const userId = authUser?.id ?? null;
+  const canCreateBudget = canAccess(PERMISSIONS.budgetsCreate);
+  const canReadSurveys = canAccess(PERMISSIONS.siteSurveyRead);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export default function BudgetList() {
     setError(null);
     try {
       const [loadedSurveys, loadedBudgets] = await Promise.all([
-        listSiteSurveys(companyId),
+        canReadSurveys ? listSiteSurveys(companyId) : Promise.resolve([]),
         listBudgets(companyId),
       ]);
       setSurveys(loadedSurveys);
@@ -46,7 +49,7 @@ export default function BudgetList() {
     } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [canReadSurveys, companyId]);
 
   useEffect(() => {
     void loadData();
@@ -57,6 +60,13 @@ export default function BudgetList() {
   const availableSurveys = useMemo(() => surveys, [surveys]);
 
   const handleCreate = async () => {
+    if (!canCreateBudget) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para crear presupuestos.",
+      });
+      return;
+    }
     if (!selectedSurveyId) {
       notifications.warning({
         title: "Seleccion requerida",
@@ -96,6 +106,7 @@ export default function BudgetList() {
           <Button
             type="button"
             onClick={() => setCreateOpen(true)}
+            disabled={!canCreateBudget}
             className="border-white/20 bg-white text-slate-900 hover:bg-slate-100"
           >
             Crear presupuesto
@@ -177,7 +188,7 @@ export default function BudgetList() {
               type="button"
               onClick={handleCreate}
               className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-              disabled={!selectedSurveyId}
+              disabled={!selectedSurveyId || !canCreateBudget}
             >
               Crear
             </Button>

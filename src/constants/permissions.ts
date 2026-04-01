@@ -1,6 +1,9 @@
 export const PERMISSIONS = {
   dashboardRead: "dashboard.read",
   customersRead: "customers:read",
+  customersCreate: "customers:create",
+  customersUpdate: "customers:update",
+  customersDelete: "customers:delete",
   usersRead: "users.read",
   usersCreate: "users.create",
   usersUpdate: "users.update",
@@ -38,9 +41,6 @@ export const PERMISSIONS = {
   settingsDeviceTypesCreate: "settings.device-types.create",
   settingsDeviceTypesUpdate: "settings.device-types.update",
   settingsDeviceTypesDelete: "settings.device-types.delete",
-
-
-  //Aqui iran los permisos para lo que tenga que ver con el customer
   settingsTicketCategoriesRead: "settings.ticket-categories.read",
   settingsTicketCategoriesCreate: "settings.ticket-categories.create",
   settingsTicketCategoriesUpdate: "settings.ticket-categories.update",
@@ -58,13 +58,30 @@ export const PERMISSIONS = {
   settingsChecklistItemsDelete: "settings.checklist-items.delete",
   siteSurveyRead: "site_survey.read",
   siteSurveyCreate: "site_survey.create",
+  siteSurveyUpdate: "site_survey.update",
+  siteSurveyStart: "site_survey.start",
+  siteSurveyVisitCancel: "site_survey.visit.cancel",
+  siteSurveyCancel: "site_survey.cancel",
+  technicalVisitsCancel: "technical_visits.cancel",
+  technicalVisitsReschedule: "technical_visits.reschedule",
+  scheduleRead: "schedule.read",
   accountUpdate: "account.update",
   settingsLogsRead: "settings.logs.read",
   ticketsRead: "tickets.read",
   ticketsUpdate: "tickets.update",
   ticketsAssign: "tickets.assign",
   ticketsComment: "tickets.comment",
+  ticketsVisitSchedule: "tickets.visit.schedule",
   budgetsRead: "budgets.read",
+  budgetsCreate: "budgets.create",
+  budgetsUpdate: "budgets.update",
+  budgetsSend: "budgets.send",
+  budgetsApprove: "budgets.approve",
+  workOrdersCreate: "work_orders.create",
+  installationProjectsRead: "installation_projects.read",
+  installationProjectsUpdate: "installation_projects.update",
+  emailHistoryRead: "email_history.read",
+  emailHistoryRetry: "email_history.retry",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

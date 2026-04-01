@@ -27,6 +27,9 @@ export default function CustomerTable({
   totalPages,
   total,
   disabled = false,
+  canEdit = true,
+  canDelete = true,
+  canViewDetail = true,
   onEdit,
   onDelete,
   onViewDetail,
@@ -69,7 +72,7 @@ export default function CustomerTable({
                     <Button
                       type="button"
                       onClick={() => onViewDetail(customer)}
-                      disabled={disabled}
+                      disabled={disabled || !canViewDetail}
                       aria-label="Ver perfil 360"
                       title="Ver perfil 360"
                       icon={<Eye size={14} />}
@@ -79,7 +82,7 @@ export default function CustomerTable({
                     <Button
                       type="button"
                       onClick={() => onEdit(customer)}
-                      disabled={disabled}
+                      disabled={disabled || !canEdit}
                       aria-label="Editar cliente"
                       title="Editar cliente"
                       icon={<UserPen size={14} />}
@@ -89,7 +92,7 @@ export default function CustomerTable({
                     <Button
                       type="button"
                       onClick={() => onDelete(customer)}
-                      disabled={disabled}
+                      disabled={disabled || !canDelete}
                       aria-label="Eliminar cliente"
                       title="Eliminar cliente"
                       icon={<Trash2 size={14} />}

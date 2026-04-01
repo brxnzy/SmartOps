@@ -1,8 +1,18 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import {
   getChecklistItemsByTemplateIds,
   getChecklistTemplatesByCompany,
 } from "./checklistTemplates.service";
+import {
+  canCancelSurveyStatus,
+  canCancelVisitStatus,
+  canRescheduleVisitStatus,
+  canStartVisitStatus,
+  isSurveyCompletedStatus,
+  normalizeSurveyStatus,
+  normalizeVisitStatus,
+} from "../utils/siteSurveyWorkflow";
 import type {
   ChecklistTemplateOption,
   SiteSurveyExecutionSummary,
@@ -17,19 +27,6 @@ import type {
 } from "../types/siteSurveyExecution.types";
 
 const SURVEY_MEDIA_BUCKET = "survey-media";
-
-const MOCK_CHECKLIST_TEMPLATE: ChecklistTemplateOption = {
-  id: "mock-general-site-survey",
-  name: "Plantilla base (mock)",
-  description: "Checklist rapido para iniciar levantamiento tecnico.",
-  source: "mock",
-  items: [
-    { id: "mock-1", text: "Validar alimentacion electrica del sitio", itemOrder: 0 },
-    { id: "mock-2", text: "Verificar cobertura de red y puntos de acceso", itemOrder: 1 },
-    { id: "mock-3", text: "Inspeccionar riesgos fisicos en zonas criticas", itemOrder: 2 },
-    { id: "mock-4", text: "Confirmar ubicacion final de dispositivos", itemOrder: 3 },
-  ],
-};
 
 function safeText(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
@@ -73,6 +70,60 @@ function asRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
+}
+
+type BasicUserRow = { id?: string | null; name?: string | null };
+type SiteRow = { id?: string | null; name?: string | null };
+type SurveyCustomerRow = { users?: BasicUserRow | BasicUserRow[] | null };
+type SurveyNestedRow = {
+  id?: string | null;
+  status?: string | null;
+  customer_sites?: SiteRow | SiteRow[] | null;
+  customers?: SurveyCustomerRow | SurveyCustomerRow[] | null;
+};
+type TicketNestedRow = {
+  id?: string | null;
+  customer_id?: string | null;
+  site?: SiteRow | SiteRow[] | null;
+};
+type TechnicalVisitCalendarRow = {
+  id?: string | number | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  technician_id?: string | null;
+  site_survey_id?: string | null;
+  status?: string | null;
+  ticket_id?: string | number | null;
+  installation_project_id?: string | null;
+  users?: BasicUserRow | BasicUserRow[] | null;
+  site_surveys?: SurveyNestedRow | SurveyNestedRow[] | null;
+  tickets?: TicketNestedRow | TicketNestedRow[] | null;
+};
+
+type TechnicalVisitStatusGuardRow = {
+  id: string;
+  company_id?: string | null;
+  site_survey_id: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  technician_id?: string | null;
+  status: string | null;
+  ticket_id: string | number | null;
+  installation_project_id: string | null;
+};
+
+type SiteSurveyStatusGuardRow = {
+  id: string;
+  company_id?: string | null;
+  status: string | null;
+  completed_at: string | null;
+};
+
+export interface RescheduleTechnicalVisitInput {
+  visitId: string;
+  scheduledStart: string;
+  scheduledEnd?: string | null;
+  technicianId?: string | null;
 }
 
 export const EMPTY_SURVEY_LAYOUT: SurveyLayout = {
@@ -157,6 +208,7 @@ export async function listTechnicianVisits(technicianId: string): Promise<Survey
       site_survey_id,
       status,
       ticket_id,
+      installation_project_id,
       users:technician_id ( id, name ),
       site_surveys:site_survey_id (
         id,
@@ -169,185 +221,191 @@ export async function listTechnicianVisits(technicianId: string): Promise<Survey
     `
     )
     .eq("technician_id", technicianId)
+    .is("ticket_id", null)
+    .is("installation_project_id", null)
     .order("scheduled_start", { ascending: true });
 
   if (error) {
     throw buildError(error, "No se pudieron cargar las visitas tecnicas.");
   }
 
-  return (data ?? []).map((row, index) => {
-    const surveyRow = pickSingle(
-      row.site_surveys as
-        | {
-            id?: string | null;
-            status?: string | null;
-            customer_sites?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-            customers?:
-              | {
-                  users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-                }
-              | {
-                  users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-                }[]
-              | null;
-          }
-        | {
-            id?: string | null;
-            status?: string | null;
-            customer_sites?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-            customers?:
-              | {
-                  users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-                }
-              | {
-                  users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
-                }[]
-              | null;
-          }[]
-        | null
-        | undefined
-    );
-
-    const siteRow = pickSingle(
-      surveyRow?.customer_sites as
-        | { id?: string | null; name?: string | null }
-        | { id?: string | null; name?: string | null }[]
-        | null
-        | undefined
-    );
-
-    const customerRow = pickSingle(
-      surveyRow?.customers as
-        | { users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null }
-        | { users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null }[]
-        | null
-        | undefined
-    );
-
-    const customerUser = pickSingle(
-      customerRow?.users as
-        | { id?: string | null; name?: string | null }
-        | { id?: string | null; name?: string | null }[]
-        | null
-        | undefined
-    );
-
-    const technician = pickSingle(
-      row.users as
-        | { id?: string | null; name?: string | null }
-        | { id?: string | null; name?: string | null }[]
-        | null
-        | undefined
-    );
+  return ((data ?? []) as TechnicalVisitCalendarRow[]).map((row, index) => {
+    const surveyRow = pickSingle(row.site_surveys);
+    const siteRow = pickSingle(surveyRow?.customer_sites);
+    const customerRow = pickSingle(surveyRow?.customers);
+    const customerUser = pickSingle(customerRow?.users);
+    const technician = pickSingle(row.users);
 
     return {
-      visitId: safeNumber(row.id),
+      visitId: safeText(row.id),
       surveyId: safeText(row.site_survey_id, `survey-${index}`),
       scheduledStart: safeText(row.scheduled_start, new Date().toISOString()),
       scheduledEnd: safeNullableText(row.scheduled_end),
       technicianId: safeNullableText(row.technician_id),
       technicianName: safeNullableText(technician?.name),
-      status: safeNullableText(row.status),
+      status: normalizeVisitStatus(safeNullableText(row.status)) ?? "programada",
       ticketId: row.ticket_id ?? null,
+      installationProjectId: safeNullableText(row.installation_project_id),
+      visitType: row.installation_project_id ? "installation" : row.ticket_id ? "ticket" : "survey",
       siteName: safeNullableText(siteRow?.name),
       customerName: safeNullableText(customerUser?.name),
-      surveyStatus: safeNullableText(surveyRow?.status),
+      surveyStatus: normalizeSurveyStatus(safeNullableText(surveyRow?.status)) ?? "pendiente",
     } satisfies SurveyCalendarEvent;
   });
 }
 
 export async function listCompanyVisits(companyId: string): Promise<SurveyCalendarEvent[]> {
   const { data, error } = await supabase
-    .from("site_surveys")
+    .from("technical_visits")
     .select(
       `
       id,
+      scheduled_start,
+      scheduled_end,
+      technician_id,
       status,
-      customer_sites:site_id ( id, name ),
-      customers:customer_id ( user_id, users:users!customers_user_id_fkey ( id, name ) ),
-      technical_visits (
+      ticket_id,
+      installation_project_id,
+      users:technician_id ( id, name ),
+      site_surveys:site_survey_id (
         id,
-        scheduled_start,
-        scheduled_end,
-        technician_id,
         status,
-        ticket_id,
-        users:technician_id ( id, name )
+        customer_sites:site_id ( id, name ),
+        customers:customer_id ( user_id, users:users!customers_user_id_fkey ( id, name ) )
+      ),
+      tickets:ticket_id (
+        id,
+        customer_id,
+        site:site_id ( id, name )
       )
     `
     )
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
+    .order("scheduled_start", { ascending: true });
 
   if (error) {
     throw buildError(error, "No se pudieron cargar las visitas de agenda.");
   }
 
-  const flattened: SurveyCalendarEvent[] = [];
+  const visitRows = (data ?? []) as TechnicalVisitCalendarRow[];
 
-  (data ?? []).forEach((survey, surveyIndex) => {
-    const siteRow = pickSingle(
-      survey.customer_sites as
-        | { id?: string | null; name?: string | null }
-        | { id?: string | null; name?: string | null }[]
-        | null
-        | undefined
-    );
+  const ticketCustomerIds = Array.from(
+    new Set(
+      visitRows
+        .map((visit) => {
+          const ticketRow = pickSingle(visit.tickets);
+          return safeNullableText(ticketRow?.customer_id);
+        })
+        .filter((value): value is string => Boolean(value))
+    )
+  );
 
-    const customerRow = pickSingle(
-      survey.customers as
-        | { users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null }
-        | { users?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null }[]
-        | null
-        | undefined
-    );
+  const customerNameById = new Map<string, string>();
+  if (ticketCustomerIds.length > 0) {
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", ticketCustomerIds)
+      .returns<Array<{ id: string; name: string | null }>>();
 
-    const customerUser = pickSingle(
-      customerRow?.users as
-        | { id?: string | null; name?: string | null }
-        | { id?: string | null; name?: string | null }[]
-        | null
-        | undefined
-    );
-
-    const visits = Array.isArray(survey.technical_visits)
-      ? survey.technical_visits
-      : survey.technical_visits
-        ? [survey.technical_visits]
-        : [];
-
-    visits.forEach((visit, visitIndex) => {
-      const technician = pickSingle(
-        visit.users as
-          | { id?: string | null; name?: string | null }
-          | { id?: string | null; name?: string | null }[]
-          | null
-          | undefined
-      );
-
-      flattened.push({
-        visitId: safeNumber(visit.id),
-        surveyId: safeText(survey.id, `survey-${surveyIndex}-${visitIndex}`),
-        scheduledStart: safeText(visit.scheduled_start, new Date().toISOString()),
-        scheduledEnd: safeNullableText(visit.scheduled_end),
-        technicianId: safeNullableText(visit.technician_id),
-        technicianName: safeNullableText(technician?.name),
-        status: safeNullableText(visit.status),
-        ticketId: visit.ticket_id ?? null,
-        siteName: safeNullableText(siteRow?.name),
-        customerName: safeNullableText(customerUser?.name),
-        surveyStatus: safeNullableText(survey.status),
-      });
+    (usersData ?? []).forEach((user) => {
+      customerNameById.set(user.id, user.name ?? user.id);
     });
-  });
+  }
 
-  return flattened.sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime());
+  return visitRows.map((visit) => {
+    const surveyRow = pickSingle(visit.site_surveys);
+    const ticketRow = pickSingle(visit.tickets);
+    const surveySite = pickSingle(surveyRow?.customer_sites);
+    const ticketSite = pickSingle(ticketRow?.site);
+    const surveyCustomer = pickSingle(surveyRow?.customers);
+    const surveyCustomerUser = pickSingle(surveyCustomer?.users);
+    const technician = pickSingle(visit.users);
+    const visitType = visit.installation_project_id
+      ? "installation"
+      : visit.ticket_id
+        ? "ticket"
+        : "survey";
+
+    return {
+      visitId: safeText(visit.id),
+      surveyId: safeText(surveyRow?.id),
+      scheduledStart: safeText(visit.scheduled_start, new Date().toISOString()),
+      scheduledEnd: safeNullableText(visit.scheduled_end),
+      technicianId: safeNullableText(visit.technician_id),
+      technicianName: safeNullableText(technician?.name),
+      status: normalizeVisitStatus(safeNullableText(visit.status)) ?? "programada",
+      ticketId: visit.ticket_id ?? null,
+      installationProjectId: safeNullableText(visit.installation_project_id),
+      visitType,
+      siteName: safeNullableText(ticketSite?.name) ?? safeNullableText(surveySite?.name),
+      customerName:
+        customerNameById.get(safeText(ticketRow?.customer_id, "")) ??
+        safeNullableText(surveyCustomerUser?.name),
+      surveyStatus: surveyRow
+        ? normalizeSurveyStatus(safeNullableText(surveyRow?.status)) ?? "pendiente"
+        : null,
+    } satisfies SurveyCalendarEvent;
+  });
 }
 
-export async function startSurveyVisit(visitId: number, surveyId: string): Promise<void> {
+export async function startSurveyVisit(visitId: string, surveyId: string): Promise<void> {
+  const [{ data: visitData, error: visitLoadError }, { data: surveyData, error: surveyLoadError }] = await Promise.all([
+    supabase
+      .from("technical_visits")
+      .select("id, company_id, site_survey_id, status, ticket_id, installation_project_id")
+      .eq("id", visitId)
+      .maybeSingle<TechnicalVisitStatusGuardRow>(),
+    supabase
+      .from("site_surveys")
+      .select("id, company_id, status, completed_at")
+      .eq("id", surveyId)
+      .maybeSingle<SiteSurveyStatusGuardRow>(),
+  ]);
+
+  if (visitLoadError) {
+    throw buildError(visitLoadError, "No se pudo validar la visita tecnica.");
+  }
+  if (surveyLoadError) {
+    throw buildError(surveyLoadError, "No se pudo validar el levantamiento.");
+  }
+  if (!visitData) {
+    throw new Error("La visita tecnica no existe.");
+  }
+  if (!surveyData) {
+    throw new Error("El levantamiento tecnico no existe.");
+  }
+
+  const visitSurveyId = safeNullableText(visitData.site_survey_id);
+  if (!visitSurveyId || visitSurveyId !== surveyId) {
+    throw new Error("La visita tecnica no pertenece al levantamiento solicitado.");
+  }
+
+  if (visitData.ticket_id !== null || safeNullableText(visitData.installation_project_id)) {
+    throw new Error("Solo se puede iniciar la visita del levantamiento.");
+  }
+
+  const normalizedVisitStatus = normalizeVisitStatus(visitData.status);
+  if (normalizedVisitStatus === "cancelada") {
+    throw new Error("No se puede iniciar una visita cancelada.");
+  }
+  if (normalizedVisitStatus === "completada") {
+    throw new Error("No se puede iniciar una visita completada.");
+  }
+  if (normalizedVisitStatus !== "en_progreso" && !canStartVisitStatus(normalizedVisitStatus)) {
+    throw new Error("La visita debe estar programada para poder iniciar.");
+  }
+
+  if (isSurveyCompletedStatus(surveyData.status) || Boolean(surveyData.completed_at)) {
+    throw new Error("No se puede iniciar una visita de un levantamiento completado.");
+  }
+  if (normalizeSurveyStatus(surveyData.status) === "cancelado") {
+    throw new Error("No se puede iniciar una visita de un levantamiento cancelado.");
+  }
+
   const { error: visitError } = await supabase
     .from("technical_visits")
-    .update({ status: "En Progreso" })
+    .update({ status: "en_progreso" })
     .eq("id", visitId);
 
   if (visitError) {
@@ -356,12 +414,313 @@ export async function startSurveyVisit(visitId: number, surveyId: string): Promi
 
   const { error: surveyError } = await supabase
     .from("site_surveys")
-    .update({ status: "En Progreso" })
+    .update({ status: "en_progreso" })
     .eq("id", surveyId);
 
   if (surveyError) {
     throw buildError(surveyError, "No se pudo actualizar el levantamiento.");
   }
+
+  await logAuditEvent({
+    action: "start",
+    entity: "site_survey_visit",
+    entityId: surveyId,
+    newValues: {
+      visitId,
+      visitStatus: "en_progreso",
+      surveyStatus: "en_progreso",
+      previousVisitStatus: normalizedVisitStatus,
+    },
+  });
+}
+
+function parseDateToIso(value: string, fieldName: string): string {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`La fecha de ${fieldName} no es valida.`);
+  }
+  return new Date(parsed).toISOString();
+}
+
+export async function cancelTechnicalVisit(visitId: string): Promise<void> {
+  const { data: visitData, error: visitLoadError } = await supabase
+    .from("technical_visits")
+    .select("id, company_id, site_survey_id, status, ticket_id, installation_project_id")
+    .eq("id", visitId)
+    .maybeSingle<TechnicalVisitStatusGuardRow>();
+
+  if (visitLoadError) {
+    throw buildError(visitLoadError, "No se pudo validar la visita tecnica.");
+  }
+  if (!visitData) {
+    throw new Error("La visita tecnica no existe.");
+  }
+
+  const normalizedVisitStatus = normalizeVisitStatus(visitData.status);
+  if (normalizedVisitStatus === "completada") {
+    throw new Error("No se puede cancelar una visita tecnica completada.");
+  }
+  if (normalizedVisitStatus === "cancelada") {
+    return;
+  }
+  if (!canCancelVisitStatus(normalizedVisitStatus)) {
+    throw new Error("La visita tecnica no se puede cancelar en su estado actual.");
+  }
+
+  const linkedSurveyId = safeNullableText(visitData.site_survey_id);
+  let nextSurveyStatus: string | null = null;
+  let shouldSetSurveyPending = false;
+
+  if (linkedSurveyId) {
+    const { data: surveyData, error: surveyLoadError } = await supabase
+      .from("site_surveys")
+      .select("id, status, completed_at")
+      .eq("id", linkedSurveyId)
+      .maybeSingle<SiteSurveyStatusGuardRow>();
+
+    if (surveyLoadError) {
+      throw buildError(surveyLoadError, "No se pudo validar el levantamiento asociado.");
+    }
+
+    if (surveyData) {
+      if (isSurveyCompletedStatus(surveyData.status) || Boolean(surveyData.completed_at)) {
+        throw new Error("No se puede cancelar la visita: el levantamiento ya esta completado.");
+      }
+
+      const normalizedSurveyStatus = normalizeSurveyStatus(surveyData.status);
+      nextSurveyStatus = normalizedSurveyStatus;
+
+      if (normalizedSurveyStatus === "en_progreso") {
+        shouldSetSurveyPending = true;
+      }
+    }
+  }
+
+  const { error: cancelError } = await supabase
+    .from("technical_visits")
+    .update({ status: "cancelada" })
+    .eq("id", visitId);
+
+  if (cancelError) {
+    throw buildError(cancelError, "No se pudo cancelar la visita tecnica.");
+  }
+
+  if (linkedSurveyId && shouldSetSurveyPending) {
+    const { error: surveyUpdateError } = await supabase
+      .from("site_surveys")
+      .update({ status: "pendiente" })
+      .eq("id", linkedSurveyId);
+
+    if (surveyUpdateError) {
+      throw buildError(surveyUpdateError, "La visita fue cancelada, pero no se pudo ajustar el estado del levantamiento.");
+    }
+    nextSurveyStatus = "pendiente";
+  }
+
+  await logAuditEvent({
+    action: "cancel",
+    entity: "technical_visits",
+    entityId: visitId,
+    companyId: safeNullableText(visitData.company_id),
+    newValues: {
+      visitId,
+      visitStatus: "cancelada",
+      previousVisitStatus: normalizedVisitStatus,
+      surveyId: linkedSurveyId,
+      surveyStatus: nextSurveyStatus,
+    },
+  });
+}
+
+export async function cancelSurveyVisit(visitId: string, surveyId?: string): Promise<void> {
+  if (surveyId) {
+    const { data: visitData, error: visitLoadError } = await supabase
+      .from("technical_visits")
+      .select("id, site_survey_id")
+      .eq("id", visitId)
+      .maybeSingle<{ id: string; site_survey_id: string | null }>();
+
+    if (visitLoadError) {
+      throw buildError(visitLoadError, "No se pudo validar la visita tecnica.");
+    }
+    if (!visitData?.site_survey_id || visitData.site_survey_id !== surveyId) {
+      throw new Error("La visita tecnica no pertenece al levantamiento indicado.");
+    }
+  }
+
+  await cancelTechnicalVisit(visitId);
+}
+
+export async function rescheduleTechnicalVisit(input: RescheduleTechnicalVisitInput): Promise<void> {
+  const nextStart = parseDateToIso(input.scheduledStart, "inicio");
+  const nextEnd = input.scheduledEnd ? parseDateToIso(input.scheduledEnd, "fin") : null;
+
+  if (nextEnd && Date.parse(nextEnd) <= Date.parse(nextStart)) {
+    throw new Error("La fecha fin debe ser mayor que la fecha inicio.");
+  }
+
+  const { data: visitData, error: visitLoadError } = await supabase
+    .from("technical_visits")
+    .select("id, company_id, site_survey_id, scheduled_start, scheduled_end, technician_id, status, ticket_id, installation_project_id")
+    .eq("id", input.visitId)
+    .maybeSingle<TechnicalVisitStatusGuardRow>();
+
+  if (visitLoadError) {
+    throw buildError(visitLoadError, "No se pudo validar la visita tecnica.");
+  }
+  if (!visitData) {
+    throw new Error("La visita tecnica no existe.");
+  }
+
+  const normalizedVisitStatus = normalizeVisitStatus(visitData.status);
+  if (normalizedVisitStatus === "completada") {
+    throw new Error("No se puede reprogramar una visita completada.");
+  }
+  if (!canRescheduleVisitStatus(normalizedVisitStatus)) {
+    throw new Error("Solo se pueden reprogramar visitas programadas o canceladas.");
+  }
+
+  const linkedSurveyId = safeNullableText(visitData.site_survey_id);
+  if (linkedSurveyId) {
+    const { data: surveyData, error: surveyLoadError } = await supabase
+      .from("site_surveys")
+      .select("id, status, completed_at")
+      .eq("id", linkedSurveyId)
+      .maybeSingle<SiteSurveyStatusGuardRow>();
+
+    if (surveyLoadError) {
+      throw buildError(surveyLoadError, "No se pudo validar el levantamiento asociado.");
+    }
+
+    if (surveyData) {
+      if (isSurveyCompletedStatus(surveyData.status) || Boolean(surveyData.completed_at)) {
+        throw new Error("No se puede reprogramar la visita: el levantamiento ya esta completado.");
+      }
+      if (normalizeSurveyStatus(surveyData.status) === "cancelado") {
+        throw new Error("No se puede reprogramar la visita: el levantamiento esta cancelado.");
+      }
+    }
+  }
+
+  const payload: {
+    scheduled_start: string;
+    scheduled_end: string | null;
+    technician_id?: string | null;
+    status?: string;
+  } = {
+    scheduled_start: nextStart,
+    scheduled_end: nextEnd,
+  };
+
+  if (input.technicianId !== undefined) {
+    payload.technician_id = input.technicianId;
+  }
+  if (normalizedVisitStatus === "cancelada") {
+    payload.status = "programada";
+  }
+
+  const { error: updateError } = await supabase
+    .from("technical_visits")
+    .update(payload)
+    .eq("id", input.visitId);
+
+  if (updateError) {
+    throw buildError(updateError, "No se pudo reprogramar la visita tecnica.");
+  }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "technical_visits",
+    entityId: input.visitId,
+    companyId: safeNullableText(visitData.company_id),
+    newValues: {
+      previousStatus: normalizedVisitStatus,
+      nextStatus: payload.status ?? normalizedVisitStatus,
+      previousStart: safeNullableText(visitData.scheduled_start),
+      previousEnd: safeNullableText(visitData.scheduled_end),
+      nextStart,
+      nextEnd,
+      previousTechnicianId: safeNullableText(visitData.technician_id),
+      nextTechnicianId: payload.technician_id ?? safeNullableText(visitData.technician_id),
+      surveyId: linkedSurveyId,
+      ticketId: visitData.ticket_id ?? null,
+      installationProjectId: safeNullableText(visitData.installation_project_id),
+    },
+  });
+}
+
+export async function cancelSiteSurvey(surveyId: string): Promise<void> {
+  const { data: surveyData, error: surveyLoadError } = await supabase
+    .from("site_surveys")
+    .select("id, company_id, status, completed_at")
+    .eq("id", surveyId)
+    .maybeSingle<SiteSurveyStatusGuardRow>();
+
+  if (surveyLoadError) {
+    throw buildError(surveyLoadError, "No se pudo validar el levantamiento.");
+  }
+  if (!surveyData) {
+    throw new Error("No se encontro el levantamiento tecnico.");
+  }
+
+  const normalizedSurveyStatus = normalizeSurveyStatus(surveyData.status);
+  if (isSurveyCompletedStatus(surveyData.status) || Boolean(surveyData.completed_at)) {
+    throw new Error("No se puede cancelar un levantamiento completado.");
+  }
+  if (!canCancelSurveyStatus(normalizedSurveyStatus)) {
+    throw new Error("El levantamiento no puede cancelarse en su estado actual.");
+  }
+
+  const { error: updateSurveyError } = await supabase
+    .from("site_surveys")
+    .update({ status: "cancelado" })
+    .eq("id", surveyId);
+
+  if (updateSurveyError) {
+    throw buildError(updateSurveyError, "No se pudo cancelar el levantamiento.");
+  }
+
+  const { data: surveyVisits, error: visitsLoadError } = await supabase
+    .from("technical_visits")
+    .select("id, status")
+    .eq("site_survey_id", surveyId)
+    .is("ticket_id", null)
+    .is("installation_project_id", null)
+    .returns<Array<{ id: string; status: string | null }>>();
+
+  if (visitsLoadError) {
+    throw buildError(visitsLoadError, "El levantamiento fue cancelado, pero no se pudieron validar las visitas asociadas.");
+  }
+
+  const visitIdsToCancel = (surveyVisits ?? [])
+    .filter((visit) => {
+      const status = normalizeVisitStatus(visit.status);
+      return status !== "cancelada" && status !== "completada";
+    })
+    .map((visit) => visit.id);
+
+  if (visitIdsToCancel.length > 0) {
+    const { error: visitsCancelError } = await supabase
+      .from("technical_visits")
+      .update({ status: "cancelada" })
+      .in("id", visitIdsToCancel);
+
+    if (visitsCancelError) {
+      throw buildError(visitsCancelError, "El levantamiento fue cancelado, pero no se pudieron cancelar sus visitas tecnicas.");
+    }
+  }
+
+  await logAuditEvent({
+    action: "cancel",
+    entity: "site_surveys",
+    entityId: surveyId,
+    companyId: safeNullableText(surveyData.company_id),
+    newValues: {
+      previousStatus: normalizedSurveyStatus,
+      status: "cancelado",
+      canceledVisits: visitIdsToCancel.length,
+    },
+  });
 }
 
 export async function getSurveyExecutionData(
@@ -440,7 +799,7 @@ export async function getSurveyExecutionData(
     customerId: safeNullableText(surveyData.customer_id),
     siteId: safeNullableText(surveyData.site_id),
     companyId: safeNullableText(surveyData.company_id),
-    status: safeNullableText(surveyData.status),
+    status: normalizeSurveyStatus(safeNullableText(surveyData.status)),
     completedAt: safeNullableText(surveyData.completed_at),
     requirements: safeNullableText(surveyData.requirements),
     observations: safeNullableText(surveyData.observations),
@@ -466,8 +825,10 @@ export async function getSurveyVisitBySurveyId(
 ): Promise<TechnicalVisitExecutionSummary | null> {
   const { data, error } = await supabase
     .from("technical_visits")
-    .select("id, site_survey_id, scheduled_start, scheduled_end, technician_id, status, ticket_id")
+    .select("id, site_survey_id, scheduled_start, scheduled_end, technician_id, status, ticket_id, installation_project_id")
     .eq("site_survey_id", surveyId)
+    .is("ticket_id", null)
+    .is("installation_project_id", null)
     .order("scheduled_start", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -479,12 +840,12 @@ export async function getSurveyVisitBySurveyId(
   if (!data) return null;
 
   return {
-    id: safeNumber(data.id),
+    id: safeText(data.id),
     siteSurveyId: safeText(data.site_survey_id),
     scheduledStart: safeText(data.scheduled_start),
     scheduledEnd: safeNullableText(data.scheduled_end),
     technicianId: safeNullableText(data.technician_id),
-    status: safeNullableText(data.status),
+    status: normalizeVisitStatus(safeNullableText(data.status)) ?? "programada",
     ticketId: data.ticket_id ?? null,
   };
 }
@@ -519,9 +880,7 @@ export async function listChecklistTemplatesForSurvey(
   companyId: string
 ): Promise<ChecklistTemplateOption[]> {
   const templates = await getChecklistTemplatesByCompany(companyId);
-  if (templates.length === 0) {
-    return [MOCK_CHECKLIST_TEMPLATE];
-  }
+  if (templates.length === 0) return [];
 
   const templateIds = templates.map((template) => template.id);
   const items = await getChecklistItemsByTemplateIds(templateIds);
@@ -545,7 +904,7 @@ export async function listChecklistTemplatesForSurvey(
     items: (grouped.get(template.id) ?? []).sort((a, b) => a.itemOrder - b.itemOrder),
   }));
 
-  return [MOCK_CHECKLIST_TEMPLATE, ...options];
+  return options;
 }
 
 export async function applyChecklistTemplateToSurvey(
@@ -609,6 +968,16 @@ export async function applyChecklistTemplatesToSurvey(
     throw buildError(error, "No se pudo aplicar la plantilla de checklist.");
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "site_survey_checklist_items",
+    entityId: surveyId,
+    newValues: {
+      inserted: payload.length,
+      templates: templates.map((template) => template.id),
+    },
+  });
+
   return (data ?? []).map((row, index) => ({
     id: safeText(row.id, `item-${index}`),
     siteSurveyId: safeText(row.site_survey_id),
@@ -649,6 +1018,17 @@ export async function createCustomChecklistItem(
     throw buildError(error, "No se pudo crear el item personalizado.");
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "site_survey_checklist_items",
+    entityId: data.id,
+    newValues: {
+      surveyId,
+      text: data.text,
+      itemOrder: data.item_order,
+    },
+  });
+
   return {
     id: safeText(data.id),
     siteSurveyId: safeText(data.site_survey_id),
@@ -687,6 +1067,13 @@ export async function updateSurveyChecklistItem(
   if (error) {
     throw buildError(error, "No se pudo actualizar el item del checklist.");
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "site_survey_checklist_items",
+    entityId: itemId,
+    newValues: payload,
+  });
 }
 
 export async function deleteSurveyChecklistItem(itemId: string): Promise<void> {
@@ -698,6 +1085,12 @@ export async function deleteSurveyChecklistItem(itemId: string): Promise<void> {
   if (error) {
     throw buildError(error, "No se pudo eliminar el item del checklist.");
   }
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "site_survey_checklist_items",
+    entityId: itemId,
+  });
 }
 
 export async function updateSurveyForm(
@@ -710,17 +1103,36 @@ export async function updateSurveyForm(
     status?: string | null;
   }
 ): Promise<void> {
-  const { error } = await supabase.from("site_surveys").update({
-    requirements: patch.requirements,
-    observations: patch.observations,
-    recomendations: patch.recomendations,
-    risks: patch.risks,
-    status: patch.status,
-  }).eq("id", surveyId);
+  const statusPayload =
+    patch.status === undefined ? undefined : normalizeSurveyStatus(patch.status);
+
+  const { error } = await supabase
+    .from("site_surveys")
+    .update({
+      requirements: patch.requirements,
+      observations: patch.observations,
+      recomendations: patch.recomendations,
+      risks: patch.risks,
+      status: statusPayload,
+    })
+    .eq("id", surveyId);
 
   if (error) {
     throw buildError(error, "No se pudo guardar el formulario del levantamiento.");
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "site_surveys",
+    entityId: surveyId,
+    newValues: {
+      requirements: patch.requirements,
+      observations: patch.observations,
+      recomendations: patch.recomendations,
+      risks: patch.risks,
+      status: statusPayload,
+    },
+  });
 }
 
 export async function saveSurveyLayout(
@@ -735,16 +1147,94 @@ export async function saveSurveyLayout(
   if (error) {
     throw buildError(error, "No se pudo guardar el plano del levantamiento.");
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "site_surveys",
+    entityId: surveyId,
+    newValues: {
+      layoutDevices: layout.devices.length,
+      layoutWalls: layout.walls.length,
+      layoutZones: layout.zones.length,
+    },
+  });
 }
 
 export async function finalizeSurveyExecution(
   surveyId: string,
-  visitId: number | null
+  visitId: string | null
 ): Promise<void> {
+  const { data: surveyData, error: surveyLoadError } = await supabase
+    .from("site_surveys")
+    .select("id, status, completed_at")
+    .eq("id", surveyId)
+    .maybeSingle<SiteSurveyStatusGuardRow>();
+
+  if (surveyLoadError) {
+    throw buildError(surveyLoadError, "No se pudo validar el levantamiento.");
+  }
+  if (!surveyData) {
+    throw new Error("No se encontro el levantamiento tecnico.");
+  }
+  if (isSurveyCompletedStatus(surveyData.status) || Boolean(surveyData.completed_at)) {
+    throw new Error("El levantamiento ya fue finalizado.");
+  }
+  if (normalizeSurveyStatus(surveyData.status) === "cancelado") {
+    throw new Error("No se puede finalizar un levantamiento cancelado.");
+  }
+
+  let visitData: TechnicalVisitStatusGuardRow | null = null;
+  if (visitId) {
+    const { data: selectedVisit, error: selectedVisitError } = await supabase
+      .from("technical_visits")
+      .select("id, site_survey_id, status, ticket_id, installation_project_id")
+      .eq("id", visitId)
+      .maybeSingle<TechnicalVisitStatusGuardRow>();
+
+    if (selectedVisitError) {
+      throw buildError(selectedVisitError, "No se pudo validar la visita tecnica.");
+    }
+    visitData = selectedVisit;
+  } else {
+    const { data: fallbackVisit, error: fallbackVisitError } = await supabase
+      .from("technical_visits")
+      .select("id, site_survey_id, status, ticket_id, installation_project_id")
+      .eq("site_survey_id", surveyId)
+      .is("ticket_id", null)
+      .is("installation_project_id", null)
+      .order("scheduled_start", { ascending: false })
+      .limit(1)
+      .maybeSingle<TechnicalVisitStatusGuardRow>();
+
+    if (fallbackVisitError) {
+      throw buildError(fallbackVisitError, "No se pudo validar la visita tecnica.");
+    }
+    visitData = fallbackVisit;
+  }
+
+  if (!visitData) {
+    throw new Error("No se encontro la visita tecnica vinculada al levantamiento.");
+  }
+
+  if (safeNullableText(visitData.site_survey_id) !== surveyId) {
+    throw new Error("La visita tecnica no pertenece al levantamiento.");
+  }
+  if (visitData.ticket_id !== null || safeNullableText(visitData.installation_project_id)) {
+    throw new Error("Solo se puede finalizar la visita tecnica del levantamiento.");
+  }
+
+  const normalizedVisitStatus = normalizeVisitStatus(visitData.status);
+  if (normalizedVisitStatus === "cancelada") {
+    throw new Error("No se puede finalizar un levantamiento con una visita cancelada.");
+  }
+  if (normalizedVisitStatus !== "en_progreso" && normalizedVisitStatus !== "completada") {
+    throw new Error("Primero debes iniciar la visita tecnica para finalizar el levantamiento.");
+  }
+
   const { error: surveyError } = await supabase
     .from("site_surveys")
     .update({
-      status: "Completado",
+      status: "completado",
       completed_at: new Date().toISOString(),
     })
     .eq("id", surveyId);
@@ -753,26 +1243,26 @@ export async function finalizeSurveyExecution(
     throw buildError(surveyError, "No se pudo finalizar el levantamiento.");
   }
 
-  if (visitId) {
-    const { error: visitError } = await supabase
-      .from("technical_visits")
-      .update({ status: "Completada" })
-      .eq("id", visitId);
-
-    if (visitError) {
-      throw buildError(visitError, "No se pudo actualizar el estado de la visita tecnica.");
-    }
-    return;
-  }
-
-  const { error: visitsError } = await supabase
+  const { error: visitError } = await supabase
     .from("technical_visits")
-    .update({ status: "Completada" })
-    .eq("site_survey_id", surveyId);
+    .update({ status: "completada" })
+    .eq("id", visitData.id);
 
-  if (visitsError) {
-    throw buildError(visitsError, "No se pudo actualizar el estado de la visita tecnica.");
+  if (visitError) {
+    throw buildError(visitError, "No se pudo actualizar el estado de la visita tecnica.");
   }
+
+  await logAuditEvent({
+    action: "complete",
+    entity: "site_surveys",
+    entityId: surveyId,
+    newValues: {
+      status: "completado",
+      visitId: visitData.id,
+      visitStatus: "completada",
+      previousVisitStatus: normalizedVisitStatus,
+    },
+  });
 }
 
 export async function listSurveyZonesBySite(
@@ -911,6 +1401,18 @@ export async function uploadSurveyMediaFiles(input: {
       throw buildError(insertError, "No se pudo registrar el archivo multimedia.");
     }
   }
+
+  await logAuditEvent({
+    action: "upload",
+    entity: "survey_media",
+    entityId: input.surveyId,
+    companyId: input.companyId,
+    newValues: {
+      files: input.files.length,
+      category: input.category,
+      zoneId: input.zoneId,
+    },
+  });
 }
 
 export async function updateSurveyMediaMetadata(
@@ -937,6 +1439,13 @@ export async function updateSurveyMediaMetadata(
   if (error) {
     throw buildError(error, "No se pudo actualizar la metadata del archivo multimedia.");
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "survey_media",
+    entityId: mediaId,
+    newValues: payload,
+  });
 }
 
 export async function deleteSurveyMedia(mediaId: string, filePath: string): Promise<void> {
@@ -956,4 +1465,13 @@ export async function deleteSurveyMedia(mediaId: string, filePath: string): Prom
   if (storageError) {
     throw buildError(storageError, "No se pudo eliminar el archivo multimedia.");
   }
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "survey_media",
+    entityId: mediaId,
+    newValues: {
+      filePath,
+    },
+  });
 }

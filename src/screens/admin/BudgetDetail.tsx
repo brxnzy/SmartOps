@@ -4,6 +4,7 @@ import Button from "../../components/Button";
 import Field from "../../components/Field";
 import Modal from "../../components/Modal";
 import FloorPlanEditor from "../../components/siteSurvey/FloorPlanEditor";
+import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import {
@@ -12,7 +13,11 @@ import {
   saveBudgetDraft,
   updateBudgetStatus,
 } from "../../services/budget.service";
-import { createInstallationProject } from "../../services/installation.service";
+import {
+  createInstallationProject,
+  getInstallationProjectByBudget,
+  markInstallationProjectCompleted,
+} from "../../services/installation.service";
 import { generateFormalQuote, getBudgetQuote, getQuotePdfUrl } from "../../services/quote.service";
 import { getSurveyExecutionData } from "../../services/siteSurveyExecution.service";
 import { listTechnicians } from "../../services/tickets.service";
@@ -24,6 +29,7 @@ import type {
 } from "../../types/siteSurveyExecution.types";
 import type { BudgetDetail as BudgetDetailType } from "../../types/budget.types";
 import type { BudgetQuote } from "../../types/quote.types";
+import type { InstallationProject } from "../../services/installation.service";
 
 type BudgetRow = {
   key: string;
@@ -76,9 +82,13 @@ function cloneLayout(layout: SurveyLayout): SurveyLayout {
 export default function BudgetDetail() {
   const navigate = useNavigate();
   const { budgetId } = useParams<{ budgetId: string }>();
-  const { companyProfile, authUser } = useAuth();
+  const { companyProfile, authUser, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const userId = authUser?.id ?? null;
+  const canUpdateBudget = canAccess(PERMISSIONS.budgetsUpdate);
+  const canSendBudget = canAccess(PERMISSIONS.budgetsSend);
+  const canCreateWorkOrder = canAccess(PERMISSIONS.workOrdersCreate);
+  const canUpdateInstallation = canAccess(PERMISSIONS.installationProjectsUpdate);
 
   const [loadingSurvey, setLoadingSurvey] = useState(false);
   const [surveyError, setSurveyError] = useState<string | null>(null);
@@ -110,6 +120,9 @@ export default function BudgetDetail() {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   });
   const [scheduledEnd, setScheduledEnd] = useState("");
+  const [installationProject, setInstallationProject] = useState<InstallationProject | null>(null);
+  const [installationSubmitting, setInstallationSubmitting] = useState(false);
+  const [installationCompleting, setInstallationCompleting] = useState(false);
 
   const [quote, setQuote] = useState<BudgetQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -133,9 +146,13 @@ export default function BudgetDetail() {
 
     try {
       const budgetDetail = await getBudgetDetail(budgetId, companyId);
-      const surveyData = await getSurveyExecutionData(budgetDetail.surveyId, companyId);
+      const [surveyData, projectData] = await Promise.all([
+        getSurveyExecutionData(budgetDetail.surveyId, companyId),
+        getInstallationProjectByBudget(budgetDetail.id, companyId),
+      ]);
 
       setBudget(budgetDetail);
+      setInstallationProject(projectData);
       setZones(surveyData.zones);
       setDevicesCatalog(surveyData.catalogDevices);
       setNotes({
@@ -246,7 +263,7 @@ export default function BudgetDetail() {
   }, [rows]);
 
   useEffect(() => {
-    if (!budget || !budgetId) return;
+    if (!budget || !budgetId || !canUpdateBudget) return;
     if (!hydratedRef.current) return;
 
     const signature = JSON.stringify(layout);
@@ -283,7 +300,7 @@ export default function BudgetDetail() {
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [budget, budgetId, itemsForSave, layout, subtotal, taxAmount, taxRate, total]);
+  }, [budget, budgetId, canUpdateBudget, itemsForSave, layout, subtotal, taxAmount, taxRate, total]);
 
   useEffect(() => {
     if (!budget || budget.status !== "enviada" || !budget.expiresAt) return;
@@ -297,7 +314,22 @@ export default function BudgetDetail() {
   }, [budget]);
 
   const openInstallationModal = async () => {
+    if (!canCreateWorkOrder) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para crear ordenes de trabajo.",
+      });
+      return;
+    }
     if (!budget) return;
+    if (installationProject) {
+      notifications.warning({
+        title: "OT ya creada",
+        description: "Este presupuesto ya tiene un proyecto de instalacion asociado.",
+      });
+      return;
+    }
+
     setInstallModalOpen(true);
     if (!companyId) return;
 
@@ -320,6 +352,20 @@ export default function BudgetDetail() {
 
   const handleCreateInstallation = async () => {
     if (!companyId || !budget) return;
+    if (!canCreateWorkOrder) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para crear ordenes de trabajo.",
+      });
+      return;
+    }
+    if (installationProject) {
+      notifications.warning({
+        title: "OT ya creada",
+        description: "Ya existe un proyecto para este presupuesto.",
+      });
+      return;
+    }
     if (!scheduledStart) {
       notifications.warning({
         title: "Fecha requerida",
@@ -327,20 +373,32 @@ export default function BudgetDetail() {
       });
       return;
     }
+    if (!technicianId) {
+      notifications.warning({
+        title: "Tecnico requerido",
+        description: "Selecciona un tecnico responsable.",
+      });
+      return;
+    }
 
+    setInstallationSubmitting(true);
     try {
-      await createInstallationProject({
+      const result = await createInstallationProject({
         companyId,
         budgetId: budget.id,
-        surveyId: budget.surveyId,
-        technicianId: technicianId || null,
+        technicianId,
         scheduledStart: new Date(scheduledStart).toISOString(),
         scheduledEnd: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
-        createdBy: userId,
       });
+
+      const refreshed = await getInstallationProjectByBudget(budget.id, companyId);
+      setInstallationProject(refreshed);
+
       notifications.success({
-        title: "Orden creada",
-        description: "Se creo el proyecto y la visita tecnica en agenda.",
+        title: result.created ? "Orden creada" : "Orden ya existente",
+        description: result.created
+          ? "Se creo el proyecto y la visita tecnica en agenda."
+          : "El presupuesto ya tenia una OT creada. Se reutilizo la existente.",
       });
       setInstallModalOpen(false);
     } catch (err) {
@@ -348,11 +406,58 @@ export default function BudgetDetail() {
         title: "Error creando orden",
         description: err instanceof Error ? err.message : "No se pudo crear la orden de trabajo.",
       });
+    } finally {
+      setInstallationSubmitting(false);
+    }
+  };
+
+  const handleCompleteInstallation = async () => {
+    if (!companyId || !installationProject) return;
+    if (!canUpdateInstallation) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para actualizar el estado del proyecto.",
+      });
+      return;
+    }
+    setInstallationCompleting(true);
+    try {
+      await markInstallationProjectCompleted({
+        projectId: installationProject.id,
+        companyId,
+      });
+      const refreshed = budget ? await getInstallationProjectByBudget(budget.id, companyId) : null;
+      setInstallationProject(refreshed);
+      notifications.success({
+        title: "Proyecto actualizado",
+        description: "El proyecto fue marcado como terminado.",
+      });
+    } catch (err) {
+      notifications.error({
+        title: "Error actualizando proyecto",
+        description: err instanceof Error ? err.message : "No se pudo actualizar el proyecto.",
+      });
+    } finally {
+      setInstallationCompleting(false);
     }
   };
 
   const handleGenerateQuote = async () => {
     if (!companyId || !budget || !userId) return;
+    if (!canSendBudget) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para generar y enviar cotizaciones.",
+      });
+      return;
+    }
+    if (installationProject) {
+      notifications.warning({
+        title: "Cotizacion bloqueada",
+        description: "La OT ya fue creada. No se puede volver a generar o enviar la cotizacion.",
+      });
+      return;
+    }
     setQuoteSubmitting(true);
     try {
       const validUntilIso = quoteValidUntil ? new Date(quoteValidUntil).toISOString() : null;
@@ -365,6 +470,16 @@ export default function BudgetDetail() {
       });
       setQuote(result.quote);
       setQuotePdfUrl(result.pdfUrl);
+      setBudget((current) =>
+        current
+          ? {
+              ...current,
+              status: "enviada",
+              expiresAt: validUntilIso,
+              sentAt: new Date().toISOString(),
+            }
+          : current
+      );
       notifications.success({
         title: "Cotizacion generada",
         description: result.emailSent
@@ -460,7 +575,7 @@ export default function BudgetDetail() {
                   layout={layout}
                   zonesCatalog={zones}
                   devicesCatalog={devicesCatalog}
-                  onLayoutChange={setLayout}
+                  onLayoutChange={canUpdateBudget ? setLayout : () => undefined}
                   onManualSave={() => undefined}
                   manualSaving={false}
                   autosaveLabel=""
@@ -498,20 +613,42 @@ export default function BudgetDetail() {
                 <div className="mt-3 space-y-3 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
                     <span>Estado</span>
-                    <span className="font-semibold text-slate-800">{budget?.status ?? "borrador"}</span>
+                    <span className="font-semibold text-slate-800">
+                      {installationProject?.status ?? budget?.status ?? "borrador"}
+                    </span>
                   </div>
+                  {installationProject ? (
+                    <p className="text-xs text-slate-500">
+                      Proyecto #{installationProject.id.slice(0, 8)} · Visita{" "}
+                      {installationProject.scheduledStart
+                        ? new Date(installationProject.scheduledStart).toLocaleString("es-DO")
+                        : "sin fecha"}
+                    </p>
+                  ) : null}
 
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       onClick={openInstallationModal}
                       className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
-                      disabled={budget?.status !== "aprobada"}
+                      disabled={!canCreateWorkOrder || budget?.status !== "aprobada" || Boolean(installationProject) || installationSubmitting}
                     >
-                      Orden de trabajo
+                      {installationSubmitting ? "Creando..." : installationProject ? "OT creada" : "Orden de trabajo"}
                     </Button>
                     {budget?.status !== "aprobada" ? (
                       <span className="text-xs text-slate-500">Disponible cuando la cotizacion este aprobada.</span>
+                    ) : installationProject ? (
+                      <span className="text-xs text-slate-500">La OT ya fue creada para este presupuesto.</span>
+                    ) : null}
+                    {installationProject && installationProject.status !== "terminado" ? (
+                      <Button
+                        type="button"
+                        onClick={handleCompleteInstallation}
+                        disabled={!canUpdateInstallation || installationCompleting}
+                        className="border-slate-800 bg-slate-800 text-white hover:bg-slate-900"
+                      >
+                        {installationCompleting ? "Actualizando..." : "Marcar terminado"}
+                      </Button>
                     ) : null}
                   </div>
                 </div>
@@ -522,6 +659,11 @@ export default function BudgetDetail() {
                 <p className="mt-1 text-xs text-slate-500">
                   Genera el PDF con logo, condiciones y validez. Se envia por email al cliente.
                 </p>
+                {installationProject ? (
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Cotizacion bloqueada: ya existe una OT creada para este presupuesto.
+                  </p>
+                ) : null}
 
                 {quoteLoading ? (
                   <p className="mt-3 text-xs text-slate-500">Cargando cotizacion formal...</p>
@@ -543,6 +685,7 @@ export default function BudgetDetail() {
                         type="date"
                         value={quoteValidUntil}
                         onChange={(event) => setQuoteValidUntil(event.target.value)}
+                        disabled={!canSendBudget}
                         className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
                       />
                     </Field>
@@ -551,6 +694,7 @@ export default function BudgetDetail() {
                       <textarea
                         value={quoteTerms}
                         onChange={(event) => setQuoteTerms(event.target.value)}
+                        disabled={!canSendBudget}
                         className="min-h-[90px] w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
                       />
                     </Field>
@@ -559,7 +703,7 @@ export default function BudgetDetail() {
                       <Button
                         type="button"
                         onClick={handleGenerateQuote}
-                        disabled={quoteSubmitting}
+                        disabled={!canSendBudget || quoteSubmitting || Boolean(installationProject)}
                         className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                       >
                         {quoteSubmitting ? "Generando..." : "Generar y enviar"}
@@ -639,6 +783,7 @@ export default function BudgetDetail() {
                         if (Number.isNaN(next)) return;
                         setTaxRate(Math.max(0, next) / 100);
                       }}
+                      disabled={!canUpdateBudget}
                       className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
                     />
                     <span className="text-xs text-slate-500">%</span>
@@ -667,7 +812,10 @@ export default function BudgetDetail() {
 
       <Modal
         open={installModalOpen}
-        onClose={() => setInstallModalOpen(false)}
+        onClose={() => {
+          if (installationSubmitting) return;
+          setInstallModalOpen(false);
+        }}
         title="Orden de trabajo"
         subtitle="Programa la instalacion y crea la visita tecnica."
         footer={
@@ -675,6 +823,7 @@ export default function BudgetDetail() {
             <Button
               type="button"
               onClick={() => setInstallModalOpen(false)}
+              disabled={installationSubmitting}
               className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
             >
               Cancelar
@@ -682,9 +831,10 @@ export default function BudgetDetail() {
             <Button
               type="button"
               onClick={handleCreateInstallation}
+              disabled={!canCreateWorkOrder || installationSubmitting}
               className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              Crear orden
+              {installationSubmitting ? "Creando..." : "Crear orden"}
             </Button>
           </>
         }

@@ -41,6 +41,7 @@ interface FloorPlanEditorProps {
   autosaveLabel: string;
   showSave?: boolean;
   restrictToDevices?: boolean;
+  locked?: boolean;
 }
 
 interface LayoutSnapshot {
@@ -119,6 +120,7 @@ export default function FloorPlanEditor({
   autosaveLabel,
   showSave = true,
   restrictToDevices = false,
+  locked = false,
 }: FloorPlanEditorProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const zoneTransformerRef = useRef<Konva.Transformer | null>(null);
@@ -214,6 +216,7 @@ export default function FloorPlanEditor({
   );
 
   const undo = useCallback(() => {
+    if (locked) return;
     if (historyIndexRef.current <= 0) return;
     historyIndexRef.current -= 1;
     const snapshot = historyRef.current[historyIndexRef.current];
@@ -221,9 +224,10 @@ export default function FloorPlanEditor({
     setLayout(snapshot.walls, snapshot.zones, snapshot.devices, false);
     setSelectedId(null);
     setSelectedType(null);
-  }, [setLayout]);
+  }, [locked, setLayout]);
 
   const redo = useCallback(() => {
+    if (locked) return;
     if (historyIndexRef.current >= historyRef.current.length - 1) return;
     historyIndexRef.current += 1;
     const snapshot = historyRef.current[historyIndexRef.current];
@@ -231,10 +235,19 @@ export default function FloorPlanEditor({
     setLayout(snapshot.walls, snapshot.zones, snapshot.devices, false);
     setSelectedId(null);
     setSelectedType(null);
-  }, [setLayout]);
+  }, [locked, setLayout]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (locked) {
+        if (event.key === "Escape") {
+          setDrawingWall(null);
+          setDrawingZone(null);
+          setMode("select");
+        }
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) {
@@ -285,7 +298,7 @@ export default function FloorPlanEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [devices, redo, selectedId, selectedType, setLayout, undo, walls, zones]);
+  }, [devices, locked, redo, selectedId, selectedType, setLayout, undo, walls, zones]);
 
   const commitWallDrag = useCallback(
     (wallId: string, dx: number, dy: number) => {
@@ -462,6 +475,7 @@ export default function FloorPlanEditor({
   );
 
   const handleStageMouseMove = () => {
+    if (locked) return;
     const pointer = getPointer(stageRef.current);
 
     if (drawingWall && pointer) {
@@ -474,6 +488,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (locked) return;
     const stage = stageRef.current;
     if (!stage) return;
 
@@ -521,6 +536,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (locked) return;
     if (mode !== "draw-zone") return;
     if (restrictToDevices) return;
     const stage = stageRef.current;
@@ -533,6 +549,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageMouseUp = () => {
+    if (locked) return;
     if (!drawingZone) return;
     if (restrictToDevices) {
       setDrawingZone(null);
@@ -576,6 +593,7 @@ export default function FloorPlanEditor({
   };
 
   const handleCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (locked) return;
     event.preventDefault();
 
     const stage = stageRef.current;
@@ -655,6 +673,7 @@ export default function FloorPlanEditor({
       <Toolbar
         mode={mode}
         onModeChange={(next) => {
+          if (locked) return;
           if (restrictToDevices && (next === "draw-wall" || next === "draw-zone")) return;
           setMode(next);
         }}
@@ -673,7 +692,7 @@ export default function FloorPlanEditor({
         onManualSave={onManualSave}
         manualSaving={manualSaving}
         autosaveLabel={autosaveLabel}
-        showSave={showSave}
+        showSave={showSave && !locked}
         showWallTools={!restrictToDevices}
         showZoneTools={!restrictToDevices}
         showZoneSelector={!restrictToDevices}
@@ -693,13 +712,13 @@ export default function FloorPlanEditor({
                   <button
                     key={zone.id}
                     type="button"
-                    draggable={!restrictToDevices}
+                    draggable={!restrictToDevices && !locked}
                     onDragStart={() => {
-                      if (restrictToDevices) return;
+                      if (restrictToDevices || locked) return;
                       setDraggingZoneId(zone.id);
                     }}
                     onDragEnd={() => {
-                      if (restrictToDevices) return;
+                      if (restrictToDevices || locked) return;
                       setDraggingZoneId(null);
                     }}
                     onClick={() => setSelectedZoneId(zone.id)}
@@ -728,8 +747,11 @@ export default function FloorPlanEditor({
                   <button
                     key={device.id}
                     type="button"
-                    draggable
-                    onDragStart={() => setDraggingDeviceId(device.id)}
+                    draggable={!locked}
+                    onDragStart={() => {
+                      if (locked) return;
+                      setDraggingDeviceId(device.id);
+                    }}
                     onDragEnd={() => setDraggingDeviceId(null)}
                     onClick={() => setSelectedDeviceId(device.id)}
                     className={`w-full rounded-lg border bg-white px-2 py-2 text-left text-xs transition ${
@@ -757,7 +779,10 @@ export default function FloorPlanEditor({
 
         <div
           className="overflow-auto bg-white"
-          onDragOver={(event) => event.preventDefault()}
+          onDragOver={(event) => {
+            if (locked) return;
+            event.preventDefault();
+          }}
           onDrop={handleCanvasDrop}
         >
           <div className="min-w-1248px p-3">
@@ -787,13 +812,13 @@ export default function FloorPlanEditor({
                       }}
                       x={zone.x}
                       y={zone.y}
-                      draggable={mode === "select" && !restrictToDevices}
+                      draggable={mode === "select" && !restrictToDevices && !locked}
                       onDragEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         commitZoneDrag(zone.id, event.target.x(), event.target.y());
                       }}
                       onTransformEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         const node = event.target as Konva.Group;
                         const nextZone = {
                           x: node.x(),
@@ -883,9 +908,9 @@ export default function FloorPlanEditor({
                       strokeWidth={isSelected ? 4 : 3}
                       lineCap="round"
                       lineJoin="round"
-                      draggable={mode === "select" && !restrictToDevices}
+                      draggable={mode === "select" && !restrictToDevices && !locked}
                       onDragEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         // FIX: igual que dispositivos, Konva acumula el desplazamiento
                         // relativo en x()/y(). Pasamos el delta y reseteamos el nodo.
                         const dx = snap(event.target.x());
@@ -916,8 +941,9 @@ export default function FloorPlanEditor({
                       key={device.id}
                       x={device.x}
                       y={device.y}
-                      draggable={mode === "select"}
+                      draggable={mode === "select" && !locked}
                       onDragEnd={(event) => {
+                        if (locked) return;
                         // FIX: capturamos el delta antes de resetear,
                         // commitDeviceDrag suma ese delta a la posición original del estado.
                         const deltaX = event.target.x() - device.x;

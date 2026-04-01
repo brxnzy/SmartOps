@@ -1,10 +1,27 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
+
+export interface InstallationProject {
+  id: string;
+  companyId: string;
+  budgetId: string;
+  siteId: string;
+  responsibleUserId: string | null;
+  status: "pendiente" | "en_progreso" | "terminado" | "cancelado";
+  createdAt: string | null;
+  updatedAt: string | null;
+  technicalVisitId: string | null;
+  technicalVisitStatus: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  technicianId: string | null;
+  technicianName: string | null;
+}
 
 export interface InstallationHistoryEntry {
   id: string;
   budgetId: string;
-  surveyId: string;
-  technicalVisitId: number | null;
+  technicalVisitId: string | null;
   status: string | null;
   createdAt: string | null;
   scheduledStart: string | null;
@@ -25,66 +42,153 @@ function safeNullableText(value: unknown): string | null {
   return safeText(value, "");
 }
 
+function pickSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+function mapProject(row: Record<string, unknown>): InstallationProject {
+  const visitsRaw = row.technical_visits as unknown;
+  const visit = pickSingle(visitsRaw as Record<string, unknown> | Record<string, unknown>[] | null | undefined);
+  const technician = pickSingle(
+    (visit as { users?: Record<string, unknown> | Record<string, unknown>[] | null | undefined } | null | undefined)
+      ?.users as Record<string, unknown> | Record<string, unknown>[] | null | undefined
+  );
+
+  return {
+    id: safeText(row.id),
+    companyId: safeText(row.company_id),
+    budgetId: safeText(row.budget_id),
+    siteId: safeText(row.site_id),
+    responsibleUserId: safeNullableText(row.responsible_user_id),
+    status: (safeText(row.status, "pendiente") as InstallationProject["status"]) ?? "pendiente",
+    createdAt: safeNullableText(row.created_at),
+    updatedAt: safeNullableText(row.updated_at),
+    technicalVisitId: safeNullableText((visit as any)?.id),
+    technicalVisitStatus: safeNullableText((visit as any)?.status),
+    scheduledStart: safeNullableText((visit as any)?.scheduled_start),
+    scheduledEnd: safeNullableText((visit as any)?.scheduled_end),
+    technicianId: safeNullableText((visit as any)?.technician_id),
+    technicianName: safeNullableText((technician as any)?.name),
+  };
+}
+
+export async function getInstallationProjectByBudget(
+  budgetId: string,
+  companyId: string
+): Promise<InstallationProject | null> {
+  const { data, error } = await supabase
+    .from("installation_projects")
+    .select(
+      `
+      id,
+      company_id,
+      budget_id,
+      site_id,
+      responsible_user_id,
+      status,
+      created_at,
+      updated_at,
+      technical_visits (
+        id,
+        scheduled_start,
+        scheduled_end,
+        technician_id,
+        status,
+        users:technician_id ( id, name )
+      )
+    `
+    )
+    .eq("company_id", companyId)
+    .eq("budget_id", budgetId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "No se pudo cargar el proyecto de instalacion.");
+  }
+
+  if (!data) return null;
+  return mapProject(data as Record<string, unknown>);
+}
+
 export async function createInstallationProject(input: {
   companyId: string;
   budgetId: string;
-  surveyId: string;
-  technicianId: string | null;
+  technicianId: string;
   scheduledStart: string;
   scheduledEnd: string | null;
-  createdBy: string | null;
-}): Promise<{ projectId: string; technicalVisitId: number | null }> {
-  const { data: visitRow, error: visitError } = await supabase
-    .from("technical_visits")
-    .insert({
-      company_id: input.companyId,
-      site_survey_id: input.surveyId,
-      technician_id: input.technicianId,
-      scheduled_start: input.scheduledStart,
-      scheduled_end: input.scheduledEnd,
+}): Promise<{ projectId: string; technicalVisitId: string | null; created: boolean }> {
+  const { data, error } = await supabase
+    .rpc("create_installation_project", {
+      p_company_id: input.companyId,
+      p_budget_id: input.budgetId,
+      p_technician_id: input.technicianId,
+      p_scheduled_start: input.scheduledStart,
+      p_scheduled_end: input.scheduledEnd,
     })
-    .select("id")
-    .single<{ id: number }>();
+    .single<{ project_id: string; technical_visit_id: string | null; created: boolean }>();
 
-  if (visitError) {
-    throw new Error(visitError.message || "No se pudo programar la visita tecnica.");
+  if (error || !data) {
+    throw new Error(error?.message || "No se pudo crear el proyecto de instalacion.");
   }
 
-  const { data: projectRow, error: projectError } = await supabase
-    .from("proyect_instalation")
-    .insert({
-      company_id: input.companyId,
-      budget_id: input.budgetId,
-      survey_id: input.surveyId,
-      technical_visit_id: visitRow?.id ?? null,
-      status: "pendiente",
-      created_by: input.createdBy,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (projectError || !projectRow) {
-    throw new Error(projectError?.message || "No se pudo crear el proyecto de instalacion.");
-  }
+  await logAuditEvent({
+    action: data.created ? "create" : "read",
+    entity: "installation_projects",
+    entityId: data.project_id,
+    companyId: input.companyId,
+    newValues: {
+      budgetId: input.budgetId,
+      technicalVisitId: data.technical_visit_id,
+      created: data.created,
+    },
+  });
 
   return {
-    projectId: projectRow.id,
-    technicalVisitId: visitRow?.id ?? null,
+    projectId: safeText(data.project_id),
+    technicalVisitId: safeNullableText(data.technical_visit_id),
+    created: Boolean(data.created),
   };
+}
+
+export async function markInstallationProjectCompleted(input: {
+  projectId: string;
+  companyId: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("installation_projects")
+    .update({
+      status: "terminado",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.projectId)
+    .eq("company_id", input.companyId)
+    .neq("status", "terminado");
+
+  if (error) {
+    throw new Error(error.message || "No se pudo marcar el proyecto como terminado.");
+  }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "installation_projects",
+    entityId: input.projectId,
+    companyId: input.companyId,
+    newValues: { status: "terminado" },
+  });
 }
 
 export async function listInstallationHistory(budgetId: string): Promise<InstallationHistoryEntry[]> {
   const { data, error } = await supabase
-    .from("proyect_instalation")
+    .from("installation_projects")
     .select(
       `
       id,
       budget_id,
-      survey_id,
-      technical_visit_id,
       status,
       created_at,
-      technical_visits:technical_visit_id (
+      technical_visits (
         id,
         scheduled_start,
         scheduled_end,
@@ -102,32 +206,26 @@ export async function listInstallationHistory(budgetId: string): Promise<Install
   }
 
   return (data ?? []).map((row) => {
-    const visit = row.technical_visits as
-      | {
-          id?: number;
-          scheduled_start?: string | null;
-          scheduled_end?: string | null;
-          technician_id?: string | null;
-          status?: string | null;
-          users?: { id?: string | null; name?: string | null } | null;
-        }
-      | null
-      | undefined;
-
-    const technician = visit?.users ?? null;
+    const visit = pickSingle(
+      (row as { technical_visits?: Record<string, unknown> | Record<string, unknown>[] | null | undefined })
+        .technical_visits
+    );
+    const technician = pickSingle(
+      (visit as { users?: Record<string, unknown> | Record<string, unknown>[] | null | undefined } | null | undefined)
+        ?.users
+    );
 
     return {
-      id: safeText(row.id),
-      budgetId: safeText(row.budget_id),
-      surveyId: safeText(row.survey_id),
-      technicalVisitId: typeof row.technical_visit_id === "number" ? row.technical_visit_id : visit?.id ?? null,
-      status: safeNullableText(row.status),
-      createdAt: safeNullableText(row.created_at),
-      scheduledStart: safeNullableText(visit?.scheduled_start),
-      scheduledEnd: safeNullableText(visit?.scheduled_end),
-      technicianId: safeNullableText(visit?.technician_id),
-      technicianName: safeNullableText(technician?.name),
-      visitStatus: safeNullableText(visit?.status),
+      id: safeText((row as any).id),
+      budgetId: safeText((row as any).budget_id),
+      technicalVisitId: safeNullableText((visit as any)?.id),
+      status: safeNullableText((row as any).status),
+      createdAt: safeNullableText((row as any).created_at),
+      scheduledStart: safeNullableText((visit as any)?.scheduled_start),
+      scheduledEnd: safeNullableText((visit as any)?.scheduled_end),
+      technicianId: safeNullableText((visit as any)?.technician_id),
+      technicianName: safeNullableText((technician as any)?.name),
+      visitStatus: safeNullableText((visit as any)?.status),
     };
   });
 }

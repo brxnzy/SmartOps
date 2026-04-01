@@ -12,6 +12,7 @@ import {
   saveSurveyLayout,
   updateSurveyForm,
 } from "../../services/siteSurveyExecution.service";
+import { isSurveyCompletedStatus, normalizeSurveyStatus } from "../../utils/siteSurveyWorkflow";
 import type {
   SurveyChecklistItem,
   SurveyLayout,
@@ -52,7 +53,9 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
   const [error, setError] = useState<string | null>(null);
 
   const [surveyName, setSurveyName] = useState<string>("Levantamiento tecnico");
-  const [visitId, setVisitId] = useState<number | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(null);
+  const [isFinalized, setIsFinalized] = useState(false);
+  const [surveyStatus, setSurveyStatus] = useState<string | null>(null);
 
   const [formValues, setFormValues] = useState<FormValues>(EMPTY_FORM);
   const [layout, setLayout] = useState<SurveyLayout>({ walls: [], zones: [], devices: [] });
@@ -80,6 +83,13 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
 
       setSurveyName(`${data.survey.customerName ?? "Cliente"} · ${data.survey.siteName ?? "Sitio"}`);
       setVisitId(data.visit?.id ?? null);
+      const normalizedStatus = normalizeSurveyStatus(data.survey.status);
+      setSurveyStatus(normalizedStatus);
+      setIsFinalized(
+        isSurveyCompletedStatus(normalizedStatus) ||
+        normalizedStatus === "cancelado" ||
+        Boolean(data.survey.completedAt)
+      );
       setZones(data.zones.map((zone) => ({ id: zone.id, name: zone.name })));
       setCatalogDevices(data.catalogDevices);
       setChecklistItems(data.checklistItems);
@@ -116,6 +126,11 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
   const normalizedForm = useMemo(() => normalizeForm(formValues), [formValues]);
   const formSignature = useMemo(() => JSON.stringify(normalizedForm), [normalizedForm]);
   const layoutSignature = useMemo(() => JSON.stringify(layout), [layout]);
+  const checkedChecklistCount = useMemo(
+    () => checklistItems.filter((item) => item.checked).length,
+    [checklistItems]
+  );
+  const isCancelled = surveyStatus === "cancelado";
 
   const persistFormNow = useCallback(async () => {
     if (formSignature === formSignatureRef.current) return;
@@ -196,10 +211,26 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
   };
 
   const finalize = async () => {
-    if (checklistItems.length === 0 && !normalizedForm.observations) {
+    if (isFinalized) {
+      notifications.warning({
+        title: "Levantamiento completado",
+        description: "Este levantamiento ya fue finalizado.",
+      });
+      return;
+    }
+
+    if (checkedChecklistCount === 0) {
       notifications.warning({
         title: "Validacion pendiente",
-        description: "Debes completar al menos un item de checklist o agregar observaciones.",
+        description: "Debes marcar al menos un item del checklist para finalizar.",
+      });
+      return;
+    }
+
+    if (!normalizedForm.observations || !normalizedForm.recomendations) {
+      notifications.warning({
+        title: "Notas requeridas",
+        description: "Debes completar Observaciones y Recomendaciones para finalizar.",
       });
       return;
     }
@@ -209,6 +240,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
       await persistFormNow();
       await persistLayoutNow();
       await finalizeSurveyExecution(surveyId, visitId);
+      setIsFinalized(true);
       setConfirmFinalizeOpen(false);
       notifications.success({
         title: "Levantamiento finalizado",
@@ -284,21 +316,34 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
           <Button
             type="button"
             onClick={() => void persistFormNow()}
+            disabled={isFinalized}
             className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
             icon={<Save size={14} />}
           >
             Guardar formulario
           </Button>
 
-          <Button
-            type="button"
-            onClick={() => setConfirmFinalizeOpen(true)}
-            disabled={finalizing}
-            className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
-            icon={<CheckCircle2 size={14} />}
-          >
-            {finalizing ? "Finalizando..." : "Finalizar levantamiento"}
-          </Button>
+          {!isFinalized ? (
+            <Button
+              type="button"
+              onClick={() => setConfirmFinalizeOpen(true)}
+              disabled={finalizing}
+              className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+              icon={<CheckCircle2 size={14} />}
+            >
+              {finalizing ? "Finalizando..." : "Finalizar levantamiento"}
+            </Button>
+          ) : (
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                isCancelled
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              {isCancelled ? "Levantamiento cancelado" : "Levantamiento finalizado"}
+            </span>
+          )}
         </div>
       </header>
 
@@ -318,6 +363,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
               <textarea
                 value={formValues.risks}
                 onChange={(event) => setFormValues((current) => ({ ...current, risks: event.target.value }))}
+                disabled={isFinalized}
                 className="mt-1 min-h-[90px] w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </label>
@@ -327,6 +373,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
               <textarea
                 value={formValues.observations}
                 onChange={(event) => setFormValues((current) => ({ ...current, observations: event.target.value }))}
+                disabled={isFinalized}
                 className="mt-1 min-h-[90px] w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </label>
@@ -336,6 +383,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
               <textarea
                 value={formValues.requirements}
                 onChange={(event) => setFormValues((current) => ({ ...current, requirements: event.target.value }))}
+                disabled={isFinalized}
                 className="mt-1 min-h-[90px] w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </label>
@@ -345,6 +393,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
               <textarea
                 value={formValues.recomendations}
                 onChange={(event) => setFormValues((current) => ({ ...current, recomendations: event.target.value }))}
+                disabled={isFinalized}
                 className="mt-1 min-h-[90px] w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </label>
@@ -380,6 +429,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
           }}
           manualSaving={savingLayoutManual}
           autosaveLabel={layoutStatus}
+          locked={isFinalized}
         />
       </div>
 
@@ -414,7 +464,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
         )}
       >
         <p className="text-sm text-slate-600">
-          Verifica que checklist, observaciones, multimedia y plano esten completos antes de continuar.
+          Para finalizar: marca al menos un item del checklist y completa Observaciones y Recomendaciones.
         </p>
       </Modal>
     </section>

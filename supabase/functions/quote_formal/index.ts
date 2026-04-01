@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
@@ -87,7 +86,21 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+type BudgetRoleRow = {
+  company_id: string | null;
+};
+
+type BudgetItemRow = {
+  quantity?: number | string | null;
+  unit_price?: number | string | null;
+  subtotal?: number | string | null;
+  devices?: { name?: string | null; model?: string | null } | { name?: string | null; model?: string | null }[] | null;
+  zones?: { name?: string | null } | { name?: string | null }[] | null;
+};
+
 Deno.serve(async (req: Request) => {
+  const requestId = crypto.randomUUID();
+
   try {
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
@@ -97,9 +110,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(405, { error: "Method not allowed" });
     }
 
-    const requestId = crypto.randomUUID();
     console.log(`[quote_formal] request_id=${requestId} method=${req.method}`);
-    console.log(`[quote_formal] origin=${req.headers.get("origin") ?? "n/a"} ua=${req.headers.get("user-agent") ?? "n/a"}`);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -113,11 +124,11 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearerToken = authHeader.replace("Bearer ", "").trim();
     const userToken = (req.headers.get("x-user-jwt") ?? "").trim() || bearerToken;
+
     if (!userToken) {
       console.log(`[quote_formal] request_id=${requestId} missing_user_jwt`);
       return jsonResponse(401, { error: "Missing user jwt" });
     }
-    console.log(`[quote_formal] request_id=${requestId} user_token_len=${userToken.length}`);
 
     const { companyId, budgetId, requestedByUserId, validUntil, terms } = (await req.json()) as {
       companyId: string;
@@ -140,26 +151,26 @@ Deno.serve(async (req: Request) => {
 
     const { data: authData, error: authError } = await authClient.auth.getUser(userToken);
     if (authError || !authData.user) {
-      console.log(`[quote_formal] request_id=${requestId} auth_error=${authError?.message ?? "unknown"}`);
+      console.log(`[quote_formal] request_id=${requestId} invalid_token`);
       return jsonResponse(401, { error: "Invalid access token" });
     }
 
     if (authData.user.id !== requestedByUserId) {
-      console.log(`[quote_formal] request_id=${requestId} user_mismatch token_user=${authData.user.id} requested=${requestedByUserId}`);
       return jsonResponse(403, { error: "Usuario autenticado no coincide con requestedByUserId" });
     }
 
     const { data: roles, error: rolesError } = await adminClient
       .from("user_roles")
-      .select("company_id, roles(name)")
+      .select("company_id")
       .eq("user_id", requestedByUserId)
-      .eq("company_id", companyId);
+      .eq("company_id", companyId)
+      .returns<BudgetRoleRow[]>();
 
     if (rolesError) {
       return jsonResponse(400, { error: rolesError.message });
     }
 
-    const isCompanyMember = (roles ?? []).some((row: any) => row.company_id === companyId);
+    const isCompanyMember = (roles ?? []).some((row) => row.company_id === companyId);
     if (!isCompanyMember) {
       return jsonResponse(403, { error: "No autorizado para esta compania" });
     }
@@ -181,6 +192,7 @@ Deno.serve(async (req: Request) => {
         id,
         company_id,
         survey_id,
+        status,
         subtotal,
         tax_rate,
         tax_amount,
@@ -212,6 +224,25 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: budgetError?.message ?? "Presupuesto no encontrado" });
     }
 
+    const budgetStatus = safeText((budget as Record<string, unknown>).status, "borrador").toLowerCase();
+    if (budgetStatus !== "borrador" && budgetStatus !== "enviada") {
+      return jsonResponse(409, { error: "La cotizacion no puede generarse desde el estado actual." });
+    }
+
+    const { data: existingProject, error: projectError } = await adminClient
+      .from("installation_projects")
+      .select("id")
+      .eq("budget_id", budgetId)
+      .maybeSingle();
+
+    if (projectError) {
+      return jsonResponse(500, { error: projectError.message });
+    }
+
+    if (existingProject?.id) {
+      return jsonResponse(409, { error: "La cotizacion esta bloqueada porque la OT ya fue creada." });
+    }
+
     const surveyRow = Array.isArray(budget.site_surveys) ? budget.site_surveys[0] : budget.site_surveys;
     const siteRow = Array.isArray(surveyRow?.customer_sites) ? surveyRow?.customer_sites[0] : surveyRow?.customer_sites;
     const customerRow = Array.isArray(surveyRow?.customers) ? surveyRow?.customers[0] : surveyRow?.customers;
@@ -224,7 +255,7 @@ Deno.serve(async (req: Request) => {
       customerEmail = authUser?.user?.email ?? null;
     }
 
-    const items = (budget.budget_items ?? []) as any[];
+    const items = (budget.budget_items ?? []) as BudgetItemRow[];
 
     const quoteNumber = buildQuoteNumber(budgetId);
     const createdAt = new Date();
@@ -272,10 +303,12 @@ Deno.serve(async (req: Request) => {
     const topY = height - 150;
     page.drawText(`Numero: ${quoteNumber}`, { x: 40, y: topY, size: 10, font });
     page.drawText(`Fecha: ${createdAt.toLocaleDateString("es-DO")}`, { x: 40, y: topY - 14, size: 10, font });
-    page.drawText(
-      `Valida hasta: ${validUntilDate ? validUntilDate.toLocaleDateString("es-DO") : "No definida"}`,
-      { x: 40, y: topY - 28, size: 10, font }
-    );
+    page.drawText(`Valida hasta: ${validUntilDate ? validUntilDate.toLocaleDateString("es-DO") : "No definida"}`, {
+      x: 40,
+      y: topY - 28,
+      size: 10,
+      font,
+    });
 
     page.drawText(`Cliente: ${safeText(customerUser?.name, "Cliente")}`, { x: 320, y: topY, size: 10, font });
     page.drawText(`Sitio: ${safeText(siteRow?.name, "Sitio")}`, { x: 320, y: topY - 14, size: 10, font });
@@ -336,33 +369,49 @@ Deno.serve(async (req: Request) => {
       .from("quotes_pdfs")
       .createSignedUrl(pdfPath, 60 * 60 * 24 * 7);
 
+    const nowIso = new Date().toISOString();
+
     const { error: upsertError } = await adminClient
       .from("budget_quotes")
-      .upsert({
-        company_id: companyId,
-        budget_id: budgetId,
-        status: "enviada",
-        quote_number: quoteNumber,
-        valid_until: validUntilDate ? validUntilDate.toISOString() : null,
-        terms: termsText,
-        pdf_path: pdfPath,
-        sent_at: new Date().toISOString(),
-        created_by: requestedByUserId,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "budget_id" });
+      .upsert(
+        {
+          company_id: companyId,
+          budget_id: budgetId,
+          status: "enviada",
+          quote_number: quoteNumber,
+          valid_until: validUntilDate ? validUntilDate.toISOString() : null,
+          terms: termsText,
+          pdf_path: pdfPath,
+          sent_at: nowIso,
+          created_by: requestedByUserId,
+          updated_at: nowIso,
+        },
+        { onConflict: "budget_id" }
+      );
 
     if (upsertError) {
       return jsonResponse(500, { error: upsertError.message });
     }
 
+    const { error: budgetUpdateError } = await adminClient
+      .from("budgets")
+      .update({
+        status: "enviada",
+        sent_at: nowIso,
+        expires_at: validUntilDate ? validUntilDate.toISOString() : null,
+        updated_at: nowIso,
+      })
+      .eq("id", budgetId)
+      .eq("company_id", companyId);
+
+    if (budgetUpdateError) {
+      return jsonResponse(500, { error: budgetUpdateError.message });
+    }
+
     let emailSent = false;
     let warning: string | null = null;
 
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    const resendFrom = Deno.env.get("RESEND_FROM") ?? "SmartOps <onboarding@resend.dev>";
-    const resendToOverride = Deno.env.get("RESEND_TO_OVERRIDE") ?? "";
-    const targetEmail = resendToOverride || customerEmail || "";
-    if (resendKey && targetEmail) {
+    if (customerEmail) {
       try {
         const attachmentBase64 = bytesToBase64(pdfBytes);
         const html = `
@@ -390,39 +439,58 @@ Deno.serve(async (req: Request) => {
           </div>
         `;
 
-        const emailResponse = await fetch("https://api.resend.com/emails", {
+        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send_email_notification`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${resendKey}`,
+            Authorization: `Bearer ${userToken}`,
+            apikey: supabaseAnonKey,
           },
           body: JSON.stringify({
-            from: resendFrom,
-            to: [targetEmail],
+            companyId,
+            to: customerEmail,
+            type: "transaction",
+            eventKey: "quote.sent",
+            templateKey: "quote_formal",
+            entityType: "budget",
+            entityId: budgetId,
             subject: `Cotizacion ${quoteNumber}`,
+            title: "Cotizacion formal enviada",
+            message: `Hola ${safeText(customerUser?.name, "cliente")}, adjuntamos tu cotizacion formal.`,
             html,
+            actionUrl: signed?.signedUrl ?? undefined,
+            metadata: {
+              budgetId,
+              quoteNumber,
+              validUntil: validUntilDate ? validUntilDate.toISOString() : null,
+              total: safeNumber(budget.total),
+            },
             attachments: [
               {
                 filename: `cotizacion-${quoteNumber}.pdf`,
-                content: attachmentBase64,
+                contentBase64: attachmentBase64,
                 contentType: "application/pdf",
               },
             ],
           }),
         });
-        emailSent = emailResponse.ok;
+
+        const rawResponse = await emailResponse.text().catch(() => "");
         if (!emailResponse.ok) {
-          const errorBody = await emailResponse.text().catch(() => "");
-          console.log(`[quote_formal] resend_error status=${emailResponse.status} body=${errorBody}`);
+          console.log(
+            `[quote_formal] request_id=${requestId} send_email_notification_error status=${emailResponse.status} body=${rawResponse}`
+          );
           warning = "El PDF fue generado pero el email no pudo enviarse.";
+        } else {
+          emailSent = true;
         }
       } catch (error) {
-        console.log(`[quote_formal] resend_exception ${(error as Error)?.message ?? String(error)}`);
-        warning = "El PDF fue generado pero el email no pudo enviarse";
+        console.log(
+          `[quote_formal] request_id=${requestId} send_email_notification_exception ${(error as Error)?.message ?? String(error)}`
+        );
+        warning = "El PDF fue generado pero el email no pudo enviarse.";
       }
-    } else if (!resendKey) {
-      warning = "RESEND_API_KEY no configurada. El PDF fue generado sin enviar email.";
-    } else if (!targetEmail) {
+    } else {
       warning = "No hay email destino configurado. El PDF fue generado sin enviar email.";
     }
 
@@ -430,19 +498,11 @@ Deno.serve(async (req: Request) => {
       quoteId: budgetId,
       pdfUrl: signed?.signedUrl ?? null,
       emailSent,
-      warning: resendToOverride ? `${warning ?? ""}`.trim() || "Email enviado a destinatario de prueba." : warning,
+      warning,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.log(`[quote_formal] request_id=${requestId} unhandled=${message}`);
     return jsonResponse(500, { error: message });
   }
 });
-
-
-
-
-
-
-
-
-

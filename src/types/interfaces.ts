@@ -49,6 +49,9 @@ export interface CustomerTableProps {
   totalPages: number; 
   total: number;
   disabled?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canViewDetail?: boolean;
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
   onViewDetail: (customer: Customer) => void;

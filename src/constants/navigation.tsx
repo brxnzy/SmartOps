@@ -75,6 +75,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
       {
         name: "Agenda",
         to: "/admin/schedule",
+        permission: PERMISSIONS.scheduleRead,
         icon: <CalendarDays size={19} />,
       },
       {
@@ -173,6 +174,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/logs",
         permission: PERMISSIONS.settingsLogsRead,
         icon: <ClipboardList size={19} />,
+      },
+      {
+        name: "Historial de emails",
+        to: "/admin/email-history",
+        permission: PERMISSIONS.emailHistoryRead,
+        icon: <FileText size={19} />,
       },
     ],
   },

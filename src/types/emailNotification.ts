@@ -10,6 +10,11 @@ export interface SendEmailNotificationInput {
   companyId?: string;
   to: string | string[];
   type?: EmailNotificationType;
+  eventKey?: string;
+  templateKey?: string;
+  entityType?: string;
+  entityId?: string;
+  retryOf?: string;
   subject?: string;
   title?: string;
   message?: string;
