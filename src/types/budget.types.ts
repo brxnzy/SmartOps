@@ -33,6 +33,7 @@ export interface BudgetSummary {
   approvedAt: string | null;
   rejectedAt: string | null;
   expiresAt: string | null;
+  quoteStatus?: "borrador" | "enviada" | null;
 }
 
 export interface BudgetDetail extends BudgetSummary {
@@ -41,4 +42,9 @@ export interface BudgetDetail extends BudgetSummary {
   approvalMethod: BudgetApprovalMethod;
   approvalNotes: string | null;
   approvedByUserId: string | null;
+  quoteStatus?: "borrador" | "enviada" | null;
+  quoteNumber?: string | null;
+  quoteSentAt?: string | null;
+  quoteValidUntil?: string | null;
+  quotePdfPath?: string | null;
 }

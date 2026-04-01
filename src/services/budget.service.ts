@@ -62,6 +62,7 @@ export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
       approved_at,
       rejected_at,
       expires_at,
+      budget_quotes ( status ),
       site_surveys:survey_id (
         id,
         site_id,
@@ -84,6 +85,8 @@ export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
     const customerRow = pickSingle((surveyRow as any)?.customers as unknown);
     const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
+    const quoteRow = pickSingle(row.budget_quotes as unknown);
+
     return {
       id: safeText(row.id),
       companyId: safeText(row.company_id),
@@ -101,6 +104,7 @@ export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
       approvedAt: safeNullableText(row.approved_at),
       rejectedAt: safeNullableText(row.rejected_at),
       expiresAt: safeNullableText(row.expires_at),
+      quoteStatus: safeNullableText((quoteRow as any)?.status) as BudgetSummary["quoteStatus"],
     } satisfies BudgetSummary;
   });
 }
@@ -124,6 +128,7 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
       approved_at,
       rejected_at,
       expires_at,
+      budget_quotes ( status ),
       site_surveys:survey_id (
         id,
         site_id,
@@ -147,6 +152,8 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
     const customerRow = pickSingle((surveyRow as any)?.customers as unknown);
     const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
+    const quoteRow = pickSingle(row.budget_quotes as unknown);
+
     return {
       id: safeText(row.id),
       companyId: safeText(row.company_id),
@@ -164,6 +171,7 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
       approvedAt: safeNullableText(row.approved_at),
       rejectedAt: safeNullableText(row.rejected_at),
       expiresAt: safeNullableText(row.expires_at),
+      quoteStatus: safeNullableText((quoteRow as any)?.status) as BudgetSummary["quoteStatus"],
     } satisfies BudgetSummary;
   });
 }
@@ -293,6 +301,7 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
       approval_notes,
       approved_by_user_id,
       layout_json,
+      budget_quotes ( status, quote_number, sent_at, valid_until, pdf_path ),
       site_surveys:survey_id (
         id,
         site_id,
@@ -330,6 +339,7 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
   const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
   const items = (data.budget_items as any[] | null | undefined) ?? [];
+  const quoteRow = pickSingle(data.budget_quotes as unknown);
 
   return {
     id: safeText(data.id),
@@ -369,6 +379,11 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
+    quoteStatus: safeNullableText((quoteRow as any)?.status) as BudgetDetail["quoteStatus"],
+    quoteNumber: safeNullableText((quoteRow as any)?.quote_number),
+    quoteSentAt: safeNullableText((quoteRow as any)?.sent_at),
+    quoteValidUntil: safeNullableText((quoteRow as any)?.valid_until),
+    quotePdfPath: safeNullableText((quoteRow as any)?.pdf_path),
   } satisfies BudgetDetail;
 }
 
@@ -399,6 +414,7 @@ export async function getBudgetDetailForCustomer(
       approval_notes,
       approved_by_user_id,
       layout_json,
+      budget_quotes ( status, quote_number, sent_at, valid_until, pdf_path ),
       site_surveys:survey_id (
         id,
         site_id,
@@ -437,6 +453,7 @@ export async function getBudgetDetailForCustomer(
   const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
   const items = (data.budget_items as any[] | null | undefined) ?? [];
+  const quoteRow = pickSingle(data.budget_quotes as unknown);
 
   return {
     id: safeText(data.id),
@@ -476,6 +493,11 @@ export async function getBudgetDetailForCustomer(
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
+    quoteStatus: safeNullableText((quoteRow as any)?.status) as BudgetDetail["quoteStatus"],
+    quoteNumber: safeNullableText((quoteRow as any)?.quote_number),
+    quoteSentAt: safeNullableText((quoteRow as any)?.sent_at),
+    quoteValidUntil: safeNullableText((quoteRow as any)?.valid_until),
+    quotePdfPath: safeNullableText((quoteRow as any)?.pdf_path),
   } satisfies BudgetDetail;
 }
 

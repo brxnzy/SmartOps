@@ -13,6 +13,7 @@ import {
   updateBudgetStatus,
 } from "../../services/budget.service";
 import { createInstallationProject } from "../../services/installation.service";
+import { generateFormalQuote, getBudgetQuote, getQuotePdfUrl } from "../../services/quote.service";
 import { getSurveyExecutionData } from "../../services/siteSurveyExecution.service";
 import { listTechnicians } from "../../services/tickets.service";
 import type {
@@ -22,6 +23,7 @@ import type {
   SurveyZoneOption,
 } from "../../types/siteSurveyExecution.types";
 import type { BudgetDetail as BudgetDetailType } from "../../types/budget.types";
+import type { BudgetQuote } from "../../types/quote.types";
 
 type BudgetRow = {
   key: string;
@@ -34,6 +36,18 @@ type BudgetRow = {
 };
 
 const DEFAULT_TAX_RATE = 0.18;
+const DEFAULT_QUOTE_VALID_DAYS = 15;
+const DEFAULT_QUOTE_TERMS =
+  "Validez sujeta a disponibilidad. La instalacion se coordina con el cliente en un plazo de 10 dias habiles.";
+
+function toDateInput(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function formatCurrency(value: number): string {
   const safeValue = Number.isFinite(value) ? value : 0;
@@ -97,6 +111,18 @@ export default function BudgetDetail() {
   });
   const [scheduledEnd, setScheduledEnd] = useState("");
 
+  const [quote, setQuote] = useState<BudgetQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteValidUntil, setQuoteValidUntil] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + DEFAULT_QUOTE_VALID_DAYS);
+    return toDateInput(date);
+  });
+  const [quoteTerms, setQuoteTerms] = useState(DEFAULT_QUOTE_TERMS);
+  const [quotePdfUrl, setQuotePdfUrl] = useState<string | null>(null);
+  const [quoteSubmitting, setQuoteSubmitting] = useState(false);
+
   const layoutSignatureRef = useRef<string>("");
   const hydratedRef = useRef(false);
 
@@ -141,6 +167,31 @@ export default function BudgetDetail() {
   useEffect(() => {
     void loadBudget();
   }, [loadBudget]);
+
+  useEffect(() => {
+    if (!companyId || !budgetId) return;
+    setQuoteLoading(true);
+    setQuoteError(null);
+
+    getBudgetQuote(budgetId, companyId)
+      .then(async (data) => {
+        setQuote(data);
+        if (data?.validUntil) {
+          setQuoteValidUntil(toDateInput(data.validUntil));
+        }
+        if (data?.terms) {
+          setQuoteTerms(data.terms);
+        }
+        if (data?.pdfPath) {
+          const url = await getQuotePdfUrl(data.pdfPath);
+          setQuotePdfUrl(url);
+        }
+      })
+      .catch((err) => {
+        setQuoteError(err instanceof Error ? err.message : "No se pudo cargar la cotizacion formal.");
+      })
+      .finally(() => setQuoteLoading(false));
+  }, [budgetId, companyId]);
 
 
   const zoneById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones]);
@@ -300,6 +351,45 @@ export default function BudgetDetail() {
     }
   };
 
+  const handleGenerateQuote = async () => {
+    if (!companyId || !budget || !userId) return;
+    setQuoteSubmitting(true);
+    try {
+      const validUntilIso = quoteValidUntil ? new Date(quoteValidUntil).toISOString() : null;
+      const result = await generateFormalQuote({
+        companyId,
+        budgetId: budget.id,
+        requestedByUserId: userId,
+        validUntil: validUntilIso,
+        terms: quoteTerms.trim() || null,
+      });
+      setQuote(result.quote);
+      setQuotePdfUrl(result.pdfUrl);
+      notifications.success({
+        title: "Cotizacion generada",
+        description: result.emailSent
+          ? "PDF creado y enviado al cliente."
+          : "PDF creado correctamente.",
+      });
+      if (result.warning) {
+        notifications.warning({
+          title: "Aviso",
+          description: result.warning,
+        });
+      }
+      if (result.pdfUrl) {
+        window.open(result.pdfUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      notifications.error({
+        title: "Error generando cotizacion",
+        description: err instanceof Error ? err.message : "No se pudo generar la cotizacion formal.",
+      });
+    } finally {
+      setQuoteSubmitting(false);
+    }
+  };
+
   if (!budgetId) {
     return (
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -425,6 +515,67 @@ export default function BudgetDetail() {
                     ) : null}
                   </div>
                 </div>
+              </article>
+
+              <article className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 p-4 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-900">Cotizacion formal</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Genera el PDF con logo, condiciones y validez. Se envia por email al cliente.
+                </p>
+
+                {quoteLoading ? (
+                  <p className="mt-3 text-xs text-slate-500">Cargando cotizacion formal...</p>
+                ) : quoteError ? (
+                  <p className="mt-3 text-xs text-red-600">{quoteError}</p>
+                ) : (
+                  <div className="mt-4 space-y-3 text-sm text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span>Numero</span>
+                      <span className="font-semibold text-slate-800">{quote?.quoteNumber ?? "Pendiente"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Estado</span>
+                      <span className="font-semibold text-slate-800">{quote?.status ?? "borrador"}</span>
+                    </div>
+
+                    <Field label="Valida hasta">
+                      <input
+                        type="date"
+                        value={quoteValidUntil}
+                        onChange={(event) => setQuoteValidUntil(event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                      />
+                    </Field>
+
+                    <Field label="Condiciones">
+                      <textarea
+                        value={quoteTerms}
+                        onChange={(event) => setQuoteTerms(event.target.value)}
+                        className="min-h-[90px] w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                      />
+                    </Field>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleGenerateQuote}
+                        disabled={quoteSubmitting}
+                        className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        {quoteSubmitting ? "Generando..." : "Generar y enviar"}
+                      </Button>
+                      {quotePdfUrl ? (
+                        <Button
+                          type="button"
+                          onClick={() => window.open(quotePdfUrl, "_blank", "noopener,noreferrer")}
+                          className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        >
+                          Ver PDF
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </article>
             </aside>
           </section>
