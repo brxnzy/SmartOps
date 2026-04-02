@@ -639,7 +639,7 @@ export default function InstallationProjectDetail() {
 
   return (
     <section className="space-y-6">
-      <header className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-sm">
+      <header className="rounded-2xl border border-slate-200 bg-linear-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Button type="button" onClick={() => navigate(`/admin/budgets/${project.budgetId}`)} className="border-white/20 bg-white text-slate-900 hover:bg-slate-100">
@@ -783,7 +783,7 @@ export default function InstallationProjectDetail() {
             value={scopeText}
             onChange={(event) => setScopeText(event.target.value)}
             disabled={!canUpdateProject || isPlanLocked}
-            className="min-h-[88px] w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+            className="min-h-88px w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             placeholder="Describe el plan general del proyecto..."
           />
         </Field>
@@ -944,7 +944,7 @@ export default function InstallationProjectDetail() {
                   onChange={(event) => setNewTaskTitle(event.target.value)}
                   disabled={!canUpdateTasks || isClosed}
                   placeholder="Nueva tarea"
-                  className="min-w-[220px] flex-1 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                  className="min-w-220px flex-1 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
                 />
                 <Button
                   type="button"

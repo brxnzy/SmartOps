@@ -129,16 +129,11 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
       },
     ],
   },
+  
   {
-    name: "Configuracion",
-    icon: <Settings />,
+    name: "Catalogos",
+    icon: <Tag />,
     children: [
-      {
-        name: "Protocolos",
-        to: "/admin/protocols",
-        permission: PERMISSIONS.settingsProtocolsRead,
-        icon: <Waypoints size={19} />,
-      },
       {
         name: "Tipos de dispositivos",
         to: "/admin/devices-types",
@@ -152,6 +147,18 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <Tag size={19} />,
       },
       {
+        name: "Marcas",
+        to: "/admin/brands",
+        permission: PERMISSIONS.settingsBrandsRead,
+        icon: <Building2 size={19} />,
+      },
+    ],
+  },
+  {
+    name: "Cuenta",
+    icon: <User />,
+    children: [
+      {
         name: "Companias",
         to: "/admin/companies",
         permission: PERMISSIONS.companiesRead,
@@ -161,13 +168,19 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         name: "Mi cuenta",
         to: "/admin/account",
         permission: PERMISSIONS.accountUpdate,
-        icon: <User size={19} />
+        icon: <User size={19} />,
       },
+    ],
+  },
+  {
+    name: "Configuracion",
+    icon: <Settings />,
+    children: [
       {
-        name: "Marcas",
-        to: "/admin/brands",
-        permission: PERMISSIONS.settingsBrandsRead,
-        icon: <Building2 size={19} />,
+        name: "Protocolos",
+        to: "/admin/protocols",
+        permission: PERMISSIONS.settingsProtocolsRead,
+        icon: <Waypoints size={19} />,
       },
       {
         name: "Plantillas de checklist",
@@ -182,16 +195,16 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <Check size={19} />,
       },
       {
-        name: "Logs",
-        to: "/admin/logs",
-        permission: PERMISSIONS.settingsLogsRead,
-        icon: <ClipboardList size={19} />,
-      },
-      {
         name: "Historial de emails",
         to: "/admin/email-history",
         permission: PERMISSIONS.emailHistoryRead,
         icon: <FileText size={19} />,
+      },
+      {
+        name: "Logs",
+        to: "/admin/logs",
+        permission: PERMISSIONS.settingsLogsRead,
+        icon: <ClipboardList size={19} />,
       },
     ],
   },
