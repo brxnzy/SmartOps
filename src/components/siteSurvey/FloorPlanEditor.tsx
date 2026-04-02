@@ -127,6 +127,7 @@ export default function FloorPlanEditor({
   const stageRef = useRef<Konva.Stage | null>(null);
   const zoneTransformerRef = useRef<Konva.Transformer | null>(null);
   const zoneNodeRefs = useRef<Record<string, Konva.Group | null>>({});
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [mode, setMode] = useState<FloorPlanMode>("select");
   const [showGrid, setShowGrid] = useState(true);
@@ -146,6 +147,7 @@ export default function FloorPlanEditor({
 
   const [draggingZoneId, setDraggingZoneId] = useState<string | null>(null);
   const [draggingDeviceId, setDraggingDeviceId] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(CANVAS_WIDTH);
 
   const historyRef = useRef<LayoutSnapshot[]>([]);
   const historyIndexRef = useRef(-1);
@@ -175,6 +177,25 @@ export default function FloorPlanEditor({
       setSelectedDeviceId(devicesCatalog[0].id);
     }
   }, [devicesCatalog, selectedDeviceId]);
+
+  useEffect(() => {
+    if (!presentationOnly) return;
+    const node = containerRef.current;
+    if (!node) return;
+
+    const updateSize = () => {
+      const nextWidth = node.clientWidth;
+      if (nextWidth > 0) {
+        setContainerWidth(nextWidth);
+      }
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [presentationOnly]);
 
   useEffect(() => {
     onLayoutChange({ walls, zones, devices });
@@ -670,8 +691,11 @@ export default function FloorPlanEditor({
   const hideChrome = presentationOnly;
   const canUndo = historyIndexRef.current > 0;
   const canRedo = historyIndexRef.current < historyRef.current.length - 1;
-  const stageWidth = CANVAS_WIDTH;
-  const stageHeight = CANVAS_HEIGHT;
+  const stageWidth = hideChrome
+    ? Math.min(CANVAS_WIDTH, Math.max(0, containerWidth - 24))
+    : CANVAS_WIDTH;
+  const stageScale = hideChrome ? stageWidth / CANVAS_WIDTH : 1;
+  const stageHeight = Math.round(CANVAS_HEIGHT * stageScale);
   const gridStep = GRID;
 
   return (
@@ -790,22 +814,22 @@ export default function FloorPlanEditor({
         ) : null}
 
         <div
-          className="overflow-auto bg-white"
+          className={hideChrome ? "overflow-hidden bg-white" : "overflow-auto bg-white"}
           onDragOver={(event) => {
             if (locked) return;
             event.preventDefault();
           }}
           onDrop={handleCanvasDrop}
         >
-          <div className={hideChrome ? "p-3" : "min-w-1248px p-3"}>
+          <div ref={containerRef} className={hideChrome ? "p-3" : "min-w-1248px p-3"}>
             <Stage
               ref={(node) => {
                 stageRef.current = node;
               }}
               width={stageWidth}
               height={stageHeight}
-              scaleX={1}
-              scaleY={1}
+              scaleX={stageScale}
+              scaleY={stageScale}
               onMouseMove={handleStageMouseMove}
               onClick={handleStageClick}
               onMouseDown={handleStageMouseDown}
