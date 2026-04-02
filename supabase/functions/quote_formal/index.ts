@@ -8,6 +8,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+export type BudgetItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
+
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -58,6 +66,10 @@ async function fetchLogoBytes(url: string): Promise<{ bytes: Uint8Array; type: "
   } catch {
     return null;
   }
+}
+
+interface Role{
+  company_id: string
 }
 
 function wrapText(text: string, maxLen: number): string[] {
@@ -170,7 +182,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: rolesError.message });
     }
 
-    const isCompanyMember = (roles ?? []).some((row) => row.company_id === companyId);
+    const isCompanyMember = (roles ?? []).some((row: Role) => row.company_id === companyId);
     if (!isCompanyMember) {
       return jsonResponse(403, { error: "No autorizado para esta compania" });
     }
@@ -255,7 +267,8 @@ Deno.serve(async (req: Request) => {
       customerEmail = authUser?.user?.email ?? null;
     }
 
-    const items = (budget.budget_items ?? []) as BudgetItemRow[];
+    const items: BudgetItem[] = budget.budget_items ?? [];
+
 
     const quoteNumber = buildQuoteNumber(budgetId);
     const createdAt = new Date();
