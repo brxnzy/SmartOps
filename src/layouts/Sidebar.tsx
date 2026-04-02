@@ -85,7 +85,7 @@ export default function Sidebar() {
           <img
             src={companyProfile?.logoUrl ?? logo}
             alt={companyProfile?.name ? `Logo ${companyProfile.name}` : "SmartOps logo"}
-            className="h-12 w-12 rounded-full  object-contain p-1"
+            className="h-12 w-12 rounded-full  object-cover p-1"
           />
           <div className="min-w-0">
             <p className="text-xl font-semibold leading-tight text-slate-800">SmartOps</p>
