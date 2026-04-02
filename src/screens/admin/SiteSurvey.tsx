@@ -18,7 +18,6 @@ import {
   cancelSiteSurvey,
   cancelTechnicalVisit,
   rescheduleTechnicalVisit,
-  startSurveyVisit,
 } from "../../services/siteSurveyExecution.service";
 import { listUsers } from "../../services/users.service";
 import SurveyExecutionPage from "../../components/siteSurvey/SurveyExecutionPage";
@@ -27,11 +26,11 @@ import {
   canCancelSurveyStatus,
   canCancelVisitStatus,
   canRescheduleVisitStatus,
-  canStartVisitStatus,
   formatSurveyStatusLabel,
   formatVisitStatusLabel,
   isSurveyCompletedStatus,
   normalizeSurveyStatus,
+  normalizeVisitStatus,
 } from "../../utils/siteSurveyWorkflow";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -61,16 +60,6 @@ function isCompleted(survey: SiteSurveySummary): boolean {
   return isSurveyCompletedStatus(survey.status) || Boolean(survey.completedAt);
 }
 
-function canStartSurvey(survey: SiteSurveySummary, userId: string | null): boolean {
-  if (!userId) return false;
-  if (survey.technicianId !== userId) return false;
-  if (isCompleted(survey)) return false;
-  if (normalizeSurveyStatus(survey.status) === "cancelado") return false;
-  if (!canStartVisitStatus(survey.visitStatus)) return false;
-  if (!survey.scheduledStart) return false;
-  return Date.now() >= new Date(survey.scheduledStart).getTime();
-}
-
 export default function SiteSurvey() {
   const navigate = useNavigate();
   const { surveyId } = useParams();
@@ -79,7 +68,6 @@ export default function SiteSurvey() {
   const companyId = companyProfile?.id ?? null;
   const userId = authUser?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.siteSurveyCreate);
-  const canStart = canAccess(PERMISSIONS.siteSurveyStart);
   const canCancelVisit = canAccess(PERMISSIONS.technicalVisitsCancel);
   const canRescheduleVisit = canAccess(PERMISSIONS.technicalVisitsReschedule);
   const canCancelSurvey = canAccess(PERMISSIONS.siteSurveyCancel);
@@ -96,7 +84,6 @@ export default function SiteSurvey() {
   const [technicianOptions, setTechnicianOptions] = useState<SimpleOption[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
 
-  const [startingSurveyId, setStartingSurveyId] = useState<string | null>(null);
   const [cancelingSurveyId, setCancelingSurveyId] = useState<string | null>(null);
   const [cancelingSiteSurveyId, setCancelingSiteSurveyId] = useState<string | null>(null);
   const [reschedulingSurveyId, setReschedulingSurveyId] = useState<string | null>(null);
@@ -447,38 +434,6 @@ export default function SiteSurvey() {
     }
   };
 
-  const handleStartSurvey = async (survey: SiteSurveySummary) => {
-    if (!canStart) {
-      notifications.warning({
-        title: "Sin permisos",
-        description: "No tienes permisos para iniciar levantamientos.",
-      });
-      return;
-    }
-
-    if (!survey.visitId) {
-      navigate(`/admin/site_surveys/${survey.id}`);
-      return;
-    }
-
-    setStartingSurveyId(survey.id);
-    try {
-      await startSurveyVisit(survey.visitId, survey.id);
-      notifications.success({
-        title: "Levantamiento iniciado",
-        description: "Se actualizo el estado a En Progreso.",
-      });
-      navigate(`/admin/site_surveys/${survey.id}`);
-    } catch (err) {
-      notifications.error({
-        title: "Error iniciando levantamiento",
-        description: err instanceof Error ? err.message : "No se pudo iniciar el levantamiento.",
-      });
-    } finally {
-      setStartingSurveyId(null);
-    }
-  };
-
   if (!companyId || !userId) {
     return <Navigate to="/admin/dashboard" replace />;
   }
@@ -552,9 +507,11 @@ export default function SiteSurvey() {
         ) : (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {surveys.map((survey) => {
-              const canStartSurveyByTime = canStartSurvey(survey, userId);
               const statusKey = normalizeSurveyStatus(survey.status) ?? "pendiente";
+              const visitStatusKey = normalizeVisitStatus(survey.visitStatus);
               const statusClass = STATUS_STYLES[statusKey] ?? "border-slate-200 bg-slate-50 text-slate-700";
+              const showProgramVisitCta =
+                statusKey === "pendiente" && visitStatusKey === "cancelada";
 
               return (
                 <article
@@ -602,17 +559,6 @@ export default function SiteSurvey() {
                       Abrir
                     </Button>
 
-                    {canStart && canStartSurveyByTime ? (
-                      <Button
-                        type="button"
-                        onClick={() => void handleStartSurvey(survey)}
-                        disabled={startingSurveyId === survey.id}
-                        className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                      >
-                        {startingSurveyId === survey.id ? "Iniciando..." : "Iniciar levantamiento"}
-                      </Button>
-                    ) : null}
-
                     {canRescheduleVisit &&
                     survey.visitId &&
                     canRescheduleVisitStatus(survey.visitStatus) &&
@@ -620,9 +566,13 @@ export default function SiteSurvey() {
                       <Button
                         type="button"
                         onClick={() => openRescheduleModal(survey)}
-                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        className={
+                          showProgramVisitCta
+                            ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        }
                       >
-                        Reprogramar visita
+                        {showProgramVisitCta ? "Programar visita" : "Reprogramar visita"}
                       </Button>
                     ) : null}
 

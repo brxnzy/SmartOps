@@ -524,6 +524,7 @@ export default function BudgetBuilder() {
                   manualSaving={false}
                   autosaveLabel="Plano sincronizado"
                   showSave={false}
+                  restrictToDevices
                 />
               </div>
             </article>

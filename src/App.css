@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700;800&family=Mulish:wght@300;400;500;600&display=swap");
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", sans-serif;

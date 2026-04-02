@@ -1,5 +1,6 @@
 import { supabase } from "../libs/supabase";
 import { logAuditEvent } from "./audit.service";
+import { sendEmailNotification } from "./email-notification.service";
 import {
   getChecklistItemsByTemplateIds,
   getChecklistTemplatesByCompany,
@@ -59,6 +60,65 @@ function buildError(error: { message?: string } | null, fallback: string): Error
   return new Error(error.message);
 }
 
+function isValidEmail(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  return normalized.length > 3 && normalized.includes("@");
+}
+
+function formatDateTimeForEmail(value: string | null | undefined): string {
+  if (!value) return "Sin fecha definida";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return "Sin fecha definida";
+  return new Intl.DateTimeFormat("es-DO", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function getSurveyUrl(surveyId: string | null): string | undefined {
+  if (!surveyId || typeof window === "undefined") return undefined;
+  return `${window.location.origin}/admin/site_surveys/${surveyId}`;
+}
+
+function getTicketUrl(ticketId: string | number | null): string | undefined {
+  if (ticketId === null || ticketId === undefined || typeof window === "undefined") return undefined;
+  return `${window.location.origin}/customer/tickets/${ticketId}`;
+}
+
+function getInstallationProjectUrl(projectId: string | null): string | undefined {
+  if (!projectId || typeof window === "undefined") return undefined;
+  return `${window.location.origin}/admin/installation-projects/${projectId}`;
+}
+
+async function assertSurveyEditable(surveyId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("site_surveys")
+    .select("id, status, completed_at")
+    .eq("id", surveyId)
+    .maybeSingle<{ id: string; status: string | null; completed_at: string | null }>();
+
+  if (error) {
+    throw buildError(error, "No se pudo validar el estado del levantamiento.");
+  }
+
+  if (!data) {
+    throw new Error("No se encontro el levantamiento tecnico.");
+  }
+
+  const normalizedStatus = normalizeSurveyStatus(data.status);
+  if (
+    isSurveyCompletedStatus(normalizedStatus) ||
+    normalizedStatus === "cancelado" ||
+    Boolean(data.completed_at)
+  ) {
+    throw new Error("El levantamiento esta finalizado/cancelado y no permite mas cambios.");
+  }
+}
+
 function pickSingle<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   if (Array.isArray(value)) return value[0] ?? null;
@@ -115,6 +175,8 @@ type TechnicalVisitStatusGuardRow = {
 type SiteSurveyStatusGuardRow = {
   id: string;
   company_id?: string | null;
+  customer_id?: string | null;
+  site_id?: string | null;
   status: string | null;
   completed_at: string | null;
 };
@@ -124,6 +186,106 @@ export interface RescheduleTechnicalVisitInput {
   scheduledStart: string;
   scheduledEnd?: string | null;
   technicianId?: string | null;
+}
+
+interface VisitEmailContext {
+  email: string | null;
+  customerName: string | null;
+  siteName: string | null;
+  surveyId: string | null;
+  ticketId: string | number | null;
+  installationProjectId: string | null;
+  companyId: string | null;
+}
+
+async function resolveVisitEmailContext(visitData: TechnicalVisitStatusGuardRow): Promise<VisitEmailContext> {
+  const surveyId = safeNullableText(visitData.site_survey_id);
+  if (surveyId) {
+    const { data: surveyData } = await supabase
+      .from("site_surveys")
+      .select("company_id, customer_id, site_id")
+      .eq("id", surveyId)
+      .maybeSingle<{ company_id: string | null; customer_id: string | null; site_id: string | null }>();
+
+    const customerId = surveyData?.customer_id ?? null;
+    const siteId = surveyData?.site_id ?? null;
+
+    const [{ data: customerData }, { data: siteData }] = await Promise.all([
+      customerId
+        ? supabase
+            .from("users")
+            .select("email, name")
+            .eq("id", customerId)
+            .maybeSingle<{ email: string | null; name: string | null }>()
+        : Promise.resolve({ data: null }),
+      siteId
+        ? supabase
+            .from("customer_sites")
+            .select("name")
+            .eq("id", siteId)
+            .maybeSingle<{ name: string | null }>()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    return {
+      email: customerData?.email ?? null,
+      customerName: customerData?.name ?? null,
+      siteName: siteData?.name ?? null,
+      surveyId,
+      ticketId: visitData.ticket_id ?? null,
+      installationProjectId: safeNullableText(visitData.installation_project_id),
+      companyId: surveyData?.company_id ?? safeNullableText(visitData.company_id),
+    };
+  }
+
+  const ticketId = visitData.ticket_id ?? null;
+  if (ticketId !== null) {
+    const { data: ticketData } = await supabase
+      .from("tickets")
+      .select("company_id, customer_id, site_id")
+      .eq("id", String(ticketId))
+      .maybeSingle<{ company_id: string | null; customer_id: string | null; site_id: string | null }>();
+
+    const customerId = ticketData?.customer_id ?? null;
+    const siteId = ticketData?.site_id ?? null;
+
+    const [{ data: customerData }, { data: siteData }] = await Promise.all([
+      customerId
+        ? supabase
+            .from("users")
+            .select("email, name")
+            .eq("id", customerId)
+            .maybeSingle<{ email: string | null; name: string | null }>()
+        : Promise.resolve({ data: null }),
+      siteId
+        ? supabase
+            .from("customer_sites")
+            .select("name")
+            .eq("id", siteId)
+            .maybeSingle<{ name: string | null }>()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    return {
+      email: customerData?.email ?? null,
+      customerName: customerData?.name ?? null,
+      siteName: siteData?.name ?? null,
+      surveyId: null,
+      ticketId,
+      installationProjectId: null,
+      companyId: ticketData?.company_id ?? safeNullableText(visitData.company_id),
+    };
+  }
+
+  return {
+    email: null,
+    customerName: null,
+    siteName: null,
+    surveyId: null,
+    ticketId: null,
+    installationProjectId: safeNullableText(visitData.installation_project_id),
+    companyId: safeNullableText(visitData.company_id),
+  };
 }
 
 export const EMPTY_SURVEY_LAYOUT: SurveyLayout = {
@@ -467,11 +629,30 @@ export async function cancelTechnicalVisit(visitId: string): Promise<void> {
     throw new Error("La visita tecnica no se puede cancelar en su estado actual.");
   }
 
+  const installationProjectId = safeNullableText(visitData.installation_project_id);
+  if (installationProjectId) {
+    const { data: projectData, error: projectError } = await supabase
+      .from("installation_projects")
+      .select("id, status")
+      .eq("id", installationProjectId)
+      .maybeSingle<{ id: string; status: string | null }>();
+
+    if (projectError) {
+      throw buildError(projectError, "No se pudo validar el proyecto de instalacion asociado.");
+    }
+
+    const projectStatus = (projectData?.status ?? "").trim().toLowerCase();
+    if (projectStatus === "terminado" || projectStatus === "cancelado") {
+      throw new Error("No se puede cancelar la visita: el proyecto de instalacion ya esta cerrado.");
+    }
+  }
+
   const linkedSurveyId = safeNullableText(visitData.site_survey_id);
+  const isSurveyVisit = visitData.ticket_id === null && !installationProjectId;
   let nextSurveyStatus: string | null = null;
   let shouldSetSurveyPending = false;
 
-  if (linkedSurveyId) {
+  if (isSurveyVisit && linkedSurveyId) {
     const { data: surveyData, error: surveyLoadError } = await supabase
       .from("site_surveys")
       .select("id, status, completed_at")
@@ -496,6 +677,8 @@ export async function cancelTechnicalVisit(visitId: string): Promise<void> {
     }
   }
 
+  const emailContext = await resolveVisitEmailContext(visitData);
+
   const { error: cancelError } = await supabase
     .from("technical_visits")
     .update({ status: "cancelada" })
@@ -505,7 +688,7 @@ export async function cancelTechnicalVisit(visitId: string): Promise<void> {
     throw buildError(cancelError, "No se pudo cancelar la visita tecnica.");
   }
 
-  if (linkedSurveyId && shouldSetSurveyPending) {
+  if (isSurveyVisit && linkedSurveyId && shouldSetSurveyPending) {
     const { error: surveyUpdateError } = await supabase
       .from("site_surveys")
       .update({ status: "pendiente" })
@@ -530,6 +713,32 @@ export async function cancelTechnicalVisit(visitId: string): Promise<void> {
       surveyStatus: nextSurveyStatus,
     },
   });
+
+  if (isValidEmail(emailContext.email)) {
+    void sendEmailNotification({
+      companyId: emailContext.companyId ?? undefined,
+      to: emailContext.email,
+      type: "transaction",
+      eventKey: "visit.canceled",
+      templateKey: "visit_canceled",
+      entityType: "technical_visit",
+      entityId: visitId,
+      title: "Visita tecnica cancelada",
+      message: `Hola ${emailContext.customerName ?? "cliente"}, tu visita tecnica fue cancelada.`,
+      actionUrl:
+        getInstallationProjectUrl(emailContext.installationProjectId) ??
+        getSurveyUrl(emailContext.surveyId) ??
+        getTicketUrl(emailContext.ticketId),
+      metadata: {
+        surveyId: emailContext.surveyId,
+        ticketId: emailContext.ticketId,
+        installationProjectId: emailContext.installationProjectId,
+        sitio: emailContext.siteName ?? "No definido",
+      },
+    }).catch((notifyError) => {
+      console.error("[siteSurveyExecution.service] visit_canceled_email_error", notifyError);
+    });
+  }
 }
 
 export async function cancelSurveyVisit(visitId: string, surveyId?: string): Promise<void> {
@@ -580,8 +789,27 @@ export async function rescheduleTechnicalVisit(input: RescheduleTechnicalVisitIn
     throw new Error("Solo se pueden reprogramar visitas programadas o canceladas.");
   }
 
+  const installationProjectId = safeNullableText(visitData.installation_project_id);
+  if (installationProjectId) {
+    const { data: projectData, error: projectError } = await supabase
+      .from("installation_projects")
+      .select("id, status")
+      .eq("id", installationProjectId)
+      .maybeSingle<{ id: string; status: string | null }>();
+
+    if (projectError) {
+      throw buildError(projectError, "No se pudo validar el proyecto de instalacion asociado.");
+    }
+
+    const projectStatus = (projectData?.status ?? "").trim().toLowerCase();
+    if (projectStatus === "terminado" || projectStatus === "cancelado") {
+      throw new Error("No se puede reprogramar la visita: el proyecto de instalacion ya esta cerrado.");
+    }
+  }
+
   const linkedSurveyId = safeNullableText(visitData.site_survey_id);
-  if (linkedSurveyId) {
+  const isSurveyVisit = visitData.ticket_id === null && !installationProjectId;
+  if (isSurveyVisit && linkedSurveyId) {
     const { data: surveyData, error: surveyLoadError } = await supabase
       .from("site_surveys")
       .select("id, status, completed_at")
@@ -601,6 +829,8 @@ export async function rescheduleTechnicalVisit(input: RescheduleTechnicalVisitIn
       }
     }
   }
+
+  const emailContext = await resolveVisitEmailContext(visitData);
 
   const payload: {
     scheduled_start: string;
@@ -647,12 +877,42 @@ export async function rescheduleTechnicalVisit(input: RescheduleTechnicalVisitIn
       installationProjectId: safeNullableText(visitData.installation_project_id),
     },
   });
+
+  if (isValidEmail(emailContext.email)) {
+    void sendEmailNotification({
+      companyId: emailContext.companyId ?? undefined,
+      to: emailContext.email,
+      type: "transaction",
+      eventKey: "visit.rescheduled",
+      templateKey: "visit_rescheduled",
+      entityType: "technical_visit",
+      entityId: input.visitId,
+      title: "Visita tecnica reprogramada",
+      message: `Hola ${emailContext.customerName ?? "cliente"}, tu visita tecnica fue reprogramada para ${formatDateTimeForEmail(
+        nextStart
+      )}.`,
+      actionUrl:
+        getInstallationProjectUrl(emailContext.installationProjectId) ??
+        getSurveyUrl(emailContext.surveyId) ??
+        getTicketUrl(emailContext.ticketId),
+      metadata: {
+        surveyId: emailContext.surveyId,
+        ticketId: emailContext.ticketId,
+        installationProjectId: emailContext.installationProjectId,
+        sitio: emailContext.siteName ?? "No definido",
+        inicio: nextStart,
+        fin: nextEnd,
+      },
+    }).catch((notifyError) => {
+      console.error("[siteSurveyExecution.service] visit_rescheduled_email_error", notifyError);
+    });
+  }
 }
 
 export async function cancelSiteSurvey(surveyId: string): Promise<void> {
   const { data: surveyData, error: surveyLoadError } = await supabase
     .from("site_surveys")
-    .select("id, company_id, status, completed_at")
+    .select("id, company_id, customer_id, site_id, status, completed_at")
     .eq("id", surveyId)
     .maybeSingle<SiteSurveyStatusGuardRow>();
 
@@ -721,6 +981,41 @@ export async function cancelSiteSurvey(surveyId: string): Promise<void> {
       canceledVisits: visitIdsToCancel.length,
     },
   });
+
+  const [{ data: customerData }, { data: siteData }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("email, name")
+      .eq("id", surveyData.customer_id ?? "")
+      .maybeSingle<{ email: string | null; name: string | null }>(),
+    supabase
+      .from("customer_sites")
+      .select("name")
+      .eq("id", surveyData.site_id ?? "")
+      .maybeSingle<{ name: string | null }>(),
+  ]);
+
+  if (isValidEmail(customerData?.email ?? null)) {
+    void sendEmailNotification({
+      companyId: safeNullableText(surveyData.company_id) ?? undefined,
+      to: customerData?.email ?? "",
+      type: "transaction",
+      eventKey: "survey.canceled",
+      templateKey: "survey_canceled",
+      entityType: "site_survey",
+      entityId: surveyId,
+      title: "Levantamiento cancelado",
+      message: `Hola ${customerData?.name ?? "cliente"}, el levantamiento tecnico fue cancelado.`,
+      actionUrl: getSurveyUrl(surveyId),
+      metadata: {
+        surveyId,
+        sitio: siteData?.name ?? "No definido",
+        visitasCanceladas: visitIdsToCancel.length,
+      },
+    }).catch((notifyError) => {
+      console.error("[siteSurveyExecution.service] survey_canceled_email_error", notifyError);
+    });
+  }
 }
 
 export async function getSurveyExecutionData(
@@ -1103,6 +1398,8 @@ export async function updateSurveyForm(
     status?: string | null;
   }
 ): Promise<void> {
+  await assertSurveyEditable(surveyId);
+
   const statusPayload =
     patch.status === undefined ? undefined : normalizeSurveyStatus(patch.status);
 
@@ -1139,6 +1436,8 @@ export async function saveSurveyLayout(
   surveyId: string,
   layout: SurveyLayout
 ): Promise<void> {
+  await assertSurveyEditable(surveyId);
+
   const { error } = await supabase
     .from("site_surveys")
     .update({ layout_json: layout })

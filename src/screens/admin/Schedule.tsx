@@ -311,7 +311,7 @@ export default function Schedule() {
     <section className="space-y-6">
       <header>
         <h1 className="text-3xl font-bold text-slate-800">Agenda</h1>
-        <p className="mt-2 text-slate-600">Calendario general por d�a/semana con horario de visitas t�cnicas.</p>
+        <p className="mt-2 text-slate-600">Calendario general por dia/semana con horario de visitas tecnicas.</p>
       </header>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

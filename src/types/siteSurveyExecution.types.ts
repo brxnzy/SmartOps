@@ -131,6 +131,6 @@ export interface ChecklistTemplateOption {
   id: string;
   name: string;
   description: string | null;
-  source: "db" | "mock";
+  source: "db";
   items: ChecklistTemplateItemOption[];
 }

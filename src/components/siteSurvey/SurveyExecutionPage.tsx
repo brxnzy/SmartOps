@@ -5,14 +5,17 @@ import Modal from "../Modal";
 import ChecklistPanel from "./ChecklistPanel";
 import FloorPlanEditor from "./FloorPlanEditor";
 import MediaPanel from "./MediaPanel";
+import { PERMISSIONS } from "../../constants/permissions";
+import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import {
   finalizeSurveyExecution,
   getSurveyExecutionData,
   saveSurveyLayout,
+  startSurveyVisit,
   updateSurveyForm,
 } from "../../services/siteSurveyExecution.service";
-import { isSurveyCompletedStatus, normalizeSurveyStatus } from "../../utils/siteSurveyWorkflow";
+import { canStartVisitStatus, isSurveyCompletedStatus, normalizeSurveyStatus, normalizeVisitStatus } from "../../utils/siteSurveyWorkflow";
 import type {
   SurveyChecklistItem,
   SurveyLayout,
@@ -49,11 +52,15 @@ function normalizeForm(values: FormValues): FormValues {
 }
 
 export default function SurveyExecutionPage({ surveyId, companyId, onBack }: SurveyExecutionPageProps) {
+  const { authUser, canAccess } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [surveyName, setSurveyName] = useState<string>("Levantamiento tecnico");
   const [visitId, setVisitId] = useState<string | null>(null);
+  const [visitStatus, setVisitStatus] = useState<string | null>(null);
+  const [visitTechnicianId, setVisitTechnicianId] = useState<string | null>(null);
+  const [visitScheduledStart, setVisitScheduledStart] = useState<string | null>(null);
   const [isFinalized, setIsFinalized] = useState(false);
   const [surveyStatus, setSurveyStatus] = useState<string | null>(null);
 
@@ -67,6 +74,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
   const [formStatus, setFormStatus] = useState<string>("Sin cambios");
   const [layoutStatus, setLayoutStatus] = useState<string>("Sin cambios");
   const [savingLayoutManual, setSavingLayoutManual] = useState(false);
+  const [startingVisit, setStartingVisit] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [confirmFinalizeOpen, setConfirmFinalizeOpen] = useState(false);
 
@@ -83,6 +91,9 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
 
       setSurveyName(`${data.survey.customerName ?? "Cliente"} · ${data.survey.siteName ?? "Sitio"}`);
       setVisitId(data.visit?.id ?? null);
+      setVisitStatus(normalizeVisitStatus(data.visit?.status));
+      setVisitTechnicianId(data.visit?.technicianId ?? null);
+      setVisitScheduledStart(data.visit?.scheduledStart ?? null);
       const normalizedStatus = normalizeSurveyStatus(data.survey.status);
       setSurveyStatus(normalizedStatus);
       setIsFinalized(
@@ -130,7 +141,22 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
     () => checklistItems.filter((item) => item.checked).length,
     [checklistItems]
   );
+  const userId = authUser?.id ?? null;
+  const canStartSurvey = canAccess(PERMISSIONS.siteSurveyStart);
+  const normalizedSurveyStatus = normalizeSurveyStatus(surveyStatus);
+  const normalizedVisitStatus = normalizeVisitStatus(visitStatus);
   const isCancelled = surveyStatus === "cancelado";
+  const showStartAction = !isFinalized && normalizedSurveyStatus === "pendiente";
+  const canStartByTechnician = !visitTechnicianId || !userId || visitTechnicianId === userId;
+  const canStartByDate = !visitScheduledStart || Date.now() >= new Date(visitScheduledStart).getTime();
+  const canStartCurrentVisit =
+    canStartSurvey &&
+    !isCancelled &&
+    !isFinalized &&
+    Boolean(visitId) &&
+    canStartVisitStatus(normalizedVisitStatus) &&
+    canStartByTechnician &&
+    canStartByDate;
 
   const persistFormNow = useCallback(async () => {
     if (formSignature === formSignatureRef.current) return;
@@ -207,6 +233,58 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
       });
     } finally {
       setSavingLayoutManual(false);
+    }
+  };
+
+  const handleStartVisit = async () => {
+    if (!canStartSurvey) {
+      notifications.warning({
+        title: "Sin permisos",
+        description: "No tienes permisos para iniciar levantamientos.",
+      });
+      return;
+    }
+
+    if (!visitId) {
+      notifications.warning({
+        title: "Visita requerida",
+        description: "Este levantamiento no tiene visita tecnica programada.",
+      });
+      return;
+    }
+
+    if (!canStartByTechnician) {
+      notifications.warning({
+        title: "Tecnico no asignado",
+        description: "Solo el tecnico asignado puede iniciar este levantamiento.",
+      });
+      return;
+    }
+
+    if (!canStartByDate) {
+      notifications.warning({
+        title: "Aun no disponible",
+        description: "No puedes iniciar antes de la fecha/hora programada.",
+      });
+      return;
+    }
+
+    setStartingVisit(true);
+    try {
+      await startSurveyVisit(visitId, surveyId);
+      setSurveyStatus("en_progreso");
+      setVisitStatus("en_progreso");
+      notifications.success({
+        title: "Levantamiento iniciado",
+        description: "La visita tecnica se marco en progreso.",
+      });
+    } catch (err) {
+      notifications.error({
+        title: "Error iniciando levantamiento",
+        description: err instanceof Error ? err.message : "No se pudo iniciar el levantamiento.",
+      });
+    } finally {
+      setStartingVisit(false);
     }
   };
 
@@ -323,7 +401,17 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
             Guardar formulario
           </Button>
 
-          {!isFinalized ? (
+          {!isFinalized ? showStartAction ? (
+            <Button
+              type="button"
+              onClick={() => void handleStartVisit()}
+              disabled={startingVisit || !canStartCurrentVisit}
+              className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+              icon={<CheckCircle2 size={14} />}
+            >
+              {startingVisit ? "Iniciando..." : "Iniciar levantamiento"}
+            </Button>
+          ) : (
             <Button
               type="button"
               onClick={() => setConfirmFinalizeOpen(true)}
@@ -423,7 +511,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
             customerSiteId: "",
           }))}
           devicesCatalog={catalogDevices}
-          onLayoutChange={setLayout}
+          onLayoutChange={isFinalized ? () => undefined : setLayout}
           onManualSave={() => {
             void handleManualLayoutSave();
           }}

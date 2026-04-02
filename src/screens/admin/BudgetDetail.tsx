@@ -16,11 +16,9 @@ import {
 import {
   createInstallationProject,
   getInstallationProjectByBudget,
-  markInstallationProjectCompleted,
 } from "../../services/installation.service";
 import { generateFormalQuote, getBudgetQuote, getQuotePdfUrl } from "../../services/quote.service";
 import { getSurveyExecutionData } from "../../services/siteSurveyExecution.service";
-import { listTechnicians } from "../../services/tickets.service";
 import type {
   SurveyCatalogDevice,
   SurveyDeviceLayout,
@@ -88,7 +86,7 @@ export default function BudgetDetail() {
   const canUpdateBudget = canAccess(PERMISSIONS.budgetsUpdate);
   const canSendBudget = canAccess(PERMISSIONS.budgetsSend);
   const canCreateWorkOrder = canAccess(PERMISSIONS.workOrdersCreate);
-  const canUpdateInstallation = canAccess(PERMISSIONS.installationProjectsUpdate);
+  const canOpenInstallationProject = canAccess(PERMISSIONS.installationProjectsOpen);
 
   const [loadingSurvey, setLoadingSurvey] = useState(false);
   const [surveyError, setSurveyError] = useState<string | null>(null);
@@ -107,22 +105,8 @@ export default function BudgetDetail() {
   const [taxRate, setTaxRate] = useState(DEFAULT_TAX_RATE);
 
   const [installModalOpen, setInstallModalOpen] = useState(false);
-  const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([]);
-  const [techniciansLoading, setTechniciansLoading] = useState(false);
-  const [technicianId, setTechnicianId] = useState("");
-  const [scheduledStart, setScheduledStart] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  });
-  const [scheduledEnd, setScheduledEnd] = useState("");
   const [installationProject, setInstallationProject] = useState<InstallationProject | null>(null);
   const [installationSubmitting, setInstallationSubmitting] = useState(false);
-  const [installationCompleting, setInstallationCompleting] = useState(false);
 
   const [quote, setQuote] = useState<BudgetQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -251,6 +235,7 @@ export default function BudgetDetail() {
   const subtotal = rowSubtotals.reduce((acc, value) => acc + value, 0);
   const taxAmount = subtotal * taxRate;
   const total = subtotal + taxAmount;
+  const canEditBudgetDraft = canUpdateBudget && budget?.status === "borrador" && !installationProject;
 
   const itemsForSave = useMemo(() => {
     return rows.map((row) => ({
@@ -263,7 +248,7 @@ export default function BudgetDetail() {
   }, [rows]);
 
   useEffect(() => {
-    if (!budget || !budgetId || !canUpdateBudget) return;
+    if (!budget || !budgetId || !canEditBudgetDraft) return;
     if (!hydratedRef.current) return;
 
     const signature = JSON.stringify(layout);
@@ -300,7 +285,7 @@ export default function BudgetDetail() {
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [budget, budgetId, canUpdateBudget, itemsForSave, layout, subtotal, taxAmount, taxRate, total]);
+  }, [budget, budgetId, canEditBudgetDraft, itemsForSave, layout, subtotal, taxAmount, taxRate, total]);
 
   useEffect(() => {
     if (!budget || budget.status !== "enviada" || !budget.expiresAt) return;
@@ -331,23 +316,6 @@ export default function BudgetDetail() {
     }
 
     setInstallModalOpen(true);
-    if (!companyId) return;
-
-    setTechniciansLoading(true);
-    try {
-      const options = await listTechnicians(companyId);
-      setTechnicians(options);
-      if (!technicianId && options.length > 0) {
-        setTechnicianId(options[0].id);
-      }
-    } catch (err) {
-      notifications.error({
-        title: "Error cargando tecnicos",
-        description: err instanceof Error ? err.message : "No se pudieron cargar los tecnicos.",
-      });
-    } finally {
-      setTechniciansLoading(false);
-    }
   };
 
   const handleCreateInstallation = async () => {
@@ -366,29 +334,12 @@ export default function BudgetDetail() {
       });
       return;
     }
-    if (!scheduledStart) {
-      notifications.warning({
-        title: "Fecha requerida",
-        description: "Selecciona la fecha y hora de inicio.",
-      });
-      return;
-    }
-    if (!technicianId) {
-      notifications.warning({
-        title: "Tecnico requerido",
-        description: "Selecciona un tecnico responsable.",
-      });
-      return;
-    }
 
     setInstallationSubmitting(true);
     try {
       const result = await createInstallationProject({
         companyId,
         budgetId: budget.id,
-        technicianId,
-        scheduledStart: new Date(scheduledStart).toISOString(),
-        scheduledEnd: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
       });
 
       const refreshed = await getInstallationProjectByBudget(budget.id, companyId);
@@ -397,7 +348,7 @@ export default function BudgetDetail() {
       notifications.success({
         title: result.created ? "Orden creada" : "Orden ya existente",
         description: result.created
-          ? "Se creo el proyecto y la visita tecnica en agenda."
+          ? "Se creo el proyecto en estado pendiente. Ahora puedes abrirlo para programar visita y ejecutar tareas."
           : "El presupuesto ya tenia una OT creada. Se reutilizo la existente.",
       });
       setInstallModalOpen(false);
@@ -411,35 +362,16 @@ export default function BudgetDetail() {
     }
   };
 
-  const handleCompleteInstallation = async () => {
-    if (!companyId || !installationProject) return;
-    if (!canUpdateInstallation) {
+  const handleOpenInstallationProject = () => {
+    if (!installationProject) return;
+    if (!canOpenInstallationProject) {
       notifications.warning({
         title: "Sin permisos",
-        description: "No tienes permisos para actualizar el estado del proyecto.",
+        description: "No tienes permisos para abrir proyectos de instalacion.",
       });
       return;
     }
-    setInstallationCompleting(true);
-    try {
-      await markInstallationProjectCompleted({
-        projectId: installationProject.id,
-        companyId,
-      });
-      const refreshed = budget ? await getInstallationProjectByBudget(budget.id, companyId) : null;
-      setInstallationProject(refreshed);
-      notifications.success({
-        title: "Proyecto actualizado",
-        description: "El proyecto fue marcado como terminado.",
-      });
-    } catch (err) {
-      notifications.error({
-        title: "Error actualizando proyecto",
-        description: err instanceof Error ? err.message : "No se pudo actualizar el proyecto.",
-      });
-    } finally {
-      setInstallationCompleting(false);
-    }
+    navigate(`/admin/installation-projects/${installationProject.id}`);
   };
 
   const handleGenerateQuote = async () => {
@@ -575,12 +507,13 @@ export default function BudgetDetail() {
                   layout={layout}
                   zonesCatalog={zones}
                   devicesCatalog={devicesCatalog}
-                  onLayoutChange={canUpdateBudget ? setLayout : () => undefined}
+                  onLayoutChange={canEditBudgetDraft ? setLayout : () => undefined}
                   onManualSave={() => undefined}
                   manualSaving={false}
                   autosaveLabel=""
                   showSave={false}
                   restrictToDevices
+                  locked={!canEditBudgetDraft}
                 />
               </div>
             </article>
@@ -635,20 +568,20 @@ export default function BudgetDetail() {
                     >
                       {installationSubmitting ? "Creando..." : installationProject ? "OT creada" : "Orden de trabajo"}
                     </Button>
+                    {installationProject ? (
+                      <Button
+                        type="button"
+                        onClick={handleOpenInstallationProject}
+                        disabled={!canOpenInstallationProject}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      >
+                        Abrir proyecto
+                      </Button>
+                    ) : null}
                     {budget?.status !== "aprobada" ? (
                       <span className="text-xs text-slate-500">Disponible cuando la cotizacion este aprobada.</span>
                     ) : installationProject ? (
                       <span className="text-xs text-slate-500">La OT ya fue creada para este presupuesto.</span>
-                    ) : null}
-                    {installationProject && installationProject.status !== "terminado" ? (
-                      <Button
-                        type="button"
-                        onClick={handleCompleteInstallation}
-                        disabled={!canUpdateInstallation || installationCompleting}
-                        className="border-slate-800 bg-slate-800 text-white hover:bg-slate-900"
-                      >
-                        {installationCompleting ? "Actualizando..." : "Marcar terminado"}
-                      </Button>
                     ) : null}
                   </div>
                 </div>
@@ -783,7 +716,7 @@ export default function BudgetDetail() {
                         if (Number.isNaN(next)) return;
                         setTaxRate(Math.max(0, next) / 100);
                       }}
-                      disabled={!canUpdateBudget}
+                      disabled={!canEditBudgetDraft}
                       className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
                     />
                     <span className="text-xs text-slate-500">%</span>
@@ -817,7 +750,7 @@ export default function BudgetDetail() {
           setInstallModalOpen(false);
         }}
         title="Orden de trabajo"
-        subtitle="Programa la instalacion y crea la visita tecnica."
+        subtitle="Esta accion crea el proyecto en estado pendiente."
         footer={
           <>
             <Button
@@ -839,41 +772,16 @@ export default function BudgetDetail() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="Tecnico asignado">
-            <select
-              value={technicianId}
-              onChange={(event) => setTechnicianId(event.target.value)}
-              disabled={techniciansLoading}
-              className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="">Selecciona un tecnico</option>
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  {tech.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Inicio">
-              <input
-                type="datetime-local"
-                value={scheduledStart}
-                onChange={(event) => setScheduledStart(event.target.value)}
-                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-            <Field label="Fin (opcional)">
-              <input
-                type="datetime-local"
-                value={scheduledEnd}
-                onChange={(event) => setScheduledEnd(event.target.value)}
-                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-              />
-            </Field>
-          </div>
+        <div className="space-y-3 text-sm text-slate-600">
+          <p>
+            Se creara la OT para este presupuesto y el proyecto quedara en <strong>pendiente</strong>.
+          </p>
+          <p>Luego podras abrir el proyecto para:</p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>programar/reprogramar/cancelar la visita tecnica</li>
+            <li>asignar tecnico y fechas por tarea</li>
+            <li>completar checklist de calidad y cerrar proyecto</li>
+          </ul>
         </div>
       </Modal>
 

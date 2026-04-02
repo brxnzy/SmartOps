@@ -213,7 +213,7 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
     void sendEmailNotification({
       companyId,
       to: userData?.email ?? "",
-      type: "event",
+      type: "transaction",
       eventKey: "visit.scheduled",
       templateKey: "visit_scheduled",
       entityType: "technical_visit",

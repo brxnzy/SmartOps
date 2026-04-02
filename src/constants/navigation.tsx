@@ -90,6 +90,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         permission: PERMISSIONS.budgetsRead,
         icon: <FileText size={19} />,
       },
+      {
+        name: "Proyectos",
+        to: "/admin/installation-projects",
+        permission: PERMISSIONS.installationProjectsRead,
+        icon: <Workflow size={19} />,
+      },
     ],
   },
 
@@ -167,6 +173,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         name: "Plantillas de checklist",
         to: "/admin/checklist-templates",
         permission: PERMISSIONS.settingsChecklistTemplatesRead,
+        icon: <Check size={19} />,
+      },
+      {
+        name: "Pruebas post instalacion",
+        to: "/admin/post-installation-checks",
+        permission: PERMISSIONS.settingsPostInstallationChecksRead,
         icon: <Check size={19} />,
       },
       {

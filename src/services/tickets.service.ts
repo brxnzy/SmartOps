@@ -583,7 +583,7 @@ export async function createTicketTechnicalVisit(
   void sendEmailNotification({
     companyId,
     to: customer.email,
-    type: "event",
+    type: "transaction",
     eventKey: isConfirmed ? "visit.confirmed" : "visit.scheduled",
     templateKey: isConfirmed ? "visit_confirmed" : "visit_scheduled",
     entityType: "technical_visit",
