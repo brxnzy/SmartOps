@@ -12,7 +12,7 @@ export interface SiteSurveySummary {
   observations: string | null;
   recomendations: string | null;
   risks: string | null;
-  visitId: number | null;
+  visitId: string | null;
   scheduledStart: string | null;
   scheduledEnd: string | null;
   technicianId: string | null;

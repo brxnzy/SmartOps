@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   InventoryLoad,
   InventoryLoadInput,
@@ -124,6 +125,17 @@ export async function createInventoryLoad(
     await applyInventoryQuantityChange(item.deviceId, item.quantity);
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "inventory_loads",
+    entityId: loadRow.id,
+    companyId,
+    newValues: {
+      supplierId: loadRow.supplier_id,
+      items: itemsPayload,
+    },
+  });
+
   return mapInventoryLoad({
     ...loadRow,
     items: itemsData ?? [],
@@ -171,6 +183,17 @@ async function applyInventoryQuantityChange(deviceId: string, delta: number): Pr
     if (updateError) {
       throw new Error(buildErrorMessage(updateError, "No se pudo actualizar el inventario del dispositivo."));
     }
+
+    await logAuditEvent({
+      action: "update",
+      entity: "device_inventory",
+      entityId: current.id,
+      newValues: {
+        deviceId,
+        quantity: nextQuantity,
+        status: nextStatus,
+      },
+    });
   } else {
     const { error: insertError } = await supabase.from("device_inventory").insert({
       device_id: deviceId,
@@ -182,5 +205,15 @@ async function applyInventoryQuantityChange(deviceId: string, delta: number): Pr
     if (insertError) {
       throw new Error(buildErrorMessage(insertError, "No se pudo crear el inventario del dispositivo."));
     }
+
+    await logAuditEvent({
+      action: "create",
+      entity: "device_inventory",
+      newValues: {
+        deviceId,
+        quantity: nextQuantity,
+        status: nextStatus,
+      },
+    });
   }
 }

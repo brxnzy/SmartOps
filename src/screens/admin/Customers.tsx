@@ -1,4 +1,4 @@
-import { useMemo} from "react";
+import { useMemo } from "react";
 import { Building2, Home, Store, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
@@ -14,14 +14,10 @@ export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
   const navigate = useNavigate();
   const companyId = companyProfile?.id ?? null;
-  const canWrite = useMemo(() => {
-    return (
-      canAccess("customers:create") ||
-      canAccess("customers:update") ||
-      canAccess("customers:delete") ||
-      canAccess(PERMISSIONS.customersRead)
-    );
-  }, [canAccess]);
+  const canCreate = useMemo(() => canAccess(PERMISSIONS.customersCreate), [canAccess]);
+  const canUpdate = useMemo(() => canAccess(PERMISSIONS.customersUpdate), [canAccess]);
+  const canDelete = useMemo(() => canAccess(PERMISSIONS.customersDelete), [canAccess]);
+  const canRead = useMemo(() => canAccess(PERMISSIONS.customersRead), [canAccess]);
 
   const {
     items,
@@ -103,7 +99,7 @@ export default function Customers() {
         onSearchChange={setSearch}
         onTypeChange={setType}
         onCreate={openCreateModal}
-        disabled={loading || submitting || !canWrite}
+        disabled={loading || submitting || !canCreate}
       />
 
       {error && (
@@ -138,7 +134,7 @@ export default function Customers() {
             <Button
               type="button"
               onClick={openCreateModal}
-              disabled={!canWrite}
+              disabled={!canCreate}
               className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
             >
               Crear cliente
@@ -153,7 +149,10 @@ export default function Customers() {
           page={query.page}
           total={total}
           totalPages={totalPages}
-          disabled={submitting || !canWrite}
+          disabled={submitting || !canRead}
+          canViewDetail={canRead}
+          canEdit={canUpdate}
+          canDelete={canDelete}
           onEdit={openEditModal}
           onDelete={openDeleteModal}
           onViewDetail={(customer) => navigate(`/admin/customers/${customer.id}/profile-360`)}

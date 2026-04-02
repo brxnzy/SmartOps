@@ -1,5 +1,7 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import { sendEmailNotification } from "./email-notification.service";
+import { normalizeVisitStatus } from "../utils/siteSurveyWorkflow";
 import type {
   CreateTicketCommentInput,
   CreateTicketInput,
@@ -39,15 +41,6 @@ function safeNullableText(value: unknown): string | null {
 function safeDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value ? value : null;
-}
-
-function safeNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function computeSlaDueAt(slaType: TicketSla): string {
@@ -192,7 +185,7 @@ function mapTechnicalVisit(row: Record<string, unknown>): TechnicalVisitSummary 
       : null;
 
   return {
-    id: safeNumber(row.id) ?? 0,
+    id: safeText(row.id),
     ticketId: safeNullableText(row.ticket_id),
     ticketCode: safeNullableText(ticket?.code),
     siteName: safeNullableText(ticket?.site?.name),
@@ -341,12 +334,32 @@ export async function createTicket(
     await uploadTicketAttachments(companyId, data.id as string, customerId, files, null);
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "tickets",
+    entityId: data.id as string,
+    companyId,
+    userId: customerId,
+    newValues: {
+      code,
+      status: "abierto",
+      categoryId: input.categoryId,
+      slaType: input.slaType,
+      siteId: input.siteId ?? null,
+      attachments: files.length,
+    },
+  });
+
   const customer = await getCustomerEmailData(customerId);
   if (isValidEmail(customer.email)) {
     void sendEmailNotification({
       companyId,
       to: customer.email,
       type: "transaction",
+      eventKey: "ticket.created",
+      templateKey: "ticket_created",
+      entityType: "ticket",
+      entityId: String(data.id),
       title: `Ticket ${code} creado`,
       message: `Hola ${customer.name ?? "cliente"}, recibimos tu ticket ${code}. Nuestro equipo lo revisara pronto.`,
       actionUrl: getTicketUrl(String(data.id)),
@@ -432,6 +445,19 @@ export async function addTicketComment(
     await uploadTicketAttachments(companyId, ticketId, authorId, files, data.id as string);
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "ticket_comments",
+    entityId: data.id as string,
+    companyId,
+    userId: authorId,
+    newValues: {
+      ticketId,
+      isInternal: input.isInternal,
+      attachments: files.length,
+    },
+  });
+
   if (input.isInternal) return;
 
   const ticketContext = await getTicketDbContext(companyId, ticketId);
@@ -452,6 +478,10 @@ export async function addTicketComment(
     companyId,
     to: customer.email,
     type: "transaction",
+    eventKey: "ticket.updated",
+    templateKey: "ticket_updated",
+    entityType: "ticket",
+    entityId: ticketId,
     title,
     message,
     actionUrl: getTicketUrl(ticketId),
@@ -496,18 +526,48 @@ export async function createTicketTechnicalVisit(
   ticketId: string,
   input: CreateTechnicalVisitInput
 ): Promise<void> {
-  const { error } = await supabase.from("technical_visits").insert({
-    company_id: companyId,
-    ticket_id: ticketId,
-    technician_id: input.technicianId,
-    scheduled_start: input.scheduledStart,
-    scheduled_end: input.scheduledEnd,
-    status: input.status ?? null,
-  });
+  const normalizedVisitStatusRaw = normalizeVisitStatus(input.status);
+  const visitStatus =
+    normalizedVisitStatusRaw === "programada" ||
+    normalizedVisitStatusRaw === "en_progreso" ||
+    normalizedVisitStatusRaw === "completada" ||
+    normalizedVisitStatusRaw === "cancelada"
+      ? normalizedVisitStatusRaw
+      : "programada";
 
-  if (error) {
-    throw new Error(error.message || "No se pudo programar la visita tecnica.");
+  const { data: technicalVisit, error } = await supabase
+    .from("technical_visits")
+    .insert({
+      company_id: companyId,
+      ticket_id: ticketId,
+      technician_id: input.technicianId,
+      scheduled_start: input.scheduledStart,
+      scheduled_end: input.scheduledEnd,
+      status: visitStatus,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !technicalVisit?.id) {
+    throw new Error(error?.message || "No se pudo programar la visita tecnica.");
   }
+
+  const technicalVisitId = technicalVisit.id;
+
+  await logAuditEvent({
+    action: "create",
+    entity: "technical_visits",
+    entityId: technicalVisitId,
+    companyId,
+    newValues: {
+      technicalVisitId,
+      ticketId,
+      technicianId: input.technicianId,
+      scheduledStart: input.scheduledStart,
+      scheduledEnd: input.scheduledEnd,
+      status: visitStatus,
+    },
+  });
 
   const ticketContext = await getTicketDbContext(companyId, ticketId);
   if (!ticketContext) return;
@@ -515,15 +575,19 @@ export async function createTicketTechnicalVisit(
   const customer = await getCustomerEmailData(ticketContext.customer_id);
   if (!isValidEmail(customer.email)) return;
 
-  const normalizedVisitStatus = (input.status ?? "").trim().toLowerCase();
+  const visitStatusLower = String(visitStatus).trim().toLowerCase();
   const isConfirmed =
-    normalizedVisitStatus.includes("confirm") || normalizedVisitStatus.includes("confirmad");
+    visitStatusLower.includes("confirm") || visitStatusLower.includes("confirmad");
   const siteName = await getSiteName(ticketContext.site_id);
 
   void sendEmailNotification({
     companyId,
     to: customer.email,
-    type: "event",
+    type: "transaction",
+    eventKey: isConfirmed ? "visit.confirmed" : "visit.scheduled",
+    templateKey: isConfirmed ? "visit_confirmed" : "visit_scheduled",
+    entityType: "technical_visit",
+    entityId: technicalVisitId,
     title: isConfirmed ? "Visita tecnica confirmada" : "Visita tecnica programada",
     message: isConfirmed
       ? `Hola ${customer.name ?? "cliente"}, confirmamos la visita tecnica del ticket ${
@@ -533,13 +597,13 @@ export async function createTicketTechnicalVisit(
           ticketContext.code
         } el ${formatDateTimeForEmail(input.scheduledStart)}.`,
     actionUrl: getTicketUrl(ticketId),
-    metadata: {
-      ticketCode: ticketContext.code,
-      sitio: siteName ?? "No definido",
-      inicio: input.scheduledStart ?? null,
-      fin: input.scheduledEnd ?? null,
-      estadoVisita: input.status ?? "programada",
-    },
+      metadata: {
+        ticketCode: ticketContext.code,
+        sitio: siteName ?? "No definido",
+        inicio: input.scheduledStart ?? null,
+        fin: input.scheduledEnd ?? null,
+        estadoVisita: visitStatus,
+      },
   }).catch((notifyError) => {
     console.error("[tickets.service] visit_email_error", notifyError);
   });
@@ -565,6 +629,16 @@ export async function updateTicketStatus(
     throw new Error(error?.message || "No se pudo actualizar el estado del ticket.");
   }
 
+  await logAuditEvent({
+    action: "update",
+    entity: "tickets",
+    entityId: ticketId,
+    companyId,
+    newValues: {
+      status,
+    },
+  });
+
   const mapped = mapTicket(data as Record<string, unknown>);
   const customer = await getCustomerEmailData(mapped.customerId);
   if (isValidEmail(customer.email)) {
@@ -573,6 +647,10 @@ export async function updateTicketStatus(
       companyId,
       to: customer.email,
       type: "transaction",
+      eventKey: isResolved ? "ticket.resolved" : "ticket.updated",
+      templateKey: isResolved ? "ticket_resolved" : "ticket_status_updated",
+      entityType: "ticket",
+      entityId: mapped.id,
       title: isResolved ? `Ticket ${mapped.code} resuelto` : `Ticket ${mapped.code} actualizado`,
       message: isResolved
         ? `Hola ${customer.name ?? "cliente"}, tu ticket ${mapped.code} fue marcado como ${status}.`

@@ -238,7 +238,8 @@ export default function BudgetBuilder() {
     }
   }, [addZoneId, zones]);
 
-  const zoneById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones]);
+  const zoneOptionById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones]);
+  const layoutZoneById = useMemo(() => new Map(layout.zones.map((zone) => [zone.id, zone])), [layout.zones]);
   const deviceById = useMemo(() => new Map(devicesCatalog.map((device) => [device.id, device])), [devicesCatalog]);
 
   const rows = useMemo(() => {
@@ -249,7 +250,8 @@ export default function BudgetBuilder() {
       const first = devices[0];
       if (!first) return;
       const device = deviceById.get(first.deviceId);
-      const zone = first.zoneId ? zoneById.get(first.zoneId) : null;
+      const zoneOption = first.zoneId ? zoneOptionById.get(first.zoneId) : null;
+      const layoutZone = first.zoneId ? layoutZoneById.get(first.zoneId) : null;
       const override = priceOverrides[key];
       const price = override?.price ?? device?.price ?? 0;
       const discount = override?.discount ?? 0;
@@ -259,7 +261,7 @@ export default function BudgetBuilder() {
         deviceId: first.deviceId,
         deviceLabel: device?.label ?? first.label ?? "Dispositivo",
         zoneId: first.zoneId ?? null,
-        zoneName: zone?.name ?? "Sin zona",
+        zoneName: zoneOption?.name ?? layoutZone?.name ?? "Sin zona",
         quantity: devices.length,
         price,
         discount,
@@ -267,7 +269,7 @@ export default function BudgetBuilder() {
     });
 
     return nextRows.sort((a, b) => a.deviceLabel.localeCompare(b.deviceLabel));
-  }, [deviceById, layout.devices, priceOverrides, zoneById]);
+  }, [deviceById, layout.devices, layoutZoneById, priceOverrides, zoneOptionById]);
 
   useEffect(() => {
     setPriceOverrides((current) => {
@@ -309,7 +311,7 @@ export default function BudgetBuilder() {
         return;
       }
 
-      const targetZone = zoneId ? zoneById.get(zoneId) : null;
+      const targetZone = zoneId ? layoutZoneById.get(zoneId) : null;
       if (!targetZone) {
         notifications.warning({
           title: "Zona requerida",
@@ -332,12 +334,12 @@ export default function BudgetBuilder() {
       }
       updateLayoutDevices([...otherDevices, ...devices, ...additions]);
     },
-    [deviceById, layout.devices, zoneById]
+    [deviceById, layout.devices, layoutZoneById]
   );
 
   const moveDevicesToZone = useCallback(
     (deviceId: string, fromZoneId: string | null, toZoneId: string) => {
-      const targetZone = zoneById.get(toZoneId);
+      const targetZone = layoutZoneById.get(toZoneId);
       if (!targetZone) return;
 
       const moving = layout.devices.filter((device) => device.deviceId === deviceId && device.zoneId === fromZoneId);
@@ -355,7 +357,7 @@ export default function BudgetBuilder() {
 
       updateLayoutDevices([...rest, ...relocated]);
     },
-    [layout.devices, zoneById]
+    [layout.devices, layoutZoneById]
   );
 
   const removeRow = useCallback(
@@ -522,6 +524,7 @@ export default function BudgetBuilder() {
                   manualSaving={false}
                   autosaveLabel="Plano sincronizado"
                   showSave={false}
+                  restrictToDevices
                 />
               </div>
             </article>

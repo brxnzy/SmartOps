@@ -1,4 +1,6 @@
 ﻿import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
+import { sendEmailNotification } from "./email-notification.service";
 import { getSurveyExecutionData } from "./siteSurveyExecution.service";
 import type { BudgetDetail, BudgetItem, BudgetStatus, BudgetSummary } from "../types/budget.types";
 import type { SurveyLayout } from "../types/siteSurveyExecution.types";
@@ -23,13 +25,6 @@ function safeNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
 function pickSingle<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   if (Array.isArray(value)) return value[0] ?? null;
@@ -41,6 +36,75 @@ function normalizeLayout(value: unknown): SurveyLayout {
     return value as SurveyLayout;
   }
   return { walls: [], zones: [], devices: [] };
+}
+
+function isValidEmail(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  return normalized.length > 3 && normalized.includes("@");
+}
+
+async function getBudgetNotificationContext(
+  budgetId: string
+): Promise<{ companyId: string; customerId: string; customerEmail: string | null; customerName: string | null } | null> {
+  const { data: budgetData, error: budgetError } = await supabase
+    .from("budgets")
+    .select("id, company_id, site_surveys:survey_id ( customer_id )")
+    .eq("id", budgetId)
+    .maybeSingle();
+
+  if (budgetError || !budgetData) return null;
+
+  const surveyRow = pickSingle(budgetData.site_surveys as unknown);
+  const customerId = safeNullableText((surveyRow as { customer_id?: unknown } | null)?.customer_id);
+  if (!customerId) return null;
+
+  const { data: customerData } = await supabase
+    .from("users")
+    .select("name, email")
+    .eq("id", customerId)
+    .maybeSingle<{ name: string | null; email: string | null }>();
+
+  return {
+    companyId: safeText(budgetData.company_id),
+    customerId,
+    customerEmail: customerData?.email ?? null,
+    customerName: customerData?.name ?? null,
+  };
+}
+
+async function notifyBudgetDecision(input: {
+  budgetId: string;
+  decision: "aprobar" | "rechazar";
+  method: "internal" | "portal";
+}): Promise<void> {
+  const context = await getBudgetNotificationContext(input.budgetId);
+  if (!context || !isValidEmail(context.customerEmail)) return;
+
+  const approved = input.decision === "aprobar";
+  const eventKey = approved ? "quote.approved" : "quote.rejected";
+
+  void sendEmailNotification({
+    companyId: context.companyId,
+    to: context.customerEmail,
+    type: "transaction",
+    eventKey,
+    templateKey: "quote_decision",
+    entityType: "budget",
+    entityId: input.budgetId,
+    title: approved ? "Cotizacion aprobada" : "Cotizacion rechazada",
+    message: approved
+      ? `Hola ${context.customerName ?? "cliente"}, tu cotizacion fue aprobada correctamente.`
+      : `Hola ${context.customerName ?? "cliente"}, tu cotizacion fue rechazada.`,
+    metadata: {
+      budgetId: input.budgetId,
+      decision: input.decision,
+      status: approved ? "aprobada" : "rechazada",
+      method: input.method,
+    },
+  }).catch((notifyError) => {
+    console.error("[budget.service] budget_decision_email_error", notifyError);
+  });
 }
 
 export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
@@ -252,6 +316,22 @@ export async function createBudgetFromSurvey(input: {
       throw new Error(itemsError.message || "No se pudieron guardar los items del presupuesto.");
     }
   }
+
+  await logAuditEvent({
+    action: "create",
+    entity: "budgets",
+    entityId: budgetId,
+    companyId: input.companyId,
+    newValues: {
+      surveyId: input.surveyId,
+      status: "borrador",
+      subtotal,
+      taxRate: input.taxRate,
+      taxAmount,
+      total,
+      items: payload.length,
+    },
+  });
 
   return {
     id: budgetId,
@@ -527,6 +607,23 @@ async function ensureBudgetNotExpired(budgetId: string): Promise<void> {
   throw new Error("La cotizacion esta expirada.");
 }
 
+async function ensureBudgetCanBeDecided(budgetId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("budgets")
+    .select("id, status")
+    .eq("id", budgetId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "No se pudo validar el estado de la cotizacion.");
+  }
+
+  const status = safeText(data?.status, "").toLowerCase();
+  if (status !== "enviada") {
+    throw new Error("Solo se puede aprobar o rechazar una cotizacion enviada.");
+  }
+}
+
 export async function saveBudgetDraft(input: {
   budgetId: string;
   layout: SurveyLayout;
@@ -550,6 +647,18 @@ export async function saveBudgetDraft(input: {
   if (error) {
     throw new Error(error.message || "No se pudo guardar el presupuesto.");
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "budgets",
+    entityId: input.budgetId,
+    newValues: {
+      subtotal: input.subtotal,
+      taxRate: input.taxRate,
+      taxAmount: input.taxAmount,
+      total: input.total,
+    },
+  });
 }
 
 export async function replaceBudgetItems(budgetId: string, items: Array<{
@@ -579,29 +688,13 @@ export async function replaceBudgetItems(budgetId: string, items: Array<{
   if (error) {
     throw new Error(error.message || "No se pudieron guardar los items del presupuesto.");
   }
-}
 
-export async function createBudgetApprovalLink(input: {
-  budgetId: string;
-  expiresAt: string;
-}): Promise<{ token: string; linkId: string; url: string }> {
-  const token = `${crypto.randomUUID()}${Math.random().toString(36).slice(2)}`;
-  const { data, error } = await supabase.rpc("create_budget_approval_link", {
-    p_budget_id: input.budgetId,
-    p_token: token,
-    p_expires_at: input.expiresAt,
+  await logAuditEvent({
+    action: "replace",
+    entity: "budget_items",
+    entityId: budgetId,
+    newValues: { count: items.length },
   });
-
-  if (error) {
-    throw new Error(error.message || "No se pudo crear el link de aprobacion.");
-  }
-
-  const baseUrl = window.location.origin;
-  return {
-    token,
-    linkId: safeText(data),
-    url: `${baseUrl}/quote/${token}`,
-  };
 }
 
 export async function approveBudgetInternal(input: {
@@ -610,6 +703,7 @@ export async function approveBudgetInternal(input: {
   notes: string | null;
   decision: "aprobar" | "rechazar";
 }): Promise<void> {
+  await ensureBudgetCanBeDecided(input.budgetId);
   const status: BudgetStatus = input.decision === "aprobar" ? "aprobada" : "rechazada";
 
   const { error } = await supabase
@@ -628,6 +722,24 @@ export async function approveBudgetInternal(input: {
   if (error) {
     throw new Error(error.message || "No se pudo actualizar el estado del presupuesto.");
   }
+
+  await logAuditEvent({
+    action: "approve",
+    entity: "budgets",
+    entityId: input.budgetId,
+    userId: input.approvedByUserId,
+    newValues: {
+      status,
+      method: "internal",
+      notes: input.notes,
+    },
+  });
+
+  await notifyBudgetDecision({
+    budgetId: input.budgetId,
+    decision: input.decision,
+    method: "internal",
+  });
 }
 
 export async function approveBudgetAsCustomer(input: {
@@ -635,6 +747,7 @@ export async function approveBudgetAsCustomer(input: {
   decision: "aprobar" | "rechazar";
   notes: string | null;
 }): Promise<void> {
+  await ensureBudgetCanBeDecided(input.budgetId);
   await ensureBudgetNotExpired(input.budgetId);
   const status: BudgetStatus = input.decision === "aprobar" ? "aprobada" : "rechazada";
 
@@ -653,6 +766,23 @@ export async function approveBudgetAsCustomer(input: {
   if (error) {
     throw new Error(error.message || "No se pudo actualizar la cotizacion.");
   }
+
+  await logAuditEvent({
+    action: "approve",
+    entity: "budgets",
+    entityId: input.budgetId,
+    newValues: {
+      status,
+      method: "portal",
+      notes: input.notes,
+    },
+  });
+
+  await notifyBudgetDecision({
+    budgetId: input.budgetId,
+    decision: input.decision,
+    method: "portal",
+  });
 }
 
 export async function updateBudgetStatus(input: {
@@ -672,22 +802,14 @@ export async function updateBudgetStatus(input: {
   if (error) {
     throw new Error(error.message || "No se pudo actualizar el estado del presupuesto.");
   }
-}
 
-export async function approveBudgetByToken(input: {
-  token: string;
-  decision: "aprobar" | "rechazar";
-  notes: string | null;
-}): Promise<string> {
-  const { data, error } = await supabase.rpc("approve_budget_by_token", {
-    p_token: input.token,
-    p_decision: input.decision,
-    p_notes: input.notes,
+  await logAuditEvent({
+    action: "update",
+    entity: "budgets",
+    entityId: input.budgetId,
+    newValues: {
+      status: input.status,
+      expiresAt: input.expiresAt ?? null,
+    },
   });
-
-  if (error) {
-    throw new Error(error.message || "No se pudo procesar la aprobacion.");
-  }
-
-  return safeText(data);
 }

@@ -41,6 +41,8 @@ interface FloorPlanEditorProps {
   autosaveLabel: string;
   showSave?: boolean;
   restrictToDevices?: boolean;
+  locked?: boolean;
+  presentationOnly?: boolean;
 }
 
 interface LayoutSnapshot {
@@ -72,18 +74,18 @@ function createSnapshot(
   return cloneSnapshot({ walls, zones, devices });
 }
 
-function GridLayer({ visible }: { visible: boolean }) {
+function GridLayer({ visible, step = GRID }: { visible: boolean; step?: number }) {
   if (!visible) return null;
 
   const lines: React.ReactNode[] = [];
 
-  for (let x = 0; x <= CANVAS_WIDTH; x += GRID) {
+  for (let x = 0; x <= CANVAS_WIDTH; x += step) {
     lines.push(
       <Line key={`vx-${x}`} points={[x, 0, x, CANVAS_HEIGHT]} stroke="#f1f5f9" strokeWidth={1} listening={false} />
     );
   }
 
-  for (let y = 0; y <= CANVAS_HEIGHT; y += GRID) {
+  for (let y = 0; y <= CANVAS_HEIGHT; y += step) {
     lines.push(
       <Line key={`hy-${y}`} points={[0, y, CANVAS_WIDTH, y]} stroke="#f1f5f9" strokeWidth={1} listening={false} />
     );
@@ -119,6 +121,8 @@ export default function FloorPlanEditor({
   autosaveLabel,
   showSave = true,
   restrictToDevices = false,
+  locked = false,
+  presentationOnly = false,
 }: FloorPlanEditorProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const zoneTransformerRef = useRef<Konva.Transformer | null>(null);
@@ -180,7 +184,7 @@ export default function FloorPlanEditor({
     const transformer = zoneTransformerRef.current;
     if (!transformer) return;
 
-    if (selectedType !== "zone" || !selectedId || mode !== "select") {
+    if (restrictToDevices || selectedType !== "zone" || !selectedId || mode !== "select") {
       transformer.nodes([]);
       transformer.getLayer()?.batchDraw();
       return;
@@ -195,7 +199,7 @@ export default function FloorPlanEditor({
 
     transformer.nodes([node]);
     transformer.getLayer()?.batchDraw();
-  }, [mode, selectedId, selectedType, zones]);
+  }, [mode, selectedId, selectedType, restrictToDevices, zones]);
 
   const setLayout = useCallback(
     (nextWalls: SurveyWall[], nextZones: SurveyZoneLayout[], nextDevices: SurveyDeviceLayout[], recordHistory = true) => {
@@ -214,6 +218,7 @@ export default function FloorPlanEditor({
   );
 
   const undo = useCallback(() => {
+    if (locked) return;
     if (historyIndexRef.current <= 0) return;
     historyIndexRef.current -= 1;
     const snapshot = historyRef.current[historyIndexRef.current];
@@ -221,9 +226,10 @@ export default function FloorPlanEditor({
     setLayout(snapshot.walls, snapshot.zones, snapshot.devices, false);
     setSelectedId(null);
     setSelectedType(null);
-  }, [setLayout]);
+  }, [locked, setLayout]);
 
   const redo = useCallback(() => {
+    if (locked) return;
     if (historyIndexRef.current >= historyRef.current.length - 1) return;
     historyIndexRef.current += 1;
     const snapshot = historyRef.current[historyIndexRef.current];
@@ -231,10 +237,19 @@ export default function FloorPlanEditor({
     setLayout(snapshot.walls, snapshot.zones, snapshot.devices, false);
     setSelectedId(null);
     setSelectedType(null);
-  }, [setLayout]);
+  }, [locked, setLayout]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (locked) {
+        if (event.key === "Escape") {
+          setDrawingWall(null);
+          setDrawingZone(null);
+          setMode("select");
+        }
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) {
@@ -285,7 +300,7 @@ export default function FloorPlanEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [devices, redo, selectedId, selectedType, setLayout, undo, walls, zones]);
+  }, [devices, locked, redo, selectedId, selectedType, setLayout, undo, walls, zones]);
 
   const commitWallDrag = useCallback(
     (wallId: string, dx: number, dy: number) => {
@@ -462,6 +477,7 @@ export default function FloorPlanEditor({
   );
 
   const handleStageMouseMove = () => {
+    if (locked) return;
     const pointer = getPointer(stageRef.current);
 
     if (drawingWall && pointer) {
@@ -474,6 +490,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (locked) return;
     const stage = stageRef.current;
     if (!stage) return;
 
@@ -521,6 +538,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (locked) return;
     if (mode !== "draw-zone") return;
     if (restrictToDevices) return;
     const stage = stageRef.current;
@@ -533,6 +551,7 @@ export default function FloorPlanEditor({
   };
 
   const handleStageMouseUp = () => {
+    if (locked) return;
     if (!drawingZone) return;
     if (restrictToDevices) {
       setDrawingZone(null);
@@ -576,6 +595,7 @@ export default function FloorPlanEditor({
   };
 
   const handleCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (locked) return;
     event.preventDefault();
 
     const stage = stageRef.current;
@@ -647,40 +667,48 @@ export default function FloorPlanEditor({
     return "Pared";
   }, [devices, selectedId, selectedType, zones]);
 
+  const hideChrome = presentationOnly;
   const canUndo = historyIndexRef.current > 0;
   const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+  const stageWidth = CANVAS_WIDTH;
+  const stageHeight = CANVAS_HEIGHT;
+  const gridStep = GRID;
 
   return (
     <section className="h-full rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <Toolbar
-        mode={mode}
-        onModeChange={(next) => {
-          if (restrictToDevices && (next === "draw-wall" || next === "draw-zone")) return;
-          setMode(next);
-        }}
-        showGrid={showGrid}
-        onToggleGrid={() => setShowGrid((current) => !current)}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        zoneOptions={zonesCatalog.map((zone) => ({ id: zone.id, name: zone.name }))}
-        selectedZoneId={selectedZoneId}
-        onSelectZone={setSelectedZoneId}
-        deviceOptions={devicesCatalog.map((device) => ({ id: device.id, name: device.label }))}
-        selectedDeviceId={selectedDeviceId}
-        onSelectDevice={setSelectedDeviceId}
-        onManualSave={onManualSave}
-        manualSaving={manualSaving}
-        autosaveLabel={autosaveLabel}
-        showSave={showSave}
-        showWallTools={!restrictToDevices}
-        showZoneTools={!restrictToDevices}
-        showZoneSelector={!restrictToDevices}
-      />
+      {!hideChrome ? (
+        <Toolbar
+          mode={mode}
+          onModeChange={(next) => {
+            if (locked) return;
+            if (restrictToDevices && (next === "draw-wall" || next === "draw-zone")) return;
+            setMode(next);
+          }}
+          showGrid={showGrid}
+          onToggleGrid={() => setShowGrid((current) => !current)}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          zoneOptions={zonesCatalog.map((zone) => ({ id: zone.id, name: zone.name }))}
+          selectedZoneId={selectedZoneId}
+          onSelectZone={setSelectedZoneId}
+          deviceOptions={devicesCatalog.map((device) => ({ id: device.id, name: device.label }))}
+          selectedDeviceId={selectedDeviceId}
+          onSelectDevice={setSelectedDeviceId}
+          onManualSave={onManualSave}
+          manualSaving={manualSaving}
+          autosaveLabel={autosaveLabel}
+          showSave={showSave && !locked}
+          showWallTools={!restrictToDevices}
+          showZoneTools={!restrictToDevices}
+          showZoneSelector={!restrictToDevices}
+        />
+      ) : null}
 
-      <div className="grid min-h-760px grid-cols-[260px_1fr]">
-        <aside className="border-r border-slate-200 bg-slate-50 p-3">
+      <div className={hideChrome ? "min-h-760px" : "grid min-h-760px grid-cols-[260px_1fr]"}>
+        {!hideChrome ? (
+          <aside className="border-r border-slate-200 bg-slate-50 p-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Zonas del sitio</h3>
             <div className="mt-2 space-y-2">
@@ -693,13 +721,13 @@ export default function FloorPlanEditor({
                   <button
                     key={zone.id}
                     type="button"
-                    draggable={!restrictToDevices}
+                    draggable={!restrictToDevices && !locked}
                     onDragStart={() => {
-                      if (restrictToDevices) return;
+                      if (restrictToDevices || locked) return;
                       setDraggingZoneId(zone.id);
                     }}
                     onDragEnd={() => {
-                      if (restrictToDevices) return;
+                      if (restrictToDevices || locked) return;
                       setDraggingZoneId(null);
                     }}
                     onClick={() => setSelectedZoneId(zone.id)}
@@ -728,8 +756,11 @@ export default function FloorPlanEditor({
                   <button
                     key={device.id}
                     type="button"
-                    draggable
-                    onDragStart={() => setDraggingDeviceId(device.id)}
+                    draggable={!locked}
+                    onDragStart={() => {
+                      if (locked) return;
+                      setDraggingDeviceId(device.id);
+                    }}
                     onDragEnd={() => setDraggingDeviceId(null)}
                     onClick={() => setSelectedDeviceId(device.id)}
                     className={`w-full rounded-lg border bg-white px-2 py-2 text-left text-xs transition ${
@@ -750,30 +781,38 @@ export default function FloorPlanEditor({
             <p className="text-[11px] font-semibold text-slate-600">Seleccion</p>
             <p className="text-xs text-slate-700">{selectedInfo}</p>
             <p className="text-[11px] text-slate-500">
-              Tip: arrastra zonas/dispositivos al plano y usa las esquinas azules para cambiar el tamano.
+              {restrictToDevices
+                ? "Tip: arrastra dispositivos al plano y muevelos entre zonas."
+                : "Tip: arrastra zonas/dispositivos al plano y usa las esquinas azules para cambiar el tamano."}
             </p>
           </div>
-        </aside>
+          </aside>
+        ) : null}
 
         <div
           className="overflow-auto bg-white"
-          onDragOver={(event) => event.preventDefault()}
+          onDragOver={(event) => {
+            if (locked) return;
+            event.preventDefault();
+          }}
           onDrop={handleCanvasDrop}
         >
-          <div className="min-w-1248px p-3">
+          <div className={hideChrome ? "p-3" : "min-w-1248px p-3"}>
             <Stage
               ref={(node) => {
                 stageRef.current = node;
               }}
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
+              width={stageWidth}
+              height={stageHeight}
+              scaleX={1}
+              scaleY={1}
               onMouseMove={handleStageMouseMove}
               onClick={handleStageClick}
               onMouseDown={handleStageMouseDown}
               onMouseUp={handleStageMouseUp}
               className="rounded-xl border border-slate-200 bg-white"
             >
-              <GridLayer visible={showGrid} />
+              <GridLayer visible={showGrid} step={gridStep} />
 
               <Layer>
                 {zones.map((zone, index) => {
@@ -787,13 +826,13 @@ export default function FloorPlanEditor({
                       }}
                       x={zone.x}
                       y={zone.y}
-                      draggable={mode === "select" && !restrictToDevices}
+                      draggable={mode === "select" && !restrictToDevices && !locked}
                       onDragEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         commitZoneDrag(zone.id, event.target.x(), event.target.y());
                       }}
                       onTransformEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         const node = event.target as Konva.Group;
                         const nextZone = {
                           x: node.x(),
@@ -806,10 +845,12 @@ export default function FloorPlanEditor({
                         commitZoneResize(zone.id, nextZone);
                       }}
                       onClick={() => {
+                        if (restrictToDevices) return;
                         setSelectedId(zone.id);
                         setSelectedType("zone");
                       }}
                       onTap={() => {
+                        if (restrictToDevices) return;
                         setSelectedId(zone.id);
                         setSelectedType("zone");
                       }}
@@ -841,34 +882,36 @@ export default function FloorPlanEditor({
                     </Group>
                   );
                 })}
-                <Transformer
-                  ref={zoneTransformerRef}
-                  rotateEnabled={false}
-                  flipEnabled={false}
-                  enabledAnchors={[
-                    "top-left",
-                    "top-center",
-                    "top-right",
-                    "middle-right",
-                    "bottom-right",
-                    "bottom-center",
-                    "bottom-left",
-                    "middle-left",
-                  ]}
-                  borderStroke="#2563eb"
-                  borderStrokeWidth={1.5}
-                  anchorStroke="#2563eb"
-                  anchorFill="#ffffff"
-                  anchorCornerRadius={999}
-                  anchorSize={10}
-                  boundBoxFunc={(_, newBox) => {
-                    const x = clamp(snap(newBox.x), 0, CANVAS_WIDTH - MIN_ZONE_SIZE);
-                    const y = clamp(snap(newBox.y), 0, CANVAS_HEIGHT - MIN_ZONE_SIZE);
-                    const width = clamp(snap(newBox.width), MIN_ZONE_SIZE, CANVAS_WIDTH - x);
-                    const height = clamp(snap(newBox.height), MIN_ZONE_SIZE, CANVAS_HEIGHT - y);
-                    return { ...newBox, x, y, width, height };
-                  }}
-                />
+                {!restrictToDevices ? (
+                  <Transformer
+                    ref={zoneTransformerRef}
+                    rotateEnabled={false}
+                    flipEnabled={false}
+                    enabledAnchors={[
+                      "top-left",
+                      "top-center",
+                      "top-right",
+                      "middle-right",
+                      "bottom-right",
+                      "bottom-center",
+                      "bottom-left",
+                      "middle-left",
+                    ]}
+                    borderStroke="#2563eb"
+                    borderStrokeWidth={1.5}
+                    anchorStroke="#2563eb"
+                    anchorFill="#ffffff"
+                    anchorCornerRadius={999}
+                    anchorSize={10}
+                    boundBoxFunc={(_, newBox) => {
+                      const x = clamp(snap(newBox.x), 0, CANVAS_WIDTH - MIN_ZONE_SIZE);
+                      const y = clamp(snap(newBox.y), 0, CANVAS_HEIGHT - MIN_ZONE_SIZE);
+                      const width = clamp(snap(newBox.width), MIN_ZONE_SIZE, CANVAS_WIDTH - x);
+                      const height = clamp(snap(newBox.height), MIN_ZONE_SIZE, CANVAS_HEIGHT - y);
+                      return { ...newBox, x, y, width, height };
+                    }}
+                  />
+                ) : null}
                 {ghostZone}
               </Layer>
 
@@ -883,9 +926,9 @@ export default function FloorPlanEditor({
                       strokeWidth={isSelected ? 4 : 3}
                       lineCap="round"
                       lineJoin="round"
-                      draggable={mode === "select" && !restrictToDevices}
+                      draggable={mode === "select" && !restrictToDevices && !locked}
                       onDragEnd={(event) => {
-                        if (restrictToDevices) return;
+                        if (restrictToDevices || locked) return;
                         // FIX: igual que dispositivos, Konva acumula el desplazamiento
                         // relativo en x()/y(). Pasamos el delta y reseteamos el nodo.
                         const dx = snap(event.target.x());
@@ -894,10 +937,12 @@ export default function FloorPlanEditor({
                         commitWallDrag(wall.id, dx, dy);
                       }}
                       onClick={() => {
+                        if (restrictToDevices) return;
                         setSelectedId(wall.id);
                         setSelectedType("wall");
                       }}
                       onTap={() => {
+                        if (restrictToDevices) return;
                         setSelectedId(wall.id);
                         setSelectedType("wall");
                       }}
@@ -916,8 +961,9 @@ export default function FloorPlanEditor({
                       key={device.id}
                       x={device.x}
                       y={device.y}
-                      draggable={mode === "select"}
+                      draggable={mode === "select" && !locked}
                       onDragEnd={(event) => {
+                        if (locked) return;
                         // FIX: capturamos el delta antes de resetear,
                         // commitDeviceDrag suma ese delta a la posición original del estado.
                         const deltaX = event.target.x() - device.x;

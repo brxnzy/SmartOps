@@ -28,7 +28,9 @@ import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsTicketCategories from "../screens/admin/settings/SettingsTicketCategories";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
+import SettingsPostInstallationChecks from "../screens/admin/settings/SettingsPostInstallationChecks";
 import SettingsLogs from "../screens/admin/settings/SettingsLogs";
+import EmailHistory from "../screens/admin/EmailHistory";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
@@ -39,13 +41,14 @@ import AdminTickets from "../screens/admin/Tickets";
 import AdminTicketDetail from "../screens/admin/TicketDetail";
 import BudgetList from "../screens/admin/BudgetList";
 import BudgetDetail from "../screens/admin/BudgetDetail";
+import InstallationProjects from "../screens/admin/InstallationProjects";
+import InstallationProjectDetail from "../screens/admin/InstallationProjectDetail";
 import CustomerTickets from "../screens/customer/CustomerTickets";
 import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
 import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
 import CustomerProfile from "../screens/customer/CustomerProfile";
 import CustomerQuotes from "../screens/customer/CustomerQuotes";
 import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
-import BudgetApprovalPublic from "../screens/public/BudgetApprovalPublic";
 
 
 export default function AppRoutes() {
@@ -54,7 +57,6 @@ export default function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/update-password" element={<UpdatePassword />} />
-      <Route path="/quote/:token" element={<BudgetApprovalPublic />} />
       <Route
         path="/app"
         element={
@@ -186,7 +188,14 @@ export default function AppRoutes() {
           }
         />
 
-        <Route path="schedule" element={<Schedule />} />
+        <Route
+          path="schedule"
+          element={
+            <PermissionRoute permission={PERMISSIONS.scheduleRead}>
+              <Schedule />
+            </PermissionRoute>
+          }
+        />
         <Route
           path="site_surveys"
           element={
@@ -264,10 +273,26 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="post-installation-checks"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsPostInstallationChecksRead}>
+              <SettingsPostInstallationChecks />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="logs"
           element={
             <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
               <SettingsLogs />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="email-history"
+          element={
+            <PermissionRoute permission={PERMISSIONS.emailHistoryRead}>
+              <EmailHistory />
             </PermissionRoute>
           }
         />
@@ -301,6 +326,22 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.budgetsRead}>
               <BudgetDetail />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="installation-projects"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsRead}>
+              <InstallationProjects />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="installation-projects/:projectId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsOpen}>
+              <InstallationProjectDetail />
             </PermissionRoute>
           }
         />

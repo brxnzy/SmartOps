@@ -6,6 +6,7 @@ import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
 import Field from "../../components/Field";
 import Modal from "../../components/Modal";
+import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import { addTicketComment, createTicketTechnicalVisit, getTicketDetail, listTechnicians } from "../../services/tickets.service";
 import type { TicketComment, TicketListItem, TicketStatus } from "../../types/ticketing.types";
@@ -43,9 +44,11 @@ function formatDateTime(value: string | null): string {
 
 export default function AdminTicketDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
-  const { companyProfile, authUser } = useAuth();
+  const { companyProfile, authUser, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
   const userId = authUser?.id ?? null;
+  const canComment = canAccess(PERMISSIONS.ticketsComment);
+  const canScheduleVisit = canAccess(PERMISSIONS.ticketsVisitSchedule);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +102,10 @@ export default function AdminTicketDetail() {
   }, [companyId]);
 
   const handleScheduleVisit = async () => {
+    if (!canScheduleVisit) {
+      setError("No tienes permisos para programar visitas tecnicas.");
+      return;
+    }
     if (!companyId || !ticketId || !visitStart) return;
     setVisitSubmitting(true);
     try {
@@ -119,6 +126,10 @@ export default function AdminTicketDetail() {
   };
 
   const handleComment = async () => {
+    if (!canComment) {
+      setError("No tienes permisos para comentar tickets.");
+      return;
+    }
     if (!companyId || !ticketId || !userId || !commentText.trim()) return;
     setSubmitting(true);
     try {
@@ -168,6 +179,7 @@ export default function AdminTicketDetail() {
           <Button
             type="button"
             onClick={() => setVisitModalOpen(true)}
+            disabled={!canScheduleVisit}
             className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
           >
             Programar visita tecnica
@@ -249,6 +261,7 @@ export default function AdminTicketDetail() {
             <textarea
               value={commentText}
               onChange={(event) => setCommentText(event.target.value)}
+              disabled={!canComment}
               rows={3}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
             />
@@ -258,6 +271,7 @@ export default function AdminTicketDetail() {
               <input
                 type="checkbox"
                 checked={commentInternal}
+                disabled={!canComment}
                 onChange={(event) => setCommentInternal(event.target.checked)}
               />
               Comentario interno
@@ -265,13 +279,14 @@ export default function AdminTicketDetail() {
             <input
               type="file"
               multiple
+              disabled={!canComment}
               onChange={(event) => setCommentFiles(Array.from(event.target.files ?? []))}
               className="text-xs text-slate-500"
             />
             <Button
               type="button"
               onClick={() => void handleComment()}
-              disabled={submitting}
+              disabled={!canComment || submitting}
               className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
               icon={<Send size={14} />}
             >
@@ -347,7 +362,7 @@ export default function AdminTicketDetail() {
             <Button
               type="button"
               onClick={() => void handleScheduleVisit()}
-              disabled={visitSubmitting || !visitStart}
+              disabled={!canScheduleVisit || visitSubmitting || !visitStart}
               className="border-0 bg-blue-600 text-white hover:bg-blue-800 font-medium text-sm"
             >
               Guardar visita
@@ -365,6 +380,7 @@ export default function AdminTicketDetail() {
                 type="datetime-local"
                 value={visitStart}
                 onChange={(event) => setVisitStart(event.target.value)}
+                disabled={!canScheduleVisit}
                 className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -376,6 +392,7 @@ export default function AdminTicketDetail() {
                 type="datetime-local"
                 value={visitEnd}
                 onChange={(event) => setVisitEnd(event.target.value)}
+                disabled={!canScheduleVisit}
                 className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -388,6 +405,7 @@ export default function AdminTicketDetail() {
             <select
               value={visitTechnician}
               onChange={(event) => setVisitTechnician(event.target.value)}
+              disabled={!canScheduleVisit}
               className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
             >
               <option value="">Sin asignar</option>

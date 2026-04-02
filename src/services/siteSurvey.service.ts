@@ -1,6 +1,8 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import { sendEmailNotification } from "./email-notification.service";
+import { normalizeSurveyStatus, normalizeVisitStatus } from "../utils/siteSurveyWorkflow";
 import type {
   SiteSurveyChecklistItem,
   SiteSurveyCreateInput,
@@ -18,15 +20,6 @@ function safeText(value: unknown, fallback = ""): string {
 function safeNullableText(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return safeText(value, "");
-}
-
-function safeNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function safeBoolean(value: unknown): boolean {
@@ -94,6 +87,8 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
         scheduled_end,
         technician_id,
         status,
+        ticket_id,
+        installation_project_id,
         users:technician_id ( id, name )
       )
     `
@@ -114,7 +109,7 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
         ? [row.technical_visits]
         : [];
     const sortedVisits = visits
-      .filter((visit) => visit)
+      .filter((visit) => visit && (visit.ticket_id ?? null) === null && !visit.installation_project_id)
       .sort((a, b) => {
         const aTime = a.scheduled_start ? new Date(a.scheduled_start).getTime() : 0;
         const bTime = b.scheduled_start ? new Date(b.scheduled_start).getTime() : 0;
@@ -132,7 +127,7 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
     return {
       id: safeText(row.id),
       createdAt: safeText(row.created_at ?? new Date().toISOString()),
-      status: safeNullableText(row.status),
+      status: normalizeSurveyStatus(safeNullableText(row.status)) ?? "pendiente",
       completedAt: safeNullableText(row.completed_at),
       companyId: safeNullableText(row.company_id),
       customerId: safeNullableText(row.customer_id),
@@ -143,12 +138,12 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
       observations: safeNullableText(row.observations),
       recomendations: safeNullableText(row.recomendations),
       risks: safeNullableText(row.risks),
-      visitId: safeNumber(visit?.id),
+      visitId: safeNullableText(visit?.id),
       scheduledStart: safeNullableText(visit?.scheduled_start),
       scheduledEnd: safeNullableText(visit?.scheduled_end),
       technicianId: safeNullableText(visit?.technician_id),
       technicianName: safeNullableText(technician?.name),
-      visitStatus: safeNullableText(visit?.status),
+      visitStatus: visit ? normalizeVisitStatus(safeNullableText(visit?.status)) ?? "programada" : null,
     } satisfies SiteSurveySummary;
   });
 }
@@ -160,6 +155,7 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
       company_id: companyId,
       customer_id: input.customerId,
       site_id: input.siteId,
+      status: "pendiente",
     })
     .select("id")
     .single<{ id: string }>();
@@ -168,7 +164,7 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
     throw new Error(buildErrorMessage(surveyError, "No se pudo crear el levantamiento."));
   }
 
-  const { error: visitError } = await supabase
+  const { data: visitRow, error: visitError } = await supabase
     .from("technical_visits")
     .insert({
       company_id: companyId,
@@ -176,12 +172,29 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
       technician_id: input.technicianId,
       scheduled_start: input.scheduledStart,
       scheduled_end: input.scheduledEnd ?? null,
-    });
+      status: "programada",
+    })
+    .select("id")
+    .single<{ id: string }>();
 
-  if (visitError) {
+  if (visitError || !visitRow?.id) {
     await supabase.from("site_surveys").delete().eq("id", surveyRow.id);
     throw new Error(buildErrorMessage(visitError, "No se pudo agendar la visita tecnica."));
   }
+
+  await logAuditEvent({
+    action: "create",
+    entity: "site_surveys",
+    entityId: surveyRow.id,
+    companyId,
+    newValues: {
+      customerId: input.customerId,
+      siteId: input.siteId,
+      technicianId: input.technicianId,
+      scheduledStart: input.scheduledStart,
+      scheduledEnd: input.scheduledEnd ?? null,
+    },
+  });
 
   const [{ data: userData }, { data: siteData }] = await Promise.all([
     supabase
@@ -200,7 +213,11 @@ export async function createSiteSurvey(companyId: string, input: SiteSurveyCreat
     void sendEmailNotification({
       companyId,
       to: userData?.email ?? "",
-      type: "event",
+      type: "transaction",
+      eventKey: "visit.scheduled",
+      templateKey: "visit_scheduled",
+      entityType: "technical_visit",
+      entityId: visitRow.id,
       title: "Visita tecnica programada",
       message: `Hola ${userData?.name ?? "cliente"}, tu visita tecnica fue programada para ${formatDateTimeForEmail(
         input.scheduledStart
@@ -243,18 +260,35 @@ export async function listSiteSurveyChecklistItems(siteSurveyId: string): Promis
 }
 
 export async function updateSiteSurvey(siteSurveyId: string, input: SiteSurveyUpdateInput): Promise<void> {
+  const normalizedStatus =
+    input.status === undefined ? undefined : normalizeSurveyStatus(input.status);
+
   const { error } = await supabase.from("site_surveys").update({
     requirements: input.requirements,
     observations: input.observations,
     recomendations: input.recomendations,
     risks: input.risks,
-    status: input.status,
+    status: normalizedStatus,
     completed_at: input.completedAt,
   }).eq("id", siteSurveyId);
 
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo actualizar el levantamiento."));
   }
+
+  await logAuditEvent({
+    action: "update",
+    entity: "site_surveys",
+    entityId: siteSurveyId,
+    newValues: {
+      requirements: input.requirements,
+      observations: input.observations,
+      recomendations: input.recomendations,
+      risks: input.risks,
+      status: normalizedStatus,
+      completedAt: input.completedAt,
+    },
+  });
 }
 
 export async function upsertSiteSurveyChecklistItems(items: SiteSurveyChecklistItem[]): Promise<void> {
@@ -278,6 +312,15 @@ export async function upsertSiteSurveyChecklistItems(items: SiteSurveyChecklistI
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudieron actualizar los items del checklist."));
   }
+
+  await logAuditEvent({
+    action: "upsert",
+    entity: "site_survey_checklist_items",
+    entityId: items[0]?.siteSurveyId,
+    newValues: {
+      count: items.length,
+    },
+  });
 }
 
 export async function listCustomerSites(companyId: string, customerId: string): Promise<SimpleOption[]> {

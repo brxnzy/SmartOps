@@ -75,7 +75,7 @@ export default function CustomerQuoteDetail() {
     return new Date(budget.expiresAt).getTime() <= Date.now();
   }, [budget?.expiresAt]);
 
-  const canRespond = !isExpired && (budget?.status === "enviada" || budget?.status === "borrador");
+  const canRespond = !isExpired && budget?.status === "enviada" && budget?.quoteStatus === "enviada";
 
   const openDecisionModal = (nextDecision: "aprobar" | "rechazar") => {
     setDecision(nextDecision);

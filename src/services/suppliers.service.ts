@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   Supplier,
   SupplierInput,
@@ -113,6 +114,19 @@ export async function createSupplier(companyId: string, input: SupplierInput): P
     throw new Error(buildErrorMessage(error, "No se pudo crear el proveedor."));
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "suppliers",
+    entityId: data.id,
+    companyId,
+    newValues: {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+    },
+  });
+
   return mapSupplier(data);
 }
 
@@ -138,6 +152,19 @@ export async function updateSupplier(
     throw new Error(buildErrorMessage(error, "No se pudo actualizar el proveedor."));
   }
 
+  await logAuditEvent({
+    action: "update",
+    entity: "suppliers",
+    entityId: data.id,
+    companyId,
+    newValues: {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+    },
+  });
+
   return mapSupplier(data);
 }
 
@@ -151,4 +178,11 @@ export async function deleteSupplier(companyId: string, supplierId: string): Pro
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el proveedor."));
   }
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "suppliers",
+    entityId: supplierId,
+    companyId,
+  });
 }

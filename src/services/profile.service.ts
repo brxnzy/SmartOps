@@ -1,6 +1,7 @@
 import { supabase } from "../libs/supabase";
 import type { UserProfile } from "../types/User";
 import type { UserRow } from "../types/types";
+import { logAuditEvent } from "./audit.service";
 
 
 export async function getUserProfileById(userId: string): Promise<UserProfile | null> {
@@ -45,6 +46,17 @@ export async function updateUserProfile(input: {
 
   if (error) throw error;
 
+  await logAuditEvent({
+    action: "update",
+    entity: "users",
+    entityId: data.id,
+    newValues: {
+      name: data.name,
+      idCard: data.id_card,
+      photoUrl: data.photo_url,
+    },
+  });
+
   return {
     id: data.id,
     name: data.name,
@@ -71,6 +83,15 @@ export async function uploadUserPhoto(params: {
   if (uploadError) throw uploadError;
 
   const { data } = supabase.storage.from("users_photos").getPublicUrl(objectPath);
+
+  await logAuditEvent({
+    action: "upload",
+    entity: "users_photos",
+    entityId: params.userId,
+    userId: params.userId,
+    newValues: { objectPath },
+  });
+
   return data.publicUrl;
 }
 
@@ -86,4 +107,12 @@ export async function deleteUserPhoto(userId: string) {
   const paths = files.map((f) => `${userId}/${f.name}`);
   const { error } = await supabase.storage.from("users_photos").remove(paths);
   if (error) throw error;
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "users_photos",
+    entityId: userId,
+    userId,
+    newValues: { paths },
+  });
 }
