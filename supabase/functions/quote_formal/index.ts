@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
@@ -8,6 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-user-jwt",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+export type BudgetItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -59,6 +66,10 @@ async function fetchLogoBytes(url: string): Promise<{ bytes: Uint8Array; type: "
   } catch {
     return null;
   }
+}
+
+interface Role{
+  company_id: string
 }
 
 function wrapText(text: string, maxLen: number): string[] {
@@ -159,7 +170,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: rolesError.message });
     }
 
-    const isCompanyMember = (roles ?? []).some((row: any) => row.company_id === companyId);
+    const isCompanyMember = (roles ?? []).some((row: Role) => row.company_id === companyId);
     if (!isCompanyMember) {
       return jsonResponse(403, { error: "No autorizado para esta compania" });
     }
@@ -224,7 +235,8 @@ Deno.serve(async (req: Request) => {
       customerEmail = authUser?.user?.email ?? null;
     }
 
-    const items = (budget.budget_items ?? []) as any[];
+    const items: BudgetItem[] = budget.budget_items ?? [];
+
 
     const quoteNumber = buildQuoteNumber(budgetId);
     const createdAt = new Date();

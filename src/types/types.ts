@@ -137,3 +137,5 @@ export type DeviceInventoryRow = {
   last_updated: string | null;
   device: DeviceInventoryDeviceJoinRow | null;
 };
+
+
