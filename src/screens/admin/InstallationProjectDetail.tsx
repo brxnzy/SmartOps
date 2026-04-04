@@ -31,6 +31,8 @@ import { notifications } from "../../services/notification.service";
 import { cancelTechnicalVisit } from "../../services/siteSurveyExecution.service";
 import { listTechnicians } from "../../services/tickets.service";
 import useDeliveryActGeneration from "../../hooks/useDeliveryActGeneration";
+import useInstalledDevices from "../../hooks/useInstalledDevices";
+import InstalledDevicesSection from "../../components/installedDevices/InstalledDevicesSection";
 
 type TaskDraft = {
   title: string;
@@ -139,6 +141,7 @@ export default function InstallationProjectDetail() {
   const [postChecksDirty, setPostChecksDirty] = useState(false);
 
   const deliveryAct = useDeliveryActGeneration(projectId ?? null);
+  const installedDevices = useInstalledDevices({ companyId, projectId: projectId ?? null, installedBy: userId });
 
   const loadProject = useCallback(async () => {
     if (!companyId || !projectId) {
@@ -221,6 +224,16 @@ export default function InstallationProjectDetail() {
       ).values()
     );
   }, [project]);
+
+  const installedDevicesCatalog = useMemo(
+    () => layoutDevicesCatalog.map((device) => ({ id: device.id, label: device.label ?? device.name ?? "Dispositivo" })),
+    [layoutDevicesCatalog]
+  );
+
+  const installedZonesOptions = useMemo(
+    () => layoutZones.map((zone) => ({ id: zone.id, name: zone.name })),
+    [layoutZones]
+  );
 
   const pendingPhases = useMemo(() => phasesDraft.filter((phase) => !phase.done).length, [phasesDraft]);
 
@@ -695,7 +708,7 @@ export default function InstallationProjectDetail() {
                       navigate(`/admin/acta/${result.actId}?returnTo=/admin/installation-projects/${projectId}`);
                     }
                   })}
-                  disabled={deliveryAct.creating}
+                  disabled={deliveryAct.creating || installedDevices.loading || installedDevices.installedCount === 0}
                   className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {deliveryAct.creating ? "Generando..." : "Generar acta"}
@@ -721,7 +734,11 @@ export default function InstallationProjectDetail() {
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Genera el acta para poder finalizar el proyecto.
+                {installedDevices.loading
+                  ? "Cargando dispositivos instalados..."
+                  : installedDevices.installedCount === 0
+                  ? "Primero registra dispositivos instalados para poder generar el acta."
+                  : "Genera el acta para poder finalizar el proyecto."}
               </div>
             )}
           </article>
@@ -973,6 +990,26 @@ export default function InstallationProjectDetail() {
           </Button>
         </div>
       </article>
+
+      <InstalledDevicesSection
+        siteId={project.siteId}
+        zones={installedZonesOptions}
+        catalogDevices={installedDevicesCatalog}
+        technicians={technicians}
+        defaultInstalledBy={userId}
+        canManage={canUpdateProject && !isClosed}
+        loading={installedDevices.loading}
+        error={installedDevices.error}
+        devices={installedDevices.devices}
+        creating={installedDevices.creating}
+        savingId={installedDevices.savingId}
+        deletingId={installedDevices.deletingId}
+        onReload={() => void installedDevices.reload()}
+        onCreate={(input) => installedDevices.registerDevice(input)}
+        onUpdate={(deviceId, patch) => installedDevices.editDevice(deviceId, patch)}
+        onChangeStatus={(deviceId, status) => installedDevices.changeStatus(deviceId, status)}
+        onRemove={(deviceId) => installedDevices.removeDevice(deviceId)}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

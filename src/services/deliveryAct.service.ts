@@ -118,7 +118,7 @@ async function callFunction<T>(path: string, payload: Record<string, unknown>): 
 }
 
 export async function generateDeliveryAct(projectId: string): Promise<DeliveryActGenerateResult> {
-  return callFunction<DeliveryActGenerateResult>("generate-delivery-act", { projectId });
+  return callFunction<DeliveryActGenerateResult>("generate-delivery-act-v3", { projectId });
 }
 
 export async function signDeliveryAct(
