@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
@@ -18,7 +18,6 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import {
   createInstallationProjectTask,
-  finalizeInstallationProject,
   getInstallationProjectById,
   seedInstallationProjectDefaults,
   updateInstallationProjectMetadata,
@@ -31,6 +30,11 @@ import {
 import { notifications } from "../../services/notification.service";
 import { cancelTechnicalVisit } from "../../services/siteSurveyExecution.service";
 import { listTechnicians } from "../../services/tickets.service";
+import useDeliveryActGeneration from "../../hooks/useDeliveryActGeneration";
+import useInstalledDevices from "../../hooks/useInstalledDevices";
+import InstalledDevicesFromPlanSection from "../../components/installedDevices/InstalledDevicesFromPlanSection";
+import InstalledDevicesReadOnlySection from "../../components/installedDevices/InstalledDevicesReadOnlySection";
+import { finalizeInstallationProject } from "../../services/installation.service";
 
 type TaskDraft = {
   title: string;
@@ -80,6 +84,28 @@ function visitStatusBadge(status: string | null): string {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
+function visitStatusLabel(status: string | null): string {
+  if (status === "completada") return "completada";
+  if (status === "cancelada") return "cancelada";
+  if (status === "en_progreso") return "en progreso";
+  if (status === "pendiente") return "pendiente";
+  return status ?? "sin visita";
+}
+
+function deliveryActBadge(status: string | null): string {
+  if (status === "signed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "accepted") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function deliveryActLabel(status: string | null): string {
+  if (status === "signed") return "Firmada";
+  if (status === "accepted") return "Aceptada";
+  if (status === "pending") return "Pendiente";
+  return "Sin generar";
+}
+
 export default function InstallationProjectDetail() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -125,7 +151,12 @@ export default function InstallationProjectDetail() {
   const [savingPostChecks, setSavingPostChecks] = useState(false);
   const [postChecksDirty, setPostChecksDirty] = useState(false);
 
-  const [finalizing, setFinalizing] = useState(false);
+  const deliveryAct = useDeliveryActGeneration(projectId ?? null);
+  const installedDevices = useInstalledDevices({ companyId, projectId: projectId ?? null, installedBy: userId });
+  const [closingProject, setClosingProject] = useState(false);
+  const [closeZoneId, setCloseZoneId] = useState("");
+  const [finishingProject, setFinishingProject] = useState(false);
+  const closeSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadProject = useCallback(async () => {
     if (!companyId || !projectId) {
@@ -209,6 +240,18 @@ export default function InstallationProjectDetail() {
     );
   }, [project]);
 
+  const installedDevicesCatalog = useMemo(
+    () => layoutDevicesCatalog.map((device) => ({ id: device.id, label: device.label ?? device.name ?? "Dispositivo" })),
+    [layoutDevicesCatalog]
+  );
+
+  useEffect(() => {
+    if (!project) return;
+    if (closeZoneId) return;
+    const firstZoneId = project.layout.zones[0]?.id ?? "";
+    if (firstZoneId) setCloseZoneId(firstZoneId);
+  }, [closeZoneId, project]);
+
   const pendingPhases = useMemo(() => phasesDraft.filter((phase) => !phase.done).length, [phasesDraft]);
 
   const pendingPostChecks = useMemo(() => {
@@ -221,6 +264,74 @@ export default function InstallationProjectDetail() {
 
   const isClosed = project?.status === "terminado" || project?.status === "cancelado";
   const isPlanLocked = Boolean(project?.planLocked) || Boolean(isClosed);
+
+  const handleFinishProject = useCallback(async () => {
+    if (!project || !companyId || !projectId || !userId) return;
+    if (finishingProject) return;
+
+    setFinishingProject(true);
+
+    const synced = await installedDevices.syncFromLayout({
+      layout: project.layout,
+      siteId: project.siteId,
+      zoneId: null,
+    });
+
+    if (!synced) {
+      setFinishingProject(false);
+      return;
+    }
+
+    try {
+      const result = await finalizeInstallationProject({
+        companyId,
+        projectId,
+        userId,
+      });
+
+      notifications.success({
+        title: "Proyecto completado",
+        description: result.alreadyFinalized
+          ? "El proyecto ya estaba completado."
+          : result.inventoryConsumed
+          ? "Se completó el proyecto y se aplicó el consumo de inventario."
+          : "El proyecto se completó correctamente.",
+      });
+
+      await loadProject();
+      setClosingProject(false);
+    } catch (err) {
+      notifications.error({
+        title: "No se pudo completar",
+        description: err instanceof Error ? err.message : "No se pudo completar el proyecto.",
+      });
+    } finally {
+      setFinishingProject(false);
+    }
+  }, [companyId, finishingProject, installedDevices, loadProject, project, projectId, userId]);
+
+  useEffect(() => {
+    if (isClosed && closingProject) setClosingProject(false);
+  }, [closingProject, isClosed]);
+
+  useEffect(() => {
+    if (!closingProject) return;
+    closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [closingProject]);
+
+  const openClosingSection = useCallback(() => {
+    setClosingProject(true);
+    queueMicrotask(() => {
+      closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const projectStatusLabel = useMemo(() => {
+    if (!project) return "";
+    if (project.status === "terminado") return "completado";
+    if (project.status === "en_progreso") return "en progreso";
+    return project.status;
+  }, [project]);
 
   const handleAddPhase = () => {
     const title = newPhaseTitle.trim();
@@ -570,42 +681,6 @@ export default function InstallationProjectDetail() {
     return () => window.clearTimeout(timer);
   }, [canUpdatePostChecks, handleSavePostChecks, isClosed, postCheckDrafts, postChecksDirty, project, savingPostChecks]);
 
-  const handleFinalizeProject = async () => {
-    if (!companyId || !userId || !project || !canCompleteProject) return;
-
-    const confirmed = window.confirm(
-      "Se cerrara el proyecto y se consumira inventario segun el presupuesto aprobado. Deseas continuar?"
-    );
-    if (!confirmed) return;
-
-    setFinalizing(true);
-    try {
-      const result = await finalizeInstallationProject({
-        companyId,
-        projectId: project.id,
-        userId,
-      });
-
-      notifications.success({
-        title: result.alreadyFinalized ? "Proyecto ya cerrado" : "Proyecto finalizado",
-        description: result.alreadyFinalized
-          ? "El proyecto ya estaba en estado terminado."
-          : result.inventoryConsumed
-            ? "Proyecto cerrado y consumo de inventario aplicado."
-            : "Proyecto cerrado correctamente.",
-      });
-
-      await loadProject();
-    } catch (finalizeError) {
-      notifications.error({
-        title: "Error finalizando proyecto",
-        description: finalizeError instanceof Error ? finalizeError.message : "No se pudo finalizar el proyecto.",
-      });
-    } finally {
-      setFinalizing(false);
-    }
-  };
-
   if (!projectId) {
     return <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">No se encontro el proyecto solicitado.</section>;
   }
@@ -642,15 +717,42 @@ export default function InstallationProjectDetail() {
       <header className="rounded-2xl border border-slate-200 bg-linear-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Button type="button" onClick={() => navigate(`/admin/budgets/${project.budgetId}`)} className="border-white/20 bg-white text-slate-900 hover:bg-slate-100">
-              Volver al presupuesto
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={() => navigate(`/admin/budgets/${project.budgetId}`)} className="border-white/20 bg-white text-slate-900 hover:bg-slate-100">
+                Volver al presupuesto
+              </Button>
+              {canCompleteProject && !isClosed ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (closingProject) {
+                      void handleFinishProject();
+                      return;
+                    }
+
+                    openClosingSection();
+                    if (!closeZoneId) {
+                      const firstZoneId = project.layout.zones[0]?.id ?? "";
+                      if (firstZoneId) setCloseZoneId(firstZoneId);
+                    }
+                  }}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  className="border-white/20 bg-white text-slate-900 hover:bg-slate-100"
+                >
+                  {installedDevices.syncing || finishingProject
+                    ? "Cargando..."
+                    : closingProject
+                    ? "Completar proyecto"
+                    : "Terminar proyecto"}
+                </Button>
+              ) : null}
+            </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">Proyecto de instalacion</h1>
             <p className="mt-2 text-sm text-slate-200">{project.customerName ?? "Cliente"} · {project.siteName ?? "Sitio"}</p>
             <p className="mt-1 text-xs text-slate-300">Proyecto #{project.id.slice(0, 8)}</p>
           </div>
           <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge(project.status)}`}>
-            {project.status}
+            {projectStatusLabel}
           </span>
         </div>
       </header>
@@ -681,13 +783,85 @@ export default function InstallationProjectDetail() {
         </article>
 
         <aside className="space-y-4">
+          <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="inline-flex items-center gap-2 text-base font-semibold text-slate-900">
+                <ClipboardList className="h-4 w-4" />
+                Acta de entrega
+              </h2>
+              <span
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                  deliveryAct.loading ? "border-slate-200 bg-slate-50 text-slate-500" : deliveryActBadge(deliveryAct.act?.status ?? null)
+                }`}
+              >
+                {deliveryAct.loading ? "Cargando..." : deliveryActLabel(deliveryAct.act?.status ?? null)}
+              </span>
+            </div>
+
+            <p className="mt-2 text-sm text-slate-600">
+              Genera el documento para que el cliente lo firme o lo acepte.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {deliveryAct.act ? (
+                <Button
+                  type="button"
+                  onClick={() => navigate(`/admin/acta/${deliveryAct.act?.id}?returnTo=/admin/installation-projects/${projectId}`)}
+                  className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Ver acta
+                </Button>
+              ) : null}
+              {!deliveryAct.act ? (
+                <Button
+                  type="button"
+                  onClick={() => void deliveryAct.generate().then((result) => {
+                    if (result?.actId) {
+                      navigate(`/admin/acta/${result.actId}?returnTo=/admin/installation-projects/${projectId}`);
+                    }
+                  })}
+                  disabled={deliveryAct.creating || installedDevices.loading || installedDevices.installedCount === 0}
+                  className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {deliveryAct.creating ? "Generando..." : "Generar acta"}
+                </Button>
+              ) : null}
+              {deliveryAct.act ? (
+                <Button
+                  type="button"
+                  onClick={() => void deliveryAct.reload()}
+                  disabled={deliveryAct.loading}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Actualizar estado
+                </Button>
+              ) : null}
+            </div>
+
+            {deliveryAct.act ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {deliveryAct.act.status === "signed" || deliveryAct.act.status === "accepted"
+                  ? "Acta finalizada."
+                  : "Pendiente de firma/aceptación del cliente."}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {installedDevices.loading
+                  ? "Cargando dispositivos instalados..."
+                  : installedDevices.installedCount === 0
+                  ? "Primero registra dispositivos instalados para poder generar el acta."
+                  : "Genera el acta para poder finalizar el proyecto."}
+              </div>
+            )}
+          </article>
+
           <article className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-base font-semibold text-slate-900">Visita tecnica</h2>
             <div className="space-y-2 text-sm text-slate-600">
               <p>
                 <span className="font-medium text-slate-700">Estado:</span>{" "}
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${visitStatusBadge(project.technicalVisitStatus)}`}>
-                  {project.technicalVisitStatus ?? "sin_visita"}
+                  {visitStatusLabel(project.technicalVisitStatus)}
                 </span>
               </p>
               <p><span className="font-medium text-slate-700">Inicio:</span> {formatDateTime(project.scheduledStart)}</p>
@@ -753,19 +927,80 @@ export default function InstallationProjectDetail() {
               <p><span className="font-medium text-slate-700">Finalizado:</span> {formatDateTime(project.completedAt)}</p>
             </div>
             <div className="mt-4">
-              <Button
-                type="button"
-                onClick={() => void handleFinalizeProject()}
-                disabled={!canCompleteProject || isClosed || finalizing || pendingPhases > 0 || pendingPostChecks > 0}
-                className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                <Check className="h-4 w-4" />
-                {finalizing ? "Cerrando..." : "Marcar proyecto terminado"}
-              </Button>
+              {deliveryAct.act ? (
+                deliveryAct.act.status === "signed" || deliveryAct.act.status === "accepted" ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    El proyecto se finaliza automaticamente al firmar el acta.
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    Esperando firma/aceptacion del acta para finalizar el proyecto.
+                  </div>
+                )
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Genera el acta de entrega para completar el proyecto.
+                </div>
+              )}
             </div>
           </article>
         </aside>
       </section>
+
+      <div ref={closeSectionRef} className="space-y-6">
+        <InstalledDevicesReadOnlySection loading={installedDevices.loading} error={installedDevices.error} devices={installedDevices.devices} />
+
+        {!isClosed ? (
+          closingProject ? (
+            <section className="space-y-3">
+              <InstalledDevicesFromPlanSection
+                zones={project.layout.zones}
+                devices={project.layout.devices}
+                catalogDevices={installedDevicesCatalog}
+                selectedZoneId={closeZoneId}
+                onZoneChange={(zoneId) => setCloseZoneId(zoneId)}
+                syncing={installedDevices.syncing || finishingProject}
+                onSyncZone={() =>
+                  void installedDevices.syncFromLayout({
+                    layout: project.layout,
+                    siteId: project.siteId,
+                    zoneId: closeZoneId,
+                  })
+                }
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setClosingProject(false)}
+                  disabled={installedDevices.syncing || finishingProject}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleFinishProject()}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  {finishingProject ? "Completando..." : "Completar proyecto"}
+                </Button>
+              </div>
+            </section>
+          ) : (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-base font-semibold text-slate-900">Cierre del proyecto</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Usa <span className="font-semibold">“Terminar proyecto”</span> para cargar los dispositivos del plano y marcar el proyecto como completado.
+              </p>
+            </article>
+          )
+        ) : (
+          <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
+            Este proyecto está completado. Los dispositivos instalados quedan disponibles para acta, garantías y soporte.
+          </article>
+        )}
+      </div>
 
       <article className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-2">
@@ -783,7 +1018,7 @@ export default function InstallationProjectDetail() {
             value={scopeText}
             onChange={(event) => setScopeText(event.target.value)}
             disabled={!canUpdateProject || isPlanLocked}
-            className="min-h-88px w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+            className="min-h-[88px] w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             placeholder="Describe el plan general del proyecto..."
           />
         </Field>
@@ -944,7 +1179,7 @@ export default function InstallationProjectDetail() {
                   onChange={(event) => setNewTaskTitle(event.target.value)}
                   disabled={!canUpdateTasks || isClosed}
                   placeholder="Nueva tarea"
-                  className="min-w-220px flex-1 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                  className="min-w-[220px] flex-1 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
                 />
                 <Button
                   type="button"

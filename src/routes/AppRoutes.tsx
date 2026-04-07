@@ -49,6 +49,8 @@ import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
 import CustomerProfile from "../screens/customer/CustomerProfile";
 import CustomerQuotes from "../screens/customer/CustomerQuotes";
 import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
+import CustomerNotifications from "../screens/customer/CustomerNotifications";
+import DeliveryActPage from "../screens/DeliveryAct";
 
 
 export default function AppRoutes() {
@@ -345,6 +347,15 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route
+          path="acta/:actId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsOpen}>
+              <DeliveryActPage />
+            </PermissionRoute>
+          }
+        />
       </Route>
 
       <Route
@@ -361,8 +372,18 @@ export default function AppRoutes() {
         <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
         <Route path="quotes" element={<CustomerQuotes />} />
         <Route path="quotes/:budgetId" element={<CustomerQuoteDetail />} />
+        <Route path="notifications" element={<CustomerNotifications />} />
         <Route path="profile" element={<CustomerProfile />} />
       </Route>
+
+      <Route
+        path="/acta/:actId"
+        element={
+          <ProtectedRoute>
+            <DeliveryActPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/403"
