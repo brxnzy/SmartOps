@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
@@ -32,7 +32,9 @@ import { cancelTechnicalVisit } from "../../services/siteSurveyExecution.service
 import { listTechnicians } from "../../services/tickets.service";
 import useDeliveryActGeneration from "../../hooks/useDeliveryActGeneration";
 import useInstalledDevices from "../../hooks/useInstalledDevices";
-import InstalledDevicesSection from "../../components/installedDevices/InstalledDevicesSection";
+import InstalledDevicesFromPlanSection from "../../components/installedDevices/InstalledDevicesFromPlanSection";
+import InstalledDevicesReadOnlySection from "../../components/installedDevices/InstalledDevicesReadOnlySection";
+import { finalizeInstallationProject } from "../../services/installation.service";
 
 type TaskDraft = {
   title: string;
@@ -82,6 +84,14 @@ function visitStatusBadge(status: string | null): string {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
+function visitStatusLabel(status: string | null): string {
+  if (status === "completada") return "completada";
+  if (status === "cancelada") return "cancelada";
+  if (status === "en_progreso") return "en progreso";
+  if (status === "pendiente") return "pendiente";
+  return status ?? "sin visita";
+}
+
 function deliveryActBadge(status: string | null): string {
   if (status === "signed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "accepted") return "border-blue-200 bg-blue-50 text-blue-700";
@@ -112,6 +122,7 @@ export default function InstallationProjectDetail() {
   const canUpdateTasks = canAccess(PERMISSIONS.installationProjectsTasksUpdate);
   const canReadPostChecks = canAccess(PERMISSIONS.installationProjectsQualityRead);
   const canUpdatePostChecks = canAccess(PERMISSIONS.installationProjectsQualityUpdate);
+  const canCompleteProject = canAccess(PERMISSIONS.installationProjectsComplete);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +153,10 @@ export default function InstallationProjectDetail() {
 
   const deliveryAct = useDeliveryActGeneration(projectId ?? null);
   const installedDevices = useInstalledDevices({ companyId, projectId: projectId ?? null, installedBy: userId });
+  const [closingProject, setClosingProject] = useState(false);
+  const [closeZoneId, setCloseZoneId] = useState("");
+  const [finishingProject, setFinishingProject] = useState(false);
+  const closeSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadProject = useCallback(async () => {
     if (!companyId || !projectId) {
@@ -230,10 +245,12 @@ export default function InstallationProjectDetail() {
     [layoutDevicesCatalog]
   );
 
-  const installedZonesOptions = useMemo(
-    () => layoutZones.map((zone) => ({ id: zone.id, name: zone.name })),
-    [layoutZones]
-  );
+  useEffect(() => {
+    if (!project) return;
+    if (closeZoneId) return;
+    const firstZoneId = project.layout.zones[0]?.id ?? "";
+    if (firstZoneId) setCloseZoneId(firstZoneId);
+  }, [closeZoneId, project]);
 
   const pendingPhases = useMemo(() => phasesDraft.filter((phase) => !phase.done).length, [phasesDraft]);
 
@@ -247,6 +264,74 @@ export default function InstallationProjectDetail() {
 
   const isClosed = project?.status === "terminado" || project?.status === "cancelado";
   const isPlanLocked = Boolean(project?.planLocked) || Boolean(isClosed);
+
+  const handleFinishProject = useCallback(async () => {
+    if (!project || !companyId || !projectId || !userId) return;
+    if (finishingProject) return;
+
+    setFinishingProject(true);
+
+    const synced = await installedDevices.syncFromLayout({
+      layout: project.layout,
+      siteId: project.siteId,
+      zoneId: null,
+    });
+
+    if (!synced) {
+      setFinishingProject(false);
+      return;
+    }
+
+    try {
+      const result = await finalizeInstallationProject({
+        companyId,
+        projectId,
+        userId,
+      });
+
+      notifications.success({
+        title: "Proyecto completado",
+        description: result.alreadyFinalized
+          ? "El proyecto ya estaba completado."
+          : result.inventoryConsumed
+          ? "Se completó el proyecto y se aplicó el consumo de inventario."
+          : "El proyecto se completó correctamente.",
+      });
+
+      await loadProject();
+      setClosingProject(false);
+    } catch (err) {
+      notifications.error({
+        title: "No se pudo completar",
+        description: err instanceof Error ? err.message : "No se pudo completar el proyecto.",
+      });
+    } finally {
+      setFinishingProject(false);
+    }
+  }, [companyId, finishingProject, installedDevices, loadProject, project, projectId, userId]);
+
+  useEffect(() => {
+    if (isClosed && closingProject) setClosingProject(false);
+  }, [closingProject, isClosed]);
+
+  useEffect(() => {
+    if (!closingProject) return;
+    closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [closingProject]);
+
+  const openClosingSection = useCallback(() => {
+    setClosingProject(true);
+    queueMicrotask(() => {
+      closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const projectStatusLabel = useMemo(() => {
+    if (!project) return "";
+    if (project.status === "terminado") return "completado";
+    if (project.status === "en_progreso") return "en progreso";
+    return project.status;
+  }, [project]);
 
   const handleAddPhase = () => {
     const title = newPhaseTitle.trim();
@@ -632,15 +717,42 @@ export default function InstallationProjectDetail() {
       <header className="rounded-2xl border border-slate-200 bg-linear-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Button type="button" onClick={() => navigate(`/admin/budgets/${project.budgetId}`)} className="border-white/20 bg-white text-slate-900 hover:bg-slate-100">
-              Volver al presupuesto
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={() => navigate(`/admin/budgets/${project.budgetId}`)} className="border-white/20 bg-white text-slate-900 hover:bg-slate-100">
+                Volver al presupuesto
+              </Button>
+              {canCompleteProject && !isClosed ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (closingProject) {
+                      void handleFinishProject();
+                      return;
+                    }
+
+                    openClosingSection();
+                    if (!closeZoneId) {
+                      const firstZoneId = project.layout.zones[0]?.id ?? "";
+                      if (firstZoneId) setCloseZoneId(firstZoneId);
+                    }
+                  }}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  className="border-white/20 bg-white text-slate-900 hover:bg-slate-100"
+                >
+                  {installedDevices.syncing || finishingProject
+                    ? "Cargando..."
+                    : closingProject
+                    ? "Completar proyecto"
+                    : "Terminar proyecto"}
+                </Button>
+              ) : null}
+            </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">Proyecto de instalacion</h1>
             <p className="mt-2 text-sm text-slate-200">{project.customerName ?? "Cliente"} · {project.siteName ?? "Sitio"}</p>
             <p className="mt-1 text-xs text-slate-300">Proyecto #{project.id.slice(0, 8)}</p>
           </div>
           <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge(project.status)}`}>
-            {project.status}
+            {projectStatusLabel}
           </span>
         </div>
       </header>
@@ -749,7 +861,7 @@ export default function InstallationProjectDetail() {
               <p>
                 <span className="font-medium text-slate-700">Estado:</span>{" "}
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${visitStatusBadge(project.technicalVisitStatus)}`}>
-                  {project.technicalVisitStatus ?? "sin_visita"}
+                  {visitStatusLabel(project.technicalVisitStatus)}
                 </span>
               </p>
               <p><span className="font-medium text-slate-700">Inicio:</span> {formatDateTime(project.scheduledStart)}</p>
@@ -834,6 +946,61 @@ export default function InstallationProjectDetail() {
           </article>
         </aside>
       </section>
+
+      <div ref={closeSectionRef} className="space-y-6">
+        <InstalledDevicesReadOnlySection loading={installedDevices.loading} error={installedDevices.error} devices={installedDevices.devices} />
+
+        {!isClosed ? (
+          closingProject ? (
+            <section className="space-y-3">
+              <InstalledDevicesFromPlanSection
+                zones={project.layout.zones}
+                devices={project.layout.devices}
+                catalogDevices={installedDevicesCatalog}
+                selectedZoneId={closeZoneId}
+                onZoneChange={(zoneId) => setCloseZoneId(zoneId)}
+                syncing={installedDevices.syncing || finishingProject}
+                onSyncZone={() =>
+                  void installedDevices.syncFromLayout({
+                    layout: project.layout,
+                    siteId: project.siteId,
+                    zoneId: closeZoneId,
+                  })
+                }
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setClosingProject(false)}
+                  disabled={installedDevices.syncing || finishingProject}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleFinishProject()}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  {finishingProject ? "Completando..." : "Completar proyecto"}
+                </Button>
+              </div>
+            </section>
+          ) : (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-base font-semibold text-slate-900">Cierre del proyecto</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Usa <span className="font-semibold">“Terminar proyecto”</span> para cargar los dispositivos del plano y marcar el proyecto como completado.
+              </p>
+            </article>
+          )
+        ) : (
+          <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
+            Este proyecto está completado. Los dispositivos instalados quedan disponibles para acta, garantías y soporte.
+          </article>
+        )}
+      </div>
 
       <article className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-2">
@@ -990,26 +1157,6 @@ export default function InstallationProjectDetail() {
           </Button>
         </div>
       </article>
-
-      <InstalledDevicesSection
-        siteId={project.siteId}
-        zones={installedZonesOptions}
-        catalogDevices={installedDevicesCatalog}
-        technicians={technicians}
-        defaultInstalledBy={userId}
-        canManage={canUpdateProject && !isClosed}
-        loading={installedDevices.loading}
-        error={installedDevices.error}
-        devices={installedDevices.devices}
-        creating={installedDevices.creating}
-        savingId={installedDevices.savingId}
-        deletingId={installedDevices.deletingId}
-        onReload={() => void installedDevices.reload()}
-        onCreate={(input) => installedDevices.registerDevice(input)}
-        onUpdate={(deviceId, patch) => installedDevices.editDevice(deviceId, patch)}
-        onChangeStatus={(deviceId, status) => installedDevices.changeStatus(deviceId, status)}
-        onRemove={(deviceId) => installedDevices.removeDevice(deviceId)}
-      />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

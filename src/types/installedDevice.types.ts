@@ -7,6 +7,7 @@ export type InstalledDevice = {
   siteId: string;
   zoneId: string;
   catalogDeviceId: string;
+  sourceLayoutDeviceId: string | null;
   serial: string | null;
   mac: string | null;
   firmware: string | null;

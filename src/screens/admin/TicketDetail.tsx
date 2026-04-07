@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from "react";
-import { Paperclip, Send } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Circle, Paperclip, Send } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
@@ -8,7 +8,14 @@ import Field from "../../components/Field";
 import Modal from "../../components/Modal";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
-import { addTicketComment, createTicketTechnicalVisit, getTicketDetail, listTechnicians } from "../../services/tickets.service";
+import { notifications } from "../../services/notification.service";
+import {
+  addTicketComment,
+  createTicketTechnicalVisit,
+  getTicketDetail,
+  listTechnicians,
+  updateTicketStatus,
+} from "../../services/tickets.service";
 import type { TicketComment, TicketListItem, TicketStatus } from "../../types/ticketing.types";
 
 function statusLabel(status: TicketStatus): string {
@@ -49,6 +56,7 @@ export default function AdminTicketDetail() {
   const userId = authUser?.id ?? null;
   const canComment = canAccess(PERMISSIONS.ticketsComment);
   const canScheduleVisit = canAccess(PERMISSIONS.ticketsVisitSchedule);
+  const canUpdateStatus = canAccess(PERMISSIONS.ticketsUpdate);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +74,8 @@ export default function AdminTicketDetail() {
   const [commentInternal, setCommentInternal] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
 
   const loadTicket = async () => {
     if (!companyId || !ticketId) return;
@@ -101,6 +111,68 @@ export default function AdminTicketDetail() {
       .catch(() => setTechnicians([]));
   }, [companyId]);
 
+  const completionRequirements = useMemo(() => {
+    if (!ticket) return [];
+
+    const isInProgress = ticket.status === "en_proceso";
+    const hasSupportResponse = comments.some((comment) => comment.authorId && comment.authorId !== ticket.customerId);
+    const hasResolutionNote = comments.some((comment) => comment.isInternal && comment.body.trim().length >= 10);
+
+    return [
+      {
+        key: "in_progress",
+        label: "Ticket en estado “En proceso”",
+        ok: isInProgress,
+        hint: "Usa “Iniciar atención” antes de completar.",
+      },
+      {
+        key: "support_response",
+        label: "Cliente fue informado (al menos un comentario del equipo)",
+        ok: hasSupportResponse,
+        hint: "Agrega un comentario para el cliente explicando la solución.",
+      },
+      {
+        key: "resolution_note",
+        label: "Nota interna de resolución (recomendado)",
+        ok: hasResolutionNote,
+        hint: "Agrega un comentario interno con el resumen técnico.",
+        optional: true,
+      },
+    ] as const;
+  }, [comments, ticket]);
+
+  const canCompleteTicket = useMemo(() => {
+    const required = completionRequirements.filter((item) => !("optional" in item && item.optional));
+    return required.every((item) => item.ok);
+  }, [completionRequirements]);
+
+  const handleStatusChange = async (nextStatus: TicketStatus, opts?: { silent?: boolean }) => {
+    if (!canUpdateStatus) {
+      setError("No tienes permisos para actualizar el estado del ticket.");
+      return;
+    }
+    if (!companyId || !ticketId) return;
+    if (ticket?.status === nextStatus) return;
+
+    setStatusUpdating(true);
+    try {
+      const updated = await updateTicketStatus(companyId, ticketId, nextStatus);
+      setTicket(updated);
+      if (!opts?.silent) {
+        notifications.success({
+          title: "Estado actualizado",
+          description: `El ticket ahora está en estado “${statusLabel(nextStatus)}”.`,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar el estado del ticket.";
+      setError(message);
+      notifications.error({ title: "Error actualizando estado", description: message });
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
   const handleScheduleVisit = async () => {
     if (!canScheduleVisit) {
       setError("No tienes permisos para programar visitas tecnicas.");
@@ -118,11 +190,35 @@ export default function AdminTicketDetail() {
       setVisitEnd("");
       setVisitTechnician("");
       setVisitModalOpen(false);
+
+      notifications.success({
+        title: "Visita programada",
+        description: "La visita técnica fue registrada. Pendiente de confirmación del cliente.",
+      });
+
+      if (ticket?.status !== "cerrado" && ticket?.status !== "resuelto") {
+        await handleStatusChange("esperando_cliente", { silent: true });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo programar la visita tecnica.");
+      const message = err instanceof Error ? err.message : "No se pudo programar la visita tecnica.";
+      setError(message);
+      notifications.error({ title: "Error programando visita", description: message });
     } finally {
       setVisitSubmitting(false);
     }
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!canCompleteTicket) {
+      notifications.warning({
+        title: "Faltan requisitos",
+        description: "Completa los requisitos antes de marcar el ticket como completado.",
+      });
+      return;
+    }
+
+    setCompleteModalOpen(false);
+    await handleStatusChange("resuelto");
   };
 
   const handleComment = async () => {
@@ -197,13 +293,49 @@ export default function AdminTicketDetail() {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Estado</p>
-          <span
-            className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(
-              ticket.status
-            )}`}
-          >
-            {statusLabel(ticket.status)}
-          </span>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(
+                ticket.status
+              )}`}
+            >
+              {statusLabel(ticket.status)}
+            </span>
+          </div>
+
+          {canUpdateStatus ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => void handleStatusChange("en_proceso")}
+                disabled={
+                  statusUpdating ||
+                  ticket.status === "en_proceso" ||
+                  ticket.status === "resuelto" ||
+                  ticket.status === "cerrado"
+                }
+                className="border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
+              >
+                Iniciar atencion
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setCompleteModalOpen(true)}
+                disabled={statusUpdating || ticket.status === "resuelto" || ticket.status === "cerrado"}
+                className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                Marcar completado
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleStatusChange("cerrado")}
+                disabled={statusUpdating || ticket.status !== "resuelto"}
+                className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              >
+                Cerrar
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Categoria</p>
@@ -415,6 +547,73 @@ export default function AdminTicketDetail() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={completeModalOpen}
+        onClose={() => setCompleteModalOpen(false)}
+        title="Marcar ticket como completado"
+        subtitle="Verifica los requisitos antes de finalizar la atención."
+        size="lg"
+        containerClassName="overflow-hidden border border-slate-200 bg-white"
+        headerClassName="border-b border-slate-100 bg-white/80 px-6 py-5 backdrop-blur"
+        bodyClassName="px-6 py-6"
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-900">Checklist de cierre</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Evita cierres sin trazabilidad y deja evidencia para soporte/garantías.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {completionRequirements.map((req) => (
+              <div key={req.key} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mt-0.5">
+                  {req.ok ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-slate-300" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900">
+                    {req.label}{" "}
+                    {"optional" in req && req.optional ? (
+                      <span className="text-xs font-semibold text-slate-400">(opcional)</span>
+                    ) : null}
+                  </p>
+                  {!req.ok ? <p className="mt-1 text-xs text-slate-600">{req.hint}</p> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!canCompleteTicket ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Completa los requisitos obligatorios para habilitar “Marcar completado”.
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              onClick={() => setCompleteModalOpen(false)}
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmComplete()}
+              disabled={statusUpdating || !canCompleteTicket}
+              className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Marcar completado
+            </Button>
           </div>
         </div>
       </Modal>

@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  CreateInstalledDeviceInput,
-  InstalledDeviceListItem,
-  InstalledDeviceStatus,
-  UpdateInstalledDeviceInput,
-} from "../types/installedDevice.types";
+import type { InstalledDeviceListItem } from "../types/installedDevice.types";
 import {
-  createInstalledDevice,
   listInstalledDevicesByProject,
-  softDeleteInstalledDevice,
-  updateInstalledDevice,
-  updateInstalledDeviceStatus,
+  upsertInstalledDevicesFromLayout,
 } from "../services/installedDevices.service";
 import { notifications } from "../services/notification.service";
+import type { SurveyLayout } from "../types/siteSurveyExecution.types";
 
 type UseInstalledDevicesParams = {
   companyId: string | null;
@@ -24,9 +17,7 @@ export default function useInstalledDevices({ companyId, projectId, installedBy 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [devices, setDevices] = useState<InstalledDeviceListItem[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const canLoad = Boolean(companyId && projectId);
 
@@ -57,119 +48,49 @@ export default function useInstalledDevices({ companyId, projectId, installedBy 
 
   const installedCount = useMemo(() => devices.length, [devices.length]);
 
-  const registerDevice = useCallback(
-    async (
-      draft: Omit<CreateInstalledDeviceInput, "companyId" | "projectId" | "installedBy"> & { installedBy?: string | null }
-    ): Promise<boolean> => {
+  const syncFromLayout = useCallback(
+    async (input: { layout: SurveyLayout; siteId: string; zoneId?: string | null }): Promise<boolean> => {
       if (!companyId || !projectId) return false;
-      setCreating(true);
+      if (!input.siteId) return false;
+
+      const layoutDevices = input.layout?.devices ?? [];
+      const candidates = layoutDevices
+        .filter((device) => (input.zoneId ? device.zoneId === input.zoneId : Boolean(device.zoneId)))
+        .filter((device) => Boolean(device.deviceId) && Boolean(device.id) && Boolean(device.zoneId))
+        .map((device) => ({
+          sourceLayoutDeviceId: device.id,
+          zoneId: device.zoneId as string,
+          catalogDeviceId: device.deviceId,
+          locationDetail: device.label?.trim() ? device.label.trim() : null,
+        }));
+
+      setSyncing(true);
       try {
-        await createInstalledDevice({
+        const result = await upsertInstalledDevicesFromLayout({
           companyId,
           projectId,
-          siteId: draft.siteId,
-          zoneId: draft.zoneId,
-          catalogDeviceId: draft.catalogDeviceId,
-          serial: draft.serial ?? null,
-          mac: draft.mac ?? null,
-          firmware: draft.firmware ?? null,
-          locationDetail: draft.locationDetail ?? null,
-          installedAt: draft.installedAt ?? null,
-          installedBy: draft.installedBy ?? installedBy ?? null,
-          status: draft.status,
+          siteId: input.siteId,
+          userId: installedBy,
+          rows: candidates,
         });
+
         notifications.success({
-          title: "Dispositivo registrado",
-          description: "El dispositivo instalado fue registrado correctamente.",
+          title: "Dispositivos sincronizados",
+          description: `${result.insertedOrUpdated} dispositivos cargados desde el plano.`,
         });
         await load();
         return true;
       } catch (err) {
         notifications.error({
-          title: "Error registrando dispositivo",
-          description: err instanceof Error ? err.message : "No se pudo registrar el dispositivo instalado.",
+          title: "Error sincronizando",
+          description: err instanceof Error ? err.message : "No se pudo sincronizar los dispositivos instalados.",
         });
         return false;
       } finally {
-        setCreating(false);
+        setSyncing(false);
       }
     },
     [companyId, projectId, installedBy, load]
-  );
-
-  const editDevice = useCallback(
-    async (deviceId: string, patch: Partial<UpdateInstalledDeviceInput>): Promise<boolean> => {
-      if (!companyId) return false;
-      setSavingId(deviceId);
-      try {
-        await updateInstalledDevice({ companyId, deviceId, patch });
-        notifications.success({
-          title: "Dispositivo actualizado",
-          description: "Los cambios fueron guardados.",
-        });
-        await load();
-        return true;
-      } catch (err) {
-        notifications.error({
-          title: "Error actualizando dispositivo",
-          description: err instanceof Error ? err.message : "No se pudo actualizar el dispositivo.",
-        });
-        return false;
-      } finally {
-        setSavingId(null);
-      }
-    },
-    [companyId, load]
-  );
-
-  const changeStatus = useCallback(
-    async (deviceId: string, status: InstalledDeviceStatus): Promise<boolean> => {
-      if (!companyId) return false;
-      setSavingId(deviceId);
-      try {
-        await updateInstalledDeviceStatus({ companyId, deviceId, status });
-        notifications.success({
-          title: "Estado actualizado",
-          description: "El estado del dispositivo fue actualizado.",
-        });
-        await load();
-        return true;
-      } catch (err) {
-        notifications.error({
-          title: "Error actualizando estado",
-          description: err instanceof Error ? err.message : "No se pudo actualizar el estado.",
-        });
-        return false;
-      } finally {
-        setSavingId(null);
-      }
-    },
-    [companyId, load]
-  );
-
-  const removeDevice = useCallback(
-    async (deviceId: string): Promise<boolean> => {
-      if (!companyId) return false;
-      setDeletingId(deviceId);
-      try {
-        await softDeleteInstalledDevice({ companyId, deviceId, deletedBy: installedBy });
-        notifications.success({
-          title: "Dispositivo eliminado",
-          description: "El registro fue removido (soft delete).",
-        });
-        await load();
-        return true;
-      } catch (err) {
-        notifications.error({
-          title: "Error eliminando dispositivo",
-          description: err instanceof Error ? err.message : "No se pudo eliminar el dispositivo.",
-        });
-        return false;
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [companyId, installedBy, load]
   );
 
   return {
@@ -178,13 +99,8 @@ export default function useInstalledDevices({ companyId, projectId, installedBy 
     error,
     devices,
     installedCount,
-    creating,
-    savingId,
-    deletingId,
+    syncing,
     reload: load,
-    registerDevice,
-    editDevice,
-    changeStatus,
-    removeDevice,
+    syncFromLayout,
   };
 }

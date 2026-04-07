@@ -13,6 +13,7 @@ type InstalledDeviceRow = {
   site_id: string;
   zone_id: string;
   catalog_device_id: string;
+  source_layout_device_id?: string | null;
   serial: string | null;
   mac: string | null;
   firmware: string | null;
@@ -55,6 +56,7 @@ function mapInstalledDevice(row: InstalledDeviceRow): InstalledDeviceListItem {
     siteId: safeText(row.site_id),
     zoneId: safeText(row.zone_id),
     catalogDeviceId: safeText(row.catalog_device_id),
+    sourceLayoutDeviceId: safeNullableText(row.source_layout_device_id),
     serial: row.serial ?? null,
     mac: row.mac ?? null,
     firmware: row.firmware ?? null,
@@ -88,6 +90,7 @@ export async function listInstalledDevicesByProject(params: {
       site_id,
       zone_id,
       catalog_device_id,
+      source_layout_device_id,
       serial,
       mac,
       firmware,
@@ -118,6 +121,53 @@ export async function listInstalledDevicesByProject(params: {
   }
 
   return (data ?? []).map(mapInstalledDevice);
+}
+
+export async function upsertInstalledDevicesFromLayout(params: {
+  companyId: string;
+  projectId: string;
+  siteId: string;
+  userId: string | null;
+  rows: Array<{
+    sourceLayoutDeviceId: string;
+    zoneId: string;
+    catalogDeviceId: string;
+    locationDetail: string | null;
+  }>;
+}): Promise<{ insertedOrUpdated: number }> {
+  const now = new Date().toISOString();
+  const payload = params.rows
+    .filter((row) => row.zoneId && row.catalogDeviceId && row.sourceLayoutDeviceId)
+    .map((row) => ({
+      company_id: params.companyId,
+      project_id: params.projectId,
+      site_id: params.siteId,
+      zone_id: row.zoneId,
+      catalog_device_id: row.catalogDeviceId,
+      source_layout_device_id: row.sourceLayoutDeviceId,
+      location_detail: row.locationDetail,
+      installed_at: now,
+      installed_by: params.userId,
+      status: "active",
+      updated_at: now,
+      created_at: now,
+      deleted_at: null,
+      deleted_by: null,
+    }));
+
+  if (payload.length === 0) return { insertedOrUpdated: 0 };
+
+  const { data, error } = await supabase
+    .from("installed_devices")
+    .upsert(payload, { onConflict: "company_id,project_id,source_layout_device_id" })
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron sincronizar los dispositivos instalados.");
+  }
+
+  return { insertedOrUpdated: (data ?? []).length };
 }
 
 export async function createInstalledDevice(input: CreateInstalledDeviceInput): Promise<string> {
