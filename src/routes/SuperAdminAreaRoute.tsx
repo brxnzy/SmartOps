@@ -4,17 +4,19 @@ import { useAuth } from "../hooks/useAuth";
 import RouteLoading from "./RouteLoading";
 import { isCustomerRole, isSuperAdminRole } from "../utils/roles";
 
-export default function AdminAreaRoute() {
+export default function SuperAdminAreaRoute() {
   const { initializing, authzLoading, roleProfile } = useAuth();
 
   if (initializing || authzLoading) return <RouteLoading />;
 
-  if (isCustomerRole(roleProfile?.name)) {
+  const roleName = roleProfile?.name;
+
+  if (isCustomerRole(roleName)) {
     return <Navigate to="/customer" replace />;
   }
 
-  if (isSuperAdminRole(roleProfile?.name)) {
-    return <Navigate to="/superadmin" replace />;
+  if (!isSuperAdminRole(roleName)) {
+    return <Navigate to="/admin" replace />;
   }
 
   return <Sidebar />;
