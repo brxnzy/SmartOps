@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
-import DeviceInventory from "../screens/admin/DeviceInventory";
 import Devices from "../screens/admin/Devices";
 import Suppliers from "../screens/admin/Suppliers";
 import InventoryLoads from "../screens/admin/InventoryLoads";
@@ -144,14 +143,6 @@ export default function AppRoutes() {
           element={
             <PermissionRoute permission={PERMISSIONS.suppliersRead}>
               <Suppliers />
-            </PermissionRoute>
-          }
-        />
-        <Route
-          path="inventory/devices"
-          element={
-            <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
-              <DeviceInventory />
             </PermissionRoute>
           }
         />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock,
@@ -13,11 +13,13 @@ import {
 } from "lucide-react";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
+import Modal from "../../components/Modal";
 import FloorPlanEditor from "../../components/siteSurvey/FloorPlanEditor";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
 import {
   createInstallationProjectTask,
+  finalizeInstallationProject,
   getInstallationProjectById,
   seedInstallationProjectDefaults,
   updateInstallationProjectMetadata,
@@ -29,12 +31,11 @@ import {
 } from "../../services/installation.service";
 import { notifications } from "../../services/notification.service";
 import { cancelTechnicalVisit } from "../../services/siteSurveyExecution.service";
+import { getDeviceInventoryByCompany } from "../../services/device.service";
 import { listTechnicians } from "../../services/tickets.service";
 import useDeliveryActGeneration from "../../hooks/useDeliveryActGeneration";
 import useInstalledDevices from "../../hooks/useInstalledDevices";
-import InstalledDevicesFromPlanSection from "../../components/installedDevices/InstalledDevicesFromPlanSection";
 import InstalledDevicesReadOnlySection from "../../components/installedDevices/InstalledDevicesReadOnlySection";
-import { finalizeInstallationProject } from "../../services/installation.service";
 
 type TaskDraft = {
   title: string;
@@ -106,10 +107,43 @@ function deliveryActLabel(status: string | null): string {
   return "Sin generar";
 }
 
+const CLOSE_PREPARED_STORAGE_PREFIX = "smartops.installationProject.closePrepared:";
+const LEGACY_COMPLETION_MODAL_DETAILS_STORAGE_KEY = "smartops.installationProject.legacyCompletionModalDetails";
+
+function getClosePreparedFlag(projectId: string): boolean {
+  try {
+    return window.localStorage.getItem(`${CLOSE_PREPARED_STORAGE_PREFIX}${projectId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setClosePreparedFlag(projectId: string, value: boolean): void {
+  try {
+    if (value) {
+      window.localStorage.setItem(`${CLOSE_PREPARED_STORAGE_PREFIX}${projectId}`, "1");
+    } else {
+      window.localStorage.removeItem(`${CLOSE_PREPARED_STORAGE_PREFIX}${projectId}`);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function shouldShowLegacyCompletionModalDetails(): boolean {
+  try {
+    return window.localStorage.getItem(LEGACY_COMPLETION_MODAL_DETAILS_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function InstallationProjectDetail() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const { companyProfile, authUser, canAccess } = useAuth();
+
+  const showLegacyCompletionModalDetails = useMemo(() => shouldShowLegacyCompletionModalDetails(), []);
 
   const companyId = companyProfile?.id ?? null;
   const userId = authUser?.id ?? null;
@@ -154,9 +188,11 @@ export default function InstallationProjectDetail() {
   const deliveryAct = useDeliveryActGeneration(projectId ?? null);
   const installedDevices = useInstalledDevices({ companyId, projectId: projectId ?? null, installedBy: userId });
   const [closingProject, setClosingProject] = useState(false);
-  const [closeZoneId, setCloseZoneId] = useState("");
   const [finishingProject, setFinishingProject] = useState(false);
-  const closeSectionRef = useRef<HTMLDivElement | null>(null);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryQuantityByDeviceId, setInventoryQuantityByDeviceId] = useState<Map<string, number>>(new Map());
 
   const loadProject = useCallback(async () => {
     if (!companyId || !projectId) {
@@ -240,17 +276,10 @@ export default function InstallationProjectDetail() {
     );
   }, [project]);
 
-  const installedDevicesCatalog = useMemo(
-    () => layoutDevicesCatalog.map((device) => ({ id: device.id, label: device.label ?? device.name ?? "Dispositivo" })),
+  const deviceLabelById = useMemo(
+    () => new Map(layoutDevicesCatalog.map((device) => [device.id, device.label ?? device.name ?? "Dispositivo"])),
     [layoutDevicesCatalog]
   );
-
-  useEffect(() => {
-    if (!project) return;
-    if (closeZoneId) return;
-    const firstZoneId = project.layout.zones[0]?.id ?? "";
-    if (firstZoneId) setCloseZoneId(firstZoneId);
-  }, [closeZoneId, project]);
 
   const pendingPhases = useMemo(() => phasesDraft.filter((phase) => !phase.done).length, [phasesDraft]);
 
@@ -265,11 +294,65 @@ export default function InstallationProjectDetail() {
   const isClosed = project?.status === "terminado" || project?.status === "cancelado";
   const isPlanLocked = Boolean(project?.planLocked) || Boolean(isClosed);
 
-  const handleFinishProject = useCallback(async () => {
-    if (!project || !companyId || !projectId || !userId) return;
-    if (finishingProject) return;
+  const requiredByDeviceId = useMemo(() => {
+    if (!project) return new Map<string, number>();
 
-    setFinishingProject(true);
+    const required = new Map<string, number>();
+    project.layout.devices
+      .filter((device) => Boolean(device.id) && Boolean(device.deviceId) && Boolean(device.zoneId))
+      .forEach((device) => {
+        required.set(device.deviceId, (required.get(device.deviceId) ?? 0) + 1);
+      });
+
+    return required;
+  }, [project]);
+
+  const requirementsRows = useMemo(() => {
+    const deviceIds = Array.from(requiredByDeviceId.keys());
+    return deviceIds
+      .map((deviceId) => {
+        const required = requiredByDeviceId.get(deviceId) ?? 0;
+        const available = inventoryQuantityByDeviceId.get(deviceId) ?? 0;
+        return {
+          deviceId,
+          label: deviceLabelById.get(deviceId) ?? deviceId,
+          required,
+          available,
+          sufficient: available >= required,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [deviceLabelById, inventoryQuantityByDeviceId, requiredByDeviceId]);
+
+  const inventorySufficient = useMemo(() => requirementsRows.every((row) => row.sufficient), [requirementsRows]);
+
+  const loadInventorySnapshot = useCallback(async () => {
+    if (!companyId) return;
+
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const inventory = await getDeviceInventoryByCompany(companyId);
+      const nextMap = new Map<string, number>();
+      inventory.forEach((row) => {
+        nextMap.set(row.deviceId, row.quantity);
+      });
+      setInventoryQuantityByDeviceId(nextMap);
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : "No se pudo cargar el inventario de dispositivos.");
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [companyId]);
+
+  const openCompletionModal = useCallback(async () => {
+    setCompletionModalOpen(true);
+    await loadInventorySnapshot();
+  }, [loadInventorySnapshot]);
+
+  const handlePrepareClose = useCallback(async () => {
+    if (!project || !companyId || !projectId || !userId) return;
+    if (installedDevices.syncing) return;
 
     const synced = await installedDevices.syncFromLayout({
       layout: project.layout,
@@ -277,10 +360,17 @@ export default function InstallationProjectDetail() {
       zoneId: null,
     });
 
-    if (!synced) {
-      setFinishingProject(false);
-      return;
-    }
+    if (!synced) return;
+
+    setClosingProject(true);
+    setClosePreparedFlag(projectId, true);
+  }, [companyId, installedDevices, project, projectId, userId]);
+
+  const handleCompleteProject = useCallback(async () => {
+    if (!project || !companyId || !projectId || !userId) return;
+    if (finishingProject) return;
+
+    setFinishingProject(true);
 
     try {
       const result = await finalizeInstallationProject({
@@ -299,7 +389,9 @@ export default function InstallationProjectDetail() {
       });
 
       await loadProject();
+      setClosePreparedFlag(projectId, false);
       setClosingProject(false);
+      setCompletionModalOpen(false);
     } catch (err) {
       notifications.error({
         title: "No se pudo completar",
@@ -308,23 +400,19 @@ export default function InstallationProjectDetail() {
     } finally {
       setFinishingProject(false);
     }
-  }, [companyId, finishingProject, installedDevices, loadProject, project, projectId, userId]);
+  }, [companyId, finishingProject, loadProject, project, projectId, userId]);
 
   useEffect(() => {
-    if (isClosed && closingProject) setClosingProject(false);
-  }, [closingProject, isClosed]);
+    if (!projectId) return;
 
-  useEffect(() => {
-    if (!closingProject) return;
-    closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [closingProject]);
+    if (isClosed) {
+      setClosingProject(false);
+      setClosePreparedFlag(projectId, false);
+      return;
+    }
 
-  const openClosingSection = useCallback(() => {
-    setClosingProject(true);
-    queueMicrotask(() => {
-      closeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
+    setClosingProject(getClosePreparedFlag(projectId));
+  }, [isClosed, projectId]);
 
   const projectStatusLabel = useMemo(() => {
     if (!project) return "";
@@ -332,6 +420,72 @@ export default function InstallationProjectDetail() {
     if (project.status === "en_progreso") return "en progreso";
     return project.status;
   }, [project]);
+
+  const deliveryActReady = deliveryAct.act?.status === "signed" || deliveryAct.act?.status === "accepted";
+  const hasDevicesInPlan = requirementsRows.length > 0;
+  const postChecksReady = pendingPostChecks === 0;
+
+  const tasksSummary = useMemo(() => {
+    if (!project) return { total: 0, completed: 0, pending: 0, ready: false };
+
+    const total = project.tasks.length;
+    const completed = project.tasks.filter((task) => {
+      const draft = taskDrafts[task.id];
+      return draft ? draft.completed : task.status === "completada";
+    }).length;
+    const pending = Math.max(0, total - completed);
+
+    return { total, completed, pending, ready: total > 0 && pending === 0 };
+  }, [project, taskDrafts]);
+
+  const postChecksSummary = useMemo(() => {
+    if (!project) return { total: 0, checked: 0, pending: 0, ready: false };
+
+    const total = project.postInstallationChecks.length;
+    const pending = project.postInstallationChecks.filter((item) => {
+      const draft = postCheckDrafts[item.id];
+      return !(draft?.checked ?? item.checked);
+    }).length;
+    const checked = Math.max(0, total - pending);
+
+    return { total, checked, pending, ready: total > 0 && pending === 0 };
+  }, [postCheckDrafts, project]);
+
+  const visitScheduledReady =
+    Boolean(project?.technicalVisitId) &&
+    Boolean(project?.scheduledStart) &&
+    Boolean(project?.technicianId) &&
+    project?.technicalVisitStatus !== "cancelada";
+
+  const finalizeBlockers = useMemo(() => {
+    const blockers: string[] = [];
+
+    if (!deliveryActReady) {
+      blockers.push(deliveryAct.act ? "Acta pendiente de firma/aceptación" : "Falta generar el acta");
+    }
+
+    if (!hasDevicesInPlan) {
+      blockers.push("Faltan dispositivos en el plano");
+    }
+
+    if (inventoryLoading) {
+      blockers.push("Inventario cargando");
+    } else if (inventoryError) {
+      blockers.push("Error de inventario");
+    } else if (!inventorySufficient) {
+      blockers.push("Inventario insuficiente");
+    }
+
+    return blockers;
+  }, [deliveryAct.act, deliveryActReady, hasDevicesInPlan, inventoryError, inventoryLoading, inventorySufficient]);
+  const canFinalizeFromModal =
+    Boolean(project?.siteId) &&
+    Boolean(closingProject) &&
+    Boolean(deliveryActReady) &&
+    Boolean(hasDevicesInPlan) &&
+    Boolean(inventorySufficient) &&
+    !inventoryLoading &&
+    !inventoryError;
 
   const handleAddPhase = () => {
     const title = newPhaseTitle.trim();
@@ -377,6 +531,7 @@ export default function InstallationProjectDetail() {
 
   const handleSavePlan = async () => {
     if (!companyId || !project || !canUpdateProject) return;
+    //Sistma tipo spa de masage
 
     const cleanPhases = phasesDraft
       .map((phase) => ({
@@ -726,15 +881,11 @@ export default function InstallationProjectDetail() {
                   type="button"
                   onClick={() => {
                     if (closingProject) {
-                      void handleFinishProject();
+                      void openCompletionModal();
                       return;
                     }
 
-                    openClosingSection();
-                    if (!closeZoneId) {
-                      const firstZoneId = project.layout.zones[0]?.id ?? "";
-                      if (firstZoneId) setCloseZoneId(firstZoneId);
-                    }
+                    void handlePrepareClose();
                   }}
                   disabled={installedDevices.syncing || finishingProject || !project.siteId}
                   className="border-white/20 bg-white text-slate-900 hover:bg-slate-100"
@@ -756,6 +907,216 @@ export default function InstallationProjectDetail() {
           </span>
         </div>
       </header>
+
+      <Modal
+        open={completionModalOpen}
+        onClose={() => {
+          if (finishingProject) return;
+          setCompletionModalOpen(false);
+        }}
+        title="Completar proyecto"
+        subtitle="Checklist antes de completar."
+        size="sm"
+        footer={
+          <>
+            <Button
+              type="button"
+              onClick={() => setCompletionModalOpen(false)}
+              disabled={finishingProject}
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleCompleteProject()}
+              disabled={!canFinalizeFromModal || finishingProject}
+              className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {finishingProject ? "Completando..." : "Completar proyecto"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`grid h-5 w-5 place-items-center rounded-full border ${
+                    canReadTasks && tasksSummary.ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {canReadTasks && tasksSummary.ready ? <Check className="h-3.5 w-3.5" /> : null}
+                </span>
+                <span className="text-sm font-medium text-slate-900">Tareas de proyecto</span>
+              </div>
+              <span className="text-xs text-slate-500">
+                {!canReadTasks ? "Sin permiso" : tasksSummary.total === 0 ? "Sin tareas" : `${tasksSummary.completed}/${tasksSummary.total}`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`grid h-5 w-5 place-items-center rounded-full border ${
+                    canReadPostChecks && postChecksSummary.ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {canReadPostChecks && postChecksSummary.ready ? <Check className="h-3.5 w-3.5" /> : null}
+                </span>
+                <span className="text-sm font-medium text-slate-900">Pruebas post instalacion</span>
+              </div>
+              <span className="text-xs text-slate-500">
+                {!canReadPostChecks ? "Sin permiso" : postChecksSummary.total === 0 ? "Sin items" : `${postChecksSummary.checked}/${postChecksSummary.total}`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`grid h-5 w-5 place-items-center rounded-full border ${
+                    visitScheduledReady ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {visitScheduledReady ? <Check className="h-3.5 w-3.5" /> : null}
+                </span>
+                <span className="text-sm font-medium text-slate-900">Visita Tecnifa programada</span>
+              </div>
+              <span className="text-xs text-slate-500">{visitScheduledReady ? formatDateTime(project.scheduledStart) : "Pendiente"}</span>
+            </div>
+          </div>
+
+          {showLegacyCompletionModalDetails ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900">Dispositivos requeridos vs inventario</h4>
+                <p className="mt-1 text-xs text-slate-500">ComparaciÃ³n basada en el plano del proyecto.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void loadInventorySnapshot()}
+                  disabled={inventoryLoading}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Actualizar inventario
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => navigate("/admin/inventory/devices")}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Ver inventario
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => navigate("/admin/inventory/loads")}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Ir a cargas
+                </Button>
+              </div>
+            </div>
+
+            {inventoryError ? (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {inventoryError}
+              </div>
+            ) : null}
+
+            <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 shadow-inner">
+              <table className="min-w-[720px] w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Dispositivo</th>
+                    <th className="px-3 py-2">Requerido</th>
+                    <th className="px-3 py-2">Disponible</th>
+                    <th className="px-3 py-2">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {requirementsRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-sm text-slate-500">
+                        No hay dispositivos en el plano para este proyecto.
+                      </td>
+                    </tr>
+                  ) : (
+                    requirementsRows.map((row) => (
+                      <tr key={row.deviceId} className="text-slate-700">
+                        <td className="px-3 py-2">
+                          <p className="font-medium text-slate-900">{row.label}</p>
+                          <p className="text-xs text-slate-500">{row.deviceId}</p>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-slate-800">{row.required}</td>
+                        <td className="px-3 py-2 text-sm text-slate-800">{row.available}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                              row.sufficient ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {row.sufficient ? "OK" : `Faltan ${row.required - row.available}`}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            </div>
+          ) : null}
+
+          {!canFinalizeFromModal ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              El botón se habilita cuando el acta está finalizada y el inventario es suficiente
+              {finalizeBlockers.length ? ` (${finalizeBlockers.join(", ")}).` : "."}
+              {inventoryError || (!inventoryLoading && !inventorySufficient) ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void loadInventorySnapshot()}
+                    disabled={inventoryLoading}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Actualizar inventario
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => navigate("/admin/inventory/devices")}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Ver inventario
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => navigate("/admin/inventory/loads")}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Ir a cargas
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : canFinalizeFromModal && (!tasksSummary.ready || !postChecksReady || !visitScheduledReady) ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Estos puntos no bloquean el cierre; son recordatorios antes de completar.
+            </div>
+          ) : null}
+
+          {showLegacyCompletionModalDetails ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Completa los requisitos marcados para poder finalizar el proyecto. El botÃ³n de completar se habilita cuando el inventario es suficiente y el acta estÃ¡ finalizada.
+            </div>
+          ) : null}
+        </div>
+      </Modal>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -923,7 +1284,6 @@ export default function InstallationProjectDetail() {
             <div className="mt-3 space-y-2 text-sm text-slate-600">
               <p><span className="font-medium text-slate-700">Fases pendientes:</span> {pendingPhases}</p>
               <p><span className="font-medium text-slate-700">Pruebas pendientes:</span> {pendingPostChecks}</p>
-              <p><span className="font-medium text-slate-700">Consumo inventario:</span> {project.consumptions.length}</p>
               <p><span className="font-medium text-slate-700">Finalizado:</span> {formatDateTime(project.completedAt)}</p>
             </div>
             <div className="mt-4">
@@ -947,27 +1307,13 @@ export default function InstallationProjectDetail() {
         </aside>
       </section>
 
-      <div ref={closeSectionRef} className="space-y-6">
-        <InstalledDevicesReadOnlySection loading={installedDevices.loading} error={installedDevices.error} devices={installedDevices.devices} />
-
-        {!isClosed ? (
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {/*
           closingProject ? (
             <section className="space-y-3">
-              <InstalledDevicesFromPlanSection
-                zones={project.layout.zones}
-                devices={project.layout.devices}
-                catalogDevices={installedDevicesCatalog}
-                selectedZoneId={closeZoneId}
-                onZoneChange={(zoneId) => setCloseZoneId(zoneId)}
-                syncing={installedDevices.syncing || finishingProject}
-                onSyncZone={() =>
-                  void installedDevices.syncFromLayout({
-                    layout: project.layout,
-                    siteId: project.siteId,
-                    zoneId: closeZoneId,
-                  })
-                }
-              />
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Esta secciÃ³n ya no muestra tablas repetidas de dispositivos. Usa el flujo de cierre (Terminar/Completar) para continuar.
+              </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   type="button"
@@ -979,7 +1325,7 @@ export default function InstallationProjectDetail() {
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => void handleFinishProject()}
+                  onClick={() => void handleCompleteProject()}
                   disabled={installedDevices.syncing || finishingProject || !project.siteId}
                   className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
                 >
@@ -999,8 +1345,89 @@ export default function InstallationProjectDetail() {
           <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
             Este proyecto está completado. Los dispositivos instalados quedan disponibles para acta, garantías y soporte.
           </article>
+        */}
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Cierre del proyecto</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Flujo recomendado: sincronizar dispositivos del plano y luego completar el proyecto con validaciones.
+            </p>
+          </div>
+          <span
+            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+              isClosed
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : closingProject
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            {isClosed ? "Completado" : closingProject ? "Listo para completar" : "En preparación"}
+          </span>
+        </div>
+
+        {isClosed ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Este proyecto está completado.
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">Paso 1: Terminar proyecto</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Sincroniza los dispositivos del plano como instalados (requerido para acta y cierre).
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">Paso 2: Completar proyecto</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Abre el modal de requisitos: acta, inventario suficiente y validaciones operativas.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              {closingProject ? (
+                <Button
+                  type="button"
+                  onClick={() => void openCompletionModal()}
+                  disabled={finishingProject}
+                  className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  Completar proyecto
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void handlePrepareClose()}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {installedDevices.syncing ? "Sincronizando..." : "Terminar proyecto"}
+                </Button>
+              )}
+
+              {closingProject ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setClosingProject(false);
+                    setClosePreparedFlag(projectId, false);
+                  }}
+                  disabled={finishingProject}
+                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Volver a preparación
+                </Button>
+              ) : null}
+            </div>
+          </>
         )}
-      </div>
+      </article>
+
+      <InstalledDevicesReadOnlySection loading={installedDevices.loading} error={installedDevices.error} devices={installedDevices.devices} />
 
       <article className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-2">
@@ -1262,19 +1689,6 @@ export default function InstallationProjectDetail() {
         </article>
       </section>
 
-      {project.consumptions.length > 0 ? (
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900">Consumo aplicado</h3>
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {project.consumptions.map((consumption) => (
-              <div key={consumption.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <p className="font-medium text-slate-700">{consumption.deviceName ?? "Dispositivo"} x {consumption.quantity}</p>
-                <p>{formatDateTime(consumption.consumedAt)}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-      ) : null}
     </section>
   );
 }

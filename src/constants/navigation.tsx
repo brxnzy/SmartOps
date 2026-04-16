@@ -104,12 +104,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     icon: <Package />,
     children: [
       {
-        name: "Inventario",
-        to: "/admin/inventory/devices",
-        permission: PERMISSIONS.deviceInventoryRead,
-        icon: <Package size={19} />,
-      },
-      {
         name: "Dispositivos",
         to: "/admin/devices",
         permission: PERMISSIONS.devicesRead,
