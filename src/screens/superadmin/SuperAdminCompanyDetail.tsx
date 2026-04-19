@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Users } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
@@ -95,23 +95,13 @@ export default function SuperAdminCompanyDetail() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <article className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-200">Usuarios</p>
-                    <Users size={16} className="text-cyan-200" />
-                  </div>
-                  <p className="mt-2 text-2xl font-semibold text-white">{company.totalUsers}</p>
-                </article>
-
-                <article className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-200">Modo</p>
-                    <Building2 size={16} className="text-cyan-200" />
-                  </div>
-                  <p className="mt-2 text-2xl font-semibold text-white">Solo lectura</p>
-                </article>
-              </div>
+              <article className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-200">Usuarios</p>
+                  <Users size={16} className="text-cyan-200" />
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-white">{company.totalUsers}</p>
+              </article>
             </div>
           </header>
 
@@ -119,7 +109,7 @@ export default function SuperAdminCompanyDetail() {
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Usuarios de la compania</h2>
               <p className="text-sm text-slate-500">
-                Listado de solo lectura con nombre y correo.
+                Listado de solo lectura con nombre, cedula y correo.
               </p>
             </div>
 
@@ -147,6 +137,9 @@ export default function SuperAdminCompanyDetail() {
                     <div className="min-w-0">
                       <p className="truncate text-base font-semibold text-slate-900">
                         {user.name}
+                      </p>
+                      <p className="truncate text-sm text-slate-500">
+                        Cedula: {user.idCard ?? "Sin cedula"}
                       </p>
                       <p className="truncate text-sm text-slate-500">
                         {user.email ?? "Sin email"}

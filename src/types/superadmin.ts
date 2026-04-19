@@ -1,6 +1,7 @@
 export interface SuperadminUserSummary {
   id: string;
   name: string;
+  idCard: string | null;
   email: string | null;
   photoUrl: string | null;
 }
