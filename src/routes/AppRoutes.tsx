@@ -50,6 +50,10 @@ import CustomerQuotes from "../screens/customer/CustomerQuotes";
 import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
 import CustomerNotifications from "../screens/customer/CustomerNotifications";
 import DeliveryActPage from "../screens/DeliveryAct";
+import SuperAdminAreaRoute from "./SuperAdminAreaRoute";
+import SuperAdminDefaultRoute from "./SuperAdminDefaultRoute";
+import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
+import SuperAdminCompanyDetail from "../screens/superadmin/SuperAdminCompanyDetail";
 
 
 export default function AppRoutes() {
@@ -365,6 +369,19 @@ export default function AppRoutes() {
         <Route path="quotes/:budgetId" element={<CustomerQuoteDetail />} />
         <Route path="notifications" element={<CustomerNotifications />} />
         <Route path="profile" element={<CustomerProfile />} />
+      </Route>
+
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute>
+            <SuperAdminAreaRoute />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<SuperAdminDefaultRoute />} />
+        <Route path="dashboard" element={<SuperAdminDashboard />} />
+        <Route path="companies/:companyId" element={<SuperAdminCompanyDetail />} />
       </Route>
 
       <Route
