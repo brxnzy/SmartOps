@@ -7,12 +7,6 @@ function formatDateTime(value: string | null): string {
   return parsed.toLocaleString("es-DO");
 }
 
-function statusBadge(status: InstalledDeviceListItem["status"]): string {
-  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "maintenance") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-slate-200 bg-slate-50 text-slate-700";
-}
-
 export default function InstalledDevicesReadOnlySection(props: {
   loading: boolean;
   error: string | null;
@@ -41,7 +35,7 @@ export default function InstalledDevicesReadOnlySection(props: {
       ) : null}
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-inner">
-        <table className="min-w-[1100px] w-full text-left text-sm">
+        <table className="min-w-[1000px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2">Dispositivo</th>
@@ -51,13 +45,12 @@ export default function InstalledDevicesReadOnlySection(props: {
               <th className="px-3 py-2">Firmware</th>
               <th className="px-3 py-2">Ubicación</th>
               <th className="px-3 py-2">Instalado</th>
-              <th className="px-3 py-2">Estado</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {!loading && devices.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-sm text-slate-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-500">
                   No hay dispositivos instalados registrados.
                 </td>
               </tr>
@@ -77,11 +70,6 @@ export default function InstalledDevicesReadOnlySection(props: {
                   <td className="px-3 py-2 text-xs text-slate-700">{device.firmware ?? "-"}</td>
                   <td className="px-3 py-2 text-xs text-slate-700">{device.locationDetail ?? "-"}</td>
                   <td className="px-3 py-2 text-xs text-slate-700">{formatDateTime(device.installedAt)}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadge(device.status)}`}>
-                      {device.status === "active" ? "activo" : device.status === "maintenance" ? "mantenimiento" : "retirado"}
-                    </span>
-                  </td>
                 </tr>
               ))
             )}

@@ -174,6 +174,7 @@ export default function InstallationProjectDetail() {
   const [visitStart, setVisitStart] = useState("");
   const [schedulingVisit, setSchedulingVisit] = useState(false);
   const [cancelingVisit, setCancelingVisit] = useState(false);
+  const [rescheduleVisitModalOpen, setRescheduleVisitModalOpen] = useState(false);
 
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -579,15 +580,15 @@ export default function InstallationProjectDetail() {
     }
   };
 
-  const handleScheduleVisit = async () => {
-    if (!companyId || !project || !canScheduleVisit) return;
+  const handleScheduleVisit = async (): Promise<boolean> => {
+    if (!companyId || !project || !canScheduleVisit) return false;
 
     if (!visitTechnicianId) {
       notifications.warning({
         title: "Tecnico requerido",
         description: "Selecciona el tecnico encargado.",
       });
-      return;
+      return false;
     }
 
     if (!visitStart) {
@@ -595,7 +596,7 @@ export default function InstallationProjectDetail() {
         title: "Fecha requerida",
         description: "Selecciona la fecha/hora de inicio.",
       });
-      return;
+      return false;
     }
 
     let scheduledStartIso: string;
@@ -606,9 +607,10 @@ export default function InstallationProjectDetail() {
         title: "Fecha invalida",
         description: "Verifica la fecha/hora de inicio.",
       });
-      return;
+      return false;
     }
 
+    let saved = false;
     setSchedulingVisit(true);
     try {
       const result = await upsertInstallationProjectVisit({
@@ -623,6 +625,7 @@ export default function InstallationProjectDetail() {
         title: result.created ? "Visita programada" : "Visita reprogramada",
         description: "Se guardo la fecha de inicio de la visita tecnica.",
       });
+      saved = true;
       await loadProject();
     } catch (scheduleError) {
       notifications.error({
@@ -632,6 +635,8 @@ export default function InstallationProjectDetail() {
     } finally {
       setSchedulingVisit(false);
     }
+
+    return saved;
   };
 
   const handleCancelVisit = async () => {
@@ -663,6 +668,18 @@ export default function InstallationProjectDetail() {
     } finally {
       setCancelingVisit(false);
     }
+  };
+
+  const openRescheduleVisitModal = useCallback(() => {
+    if (!project) return;
+    setVisitTechnicianId(project.technicianId ?? "");
+    setVisitStart(toDateTimeLocalValue(project.scheduledStart));
+    setRescheduleVisitModalOpen(true);
+  }, [project]);
+
+  const handleRescheduleVisit = async () => {
+    const saved = await handleScheduleVisit();
+    if (saved) setRescheduleVisitModalOpen(false);
   };
 
   const handleTaskChange = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -998,28 +1015,40 @@ export default function InstallationProjectDetail() {
                 <p className="mt-1 text-xs text-slate-500">ComparaciÃ³n basada en el plano del proyecto.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  onClick={() => void loadInventorySnapshot()}
-                  disabled={inventoryLoading}
-                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                >
-                  Actualizar inventario
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => navigate("/admin/inventory/devices")}
-                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                >
-                  Ver inventario
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => navigate("/admin/inventory/loads")}
-                  className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                >
-                  Ir a cargas
-                </Button>
+                {!inventoryLoading && !inventoryError && hasDevicesInPlan && !inventorySufficient ? (
+                  <Button
+                    type="button"
+                    onClick={() => navigate("/admin/inventory/loads")}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Ir a cargas
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={() => void loadInventorySnapshot()}
+                      disabled={inventoryLoading}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    >
+                      Actualizar inventario
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => navigate("/admin/inventory/devices")}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    >
+                      Ver inventario
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => navigate("/admin/inventory/loads")}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    >
+                      Ir a cargas
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1079,28 +1108,40 @@ export default function InstallationProjectDetail() {
               {finalizeBlockers.length ? ` (${finalizeBlockers.join(", ")}).` : "."}
               {inventoryError || (!inventoryLoading && !inventorySufficient) ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => void loadInventorySnapshot()}
-                    disabled={inventoryLoading}
-                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                  >
-                    Actualizar inventario
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => navigate("/admin/inventory/devices")}
-                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                  >
-                    Ver inventario
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => navigate("/admin/inventory/loads")}
-                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                  >
-                    Ir a cargas
-                  </Button>
+                  {!inventoryLoading && !inventoryError && hasDevicesInPlan && !inventorySufficient ? (
+                    <Button
+                      type="button"
+                      onClick={() => navigate("/admin/inventory/loads")}
+                      className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    >
+                      Ir a cargas
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={() => void loadInventorySnapshot()}
+                        disabled={inventoryLoading}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      >
+                        Actualizar inventario
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => navigate("/admin/inventory/devices")}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      >
+                        Ver inventario
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => navigate("/admin/inventory/loads")}
+                        className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      >
+                        Ir a cargas
+                      </Button>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -1115,6 +1156,65 @@ export default function InstallationProjectDetail() {
               Completa los requisitos marcados para poder finalizar el proyecto. El botÃ³n de completar se habilita cuando el inventario es suficiente y el acta estÃ¡ finalizada.
             </div>
           ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={rescheduleVisitModalOpen}
+        onClose={() => {
+          if (schedulingVisit) return;
+          setRescheduleVisitModalOpen(false);
+        }}
+        title="Reprogramar visita técnica"
+        subtitle="Actualiza técnico y fecha/hora."
+        size="sm"
+        footer={
+          <>
+            <Button
+              type="button"
+              onClick={() => setRescheduleVisitModalOpen(false)}
+              disabled={schedulingVisit}
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleRescheduleVisit()}
+              disabled={!canScheduleVisit || isClosed || schedulingVisit}
+              className="border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+            >
+              {schedulingVisit ? "Guardando..." : "Reprogramar visita"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <Field label="Técnico encargado">
+            <select
+              value={visitTechnicianId}
+              onChange={(event) => setVisitTechnicianId(event.target.value)}
+              disabled={!canScheduleVisit || isClosed || schedulingVisit}
+              className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Selecciona un técnico</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Inicio">
+            <input
+              type="datetime-local"
+              value={visitStart}
+              onChange={(event) => setVisitStart(event.target.value)}
+              disabled={!canScheduleVisit || isClosed || schedulingVisit}
+              className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+            />
+          </Field>
         </div>
       </Modal>
 
@@ -1229,54 +1329,72 @@ export default function InstallationProjectDetail() {
               <p><span className="font-medium text-slate-700">Tecnico:</span> {project.technicianName ?? "Sin asignar"}</p>
             </div>
 
-            <div className="grid gap-3">
-              <Field label="Tecnico encargado">
-                <select
-                  value={visitTechnicianId}
-                  onChange={(event) => setVisitTechnicianId(event.target.value)}
-                  disabled={!canScheduleVisit || isClosed}
-                  className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Selecciona un tecnico</option>
-                  {technicians.map((tech) => (
-                    <option key={tech.id} value={tech.id}>{tech.name}</option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Inicio">
-                <input
-                  type="datetime-local"
-                  value={visitStart}
-                  onChange={(event) => setVisitStart(event.target.value)}
-                  disabled={!canScheduleVisit || isClosed}
-                  className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
-                />
-              </Field>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => void handleScheduleVisit()}
-                disabled={!canScheduleVisit || isClosed || schedulingVisit}
-                className="border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
-              >
-                <CalendarClock className="h-4 w-4" />
-                {schedulingVisit ? "Guardando..." : project.technicalVisitId ? "Reprogramar visita" : "Programar visita"}
-              </Button>
-              {project.technicalVisitId ? (
+            {visitScheduledReady ? (
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  onClick={() => void handleCancelVisit()}
-                  disabled={!canCancelVisit || isClosed || cancelingVisit || project.technicalVisitStatus === "cancelada" || project.technicalVisitStatus === "completada"}
-                  className="border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
+                  onClick={openRescheduleVisitModal}
+                  disabled={!canScheduleVisit || isClosed || schedulingVisit}
+                  className="border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
                 >
-                  <Trash2 className="h-4 w-4 text-rose-600" />
-                  {cancelingVisit ? "Cancelando..." : "Cancelar visita"}
+                  <CalendarClock className="h-4 w-4" />
+                  Reprogramar visita
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3">
+                  <Field label="Tecnico encargado">
+                    <select
+                      value={visitTechnicianId}
+                      onChange={(event) => setVisitTechnicianId(event.target.value)}
+                      disabled={!canScheduleVisit || isClosed}
+                      className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Selecciona un tecnico</option>
+                      {technicians.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Inicio">
+                    <input
+                      type="datetime-local"
+                      value={visitStart}
+                      onChange={(event) => setVisitStart(event.target.value)}
+                      disabled={!canScheduleVisit || isClosed}
+                      className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+                    />
+                  </Field>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void handleScheduleVisit()}
+                    disabled={!canScheduleVisit || isClosed || schedulingVisit}
+                    className="border-teal-600 bg-teal-600 text-white hover:bg-teal-700"
+                  >
+                    <CalendarClock className="h-4 w-4" />
+                    {schedulingVisit ? "Guardando..." : project.technicalVisitId ? "Reprogramar visita" : "Programar visita"}
+                  </Button>
+                  {project.technicalVisitId ? (
+                    <Button
+                      type="button"
+                      onClick={() => void handleCancelVisit()}
+                      disabled={!canCancelVisit || isClosed || cancelingVisit || project.technicalVisitStatus === "cancelada" || project.technicalVisitStatus === "completada"}
+                      className="border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
+                    >
+                      <Trash2 className="h-4 w-4 text-rose-600" />
+                      {cancelingVisit ? "Cancelando..." : "Cancelar visita"}
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            )}
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
