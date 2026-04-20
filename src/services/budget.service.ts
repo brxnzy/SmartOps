@@ -193,7 +193,7 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
       rejected_at,
       expires_at,
       budget_quotes ( status ),
-      site_surveys:survey_id (
+      site_surveys:survey_id!inner (
         id,
         site_id,
         customer_id,
@@ -495,7 +495,7 @@ export async function getBudgetDetailForCustomer(
       approved_by_user_id,
       layout_json,
       budget_quotes ( status, quote_number, sent_at, valid_until, pdf_path ),
-      site_surveys:survey_id (
+      site_surveys:survey_id!inner (
         id,
         site_id,
         customer_id,
