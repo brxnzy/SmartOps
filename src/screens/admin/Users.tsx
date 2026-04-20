@@ -1,17 +1,22 @@
 ﻿import { ShieldCheck, Users } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../../components/Button";
+import PlanLimitReachedModal from "../../components/PlanLimitReachedModal";
 import UserFilters from "../../components/users/UserFilters";
 import UserModal from "../../components/users/UserModal";
 import UserTable from "../../components/users/UserTable";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
+import useCompanyEntitlements from "../../hooks/useCompanyEntitlements";
 import { useUsers } from "../../hooks/useUsers";
 import { notifications } from "../../services/notification.service";
+import { getCompanyTechniciansCount } from "../../services/planUsage.service";
 import type { CompanyUser } from "../../types/userManagement.types";
+import { formatRemaining, getRemaining } from "../../utils/planLimitUi";
 
 export default function UsersAdmin() {
   const { authUser, companyProfile, canAccess } = useAuth();
+  const { entitlements } = useCompanyEntitlements();
 
   const companyId = companyProfile?.id ?? null;
   const canCreate = canAccess(PERMISSIONS.usersCreate);
@@ -52,6 +57,47 @@ export default function UsersAdmin() {
     [items, total]
   );
 
+  const [techniciansCount, setTechniciansCount] = useState<number | null>(null);
+  const [isLimitModalOpen, setLimitModalOpen] = useState(false);
+  const limitToastShownRef = useRef<string | null>(null);
+
+  const maxTechnicians = entitlements?.limits?.maxTechnicians ?? null;
+  const remainingTechnicians = useMemo(() => {
+    if (techniciansCount === null) return null;
+    return getRemaining(maxTechnicians, techniciansCount);
+  }, [maxTechnicians, techniciansCount]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    setTechniciansCount(null);
+
+    getCompanyTechniciansCount(companyId)
+      .then((count) => {
+        setTechniciansCount(count);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    if (techniciansCount === null) return;
+
+    const toastKey = `${companyId}:${maxTechnicians ?? "unlimited"}`;
+    if (limitToastShownRef.current === toastKey) return;
+    limitToastShownRef.current = toastKey;
+
+    notifications.info({
+      title: "Límites de plan",
+      description: formatRemaining("usuarios", getRemaining(maxTechnicians, techniciansCount)),
+    });
+
+    if (maxTechnicians !== null && techniciansCount >= maxTechnicians) {
+      setLimitModalOpen(true);
+    }
+  }, [companyId, maxTechnicians, techniciansCount]);
+
   const handleDisableClick = async (user: CompanyUser) => {
     if (user.id === authUser?.id) {
       notifications.warning({
@@ -81,6 +127,15 @@ export default function UsersAdmin() {
     }
 
     openEditModal(user);
+  };
+
+  const handleCreateClick = () => {
+    if (remainingTechnicians === 0) {
+      setLimitModalOpen(true);
+      return;
+    }
+
+    openCreateModal();
   };
 
   return (
@@ -116,7 +171,7 @@ export default function UsersAdmin() {
         roles={roles}
         onSearchChange={setSearch}
         onRoleChange={setRoleId}
-        onCreate={openCreateModal}
+        onCreate={handleCreateClick}
         canCreate={canCreate}
         disabled={loading || submitting}
       />
@@ -185,6 +240,13 @@ export default function UsersAdmin() {
         submitting={submitting}
         onClose={closeModal}
         onSubmit={handleSubmit}
+      />
+
+      <PlanLimitReachedModal
+        open={isLimitModalOpen}
+        onClose={() => setLimitModalOpen(false)}
+        resourceLabel="usuarios"
+        planName={entitlements?.planName}
       />
     </section>
   );

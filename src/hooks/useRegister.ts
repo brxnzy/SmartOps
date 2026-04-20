@@ -1,10 +1,13 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { registerUser } from "../services/auth.service";
 import { notifications } from "../services/notification.service";
 import type { RegisterInput } from "../types/types";
 import { translateAuthError } from "../utils/authErrorMessages";
 import { formatIdCard, formatPhone } from "../utils/format";
+
+const PENDING_PLAN_STORAGE_KEY = "pending_plan_key";
+const allowedPlans = new Set(["basic", "pro", "enterprise"]);
 
 const initialForm: RegisterInput = {
   name: "",
@@ -15,10 +18,12 @@ const initialForm: RegisterInput = {
   companyAddress: "",
   companyPhone: "",
   companyRnc: "",
+  planKey: null,
 };
 
 const useRegister = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState<RegisterInput>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,10 +50,16 @@ const useRegister = () => {
     e.preventDefault();
     if (isSubmitting) return;
 
+    const planParam = (searchParams.get("plan") ?? "").trim().toLowerCase();
+    const planKey = allowedPlans.has(planParam) ? planParam : null;
+
     try {
       setIsSubmitting(true);
+      if (planKey) {
+        localStorage.setItem(PENDING_PLAN_STORAGE_KEY, planKey);
+      }
       await notifications.promise(
-        () => registerUser({ ...form, email: form.email.trim().toLowerCase() }),
+        () => registerUser({ ...form, planKey, email: form.email.trim().toLowerCase() }),
         {
           loading: {
             title: "Creando cuenta...",
@@ -73,6 +84,9 @@ const useRegister = () => {
 
       setForm(initialForm);
     } catch {
+      if (planKey) {
+        localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      }
       // Toasts are handled by notifications.promise.
     } finally {
       setIsSubmitting(false);

@@ -10,6 +10,7 @@ export type RegisterInput = {
   companyAddress: string;
   companyPhone: string;
   companyRnc: string;
+  planKey?: string | null;
 };
 
 

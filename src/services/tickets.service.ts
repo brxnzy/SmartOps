@@ -2,6 +2,7 @@ import { supabase } from "../libs/supabase";
 import { logAuditEvent } from "./audit.service";
 import { sendEmailNotification } from "./email-notification.service";
 import { normalizeVisitStatus } from "../utils/siteSurveyWorkflow";
+import { toPlanAwareErrorMessage } from "../utils/planLimits";
 import type {
   CreateTicketCommentInput,
   CreateTicketInput,
@@ -327,7 +328,7 @@ export async function createTicket(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "No se pudo crear el ticket.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo crear el ticket."));
   }
 
   if (files.length > 0) {

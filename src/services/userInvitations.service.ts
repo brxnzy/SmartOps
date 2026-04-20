@@ -17,10 +17,30 @@ function mapInvitationError(raw: string): string {
   let message = normalized;
 
   try {
-    const parsed = JSON.parse(normalized) as { error?: string; message?: string };
-    message = parsed.error ?? parsed.message ?? normalized;
+    const parsed = JSON.parse(normalized) as { error?: string; message?: string; resource?: string };
+    if (parsed?.error === "limit_exceeded" && parsed.resource) {
+      message = JSON.stringify(parsed);
+    } else {
+      message = parsed.error ?? parsed.message ?? normalized;
+    }
   } catch {
     // Keep original message when response is not JSON.
+  }
+
+  try {
+    const parsed = JSON.parse(message) as { error?: string; resource?: string };
+    if (parsed?.error === "limit_exceeded" && parsed.resource) {
+      const resource = String(parsed.resource);
+      if (resource === "technicians") {
+        return "Has alcanzado el límite de usuarios/técnicos de tu plan. Debes hacer upgrade para agregar más.";
+      }
+      if (resource === "clients") {
+        return "Has alcanzado el límite de clientes de tu plan. Debes hacer upgrade para agregar más.";
+      }
+      return "Has alcanzado un límite de tu plan. Debes hacer upgrade para continuar.";
+    }
+  } catch {
+    // Ignore JSON parse errors.
   }
 
   const lower = message.toLowerCase();

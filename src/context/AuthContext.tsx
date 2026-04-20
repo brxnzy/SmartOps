@@ -7,11 +7,15 @@ import { getUserCompanyAndRole } from "../services/company.service";
 import { getPermissionsByRoleId } from "../services/permission.service";
 import { getUserProfileById } from "../services/profile.service";
 import { notifications } from "../services/notification.service";
+import { changeCompanyPlan } from "../services/subscription.service";
 import type { AuthContextType } from "../types/auth";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const normalizePermissionCode = (code?: string) =>
   code?.trim().toLowerCase() ?? "";
+
+const PENDING_PLAN_STORAGE_KEY = "pending_plan_key";
+const allowedPlans = new Set(["basic", "pro", "enterprise"]);
 
 export default AuthContext;
 
@@ -26,6 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authzLoading, setAuthzLoading] = useState(false);
   const loadingToastIdRef = useRef<string | null>(null);
   const hydratedUserIdRef = useRef<string | null>(null);
+  const planUpgradeAttemptRef = useRef<string | null>(null);
 
   const resetAuthData = useCallback(() => {
     setUserProfile(null);
@@ -150,6 +155,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await loadDomainProfile(authUser.id);
     hydratedUserIdRef.current = authUser.id;
   };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    if (!companyProfile?.id) return;
+
+    const pendingRaw = localStorage.getItem(PENDING_PLAN_STORAGE_KEY) ?? sessionStorage.getItem(PENDING_PLAN_STORAGE_KEY);
+    const pendingPlanKey = (pendingRaw ?? "").trim().toLowerCase();
+
+    if (!pendingPlanKey || !allowedPlans.has(pendingPlanKey)) return;
+    if (pendingPlanKey === "basic") {
+      localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      sessionStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      return;
+    }
+
+    const attemptKey = `${session.user.id}:${companyProfile.id}:${pendingPlanKey}`;
+    if (planUpgradeAttemptRef.current === attemptKey) return;
+    planUpgradeAttemptRef.current = attemptKey;
+
+    const apply = async (retry = false) => {
+      try {
+        await changeCompanyPlan(companyProfile.id, pendingPlanKey);
+        localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+        sessionStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+        window.dispatchEvent(new Event("company-plan-changed"));
+      } catch (error) {
+        console.error("[AuthContext] change_company_plan_failed", error);
+        if (!retry) {
+          window.setTimeout(() => {
+            void apply(true);
+          }, 2000);
+        }
+      }
+    };
+
+    void apply(false);
+  }, [companyProfile?.id, session?.user?.id]);
 
   const permissionsSet = useMemo(() => new Set(permissions), [permissions]);
 
