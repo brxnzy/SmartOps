@@ -151,6 +151,7 @@ export interface FileInputProps extends React.ComponentProps<"input"> {
 
 export interface InputProps extends React.ComponentProps<"input"> {
   icon?: React.ReactNode;
+  rightElement?: React.ReactNode;
 }
 
 
