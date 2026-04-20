@@ -1463,6 +1463,15 @@ export async function finalizeSurveyExecution(
   surveyId: string,
   visitId: string | null
 ): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    throw buildError(authError, "No se pudo validar tu sesion.");
+  }
+  const authUserId = authData?.user?.id ?? null;
+  if (!authUserId) {
+    throw new Error("Debes iniciar sesion para finalizar el levantamiento.");
+  }
+
   const { data: surveyData, error: surveyLoadError } = await supabase
     .from("site_surveys")
     .select("id, status, completed_at")
@@ -1486,7 +1495,7 @@ export async function finalizeSurveyExecution(
   if (visitId) {
     const { data: selectedVisit, error: selectedVisitError } = await supabase
       .from("technical_visits")
-      .select("id, site_survey_id, status, ticket_id, installation_project_id")
+      .select("id, site_survey_id, status, ticket_id, installation_project_id, technician_id")
       .eq("id", visitId)
       .maybeSingle<TechnicalVisitStatusGuardRow>();
 
@@ -1497,7 +1506,7 @@ export async function finalizeSurveyExecution(
   } else {
     const { data: fallbackVisit, error: fallbackVisitError } = await supabase
       .from("technical_visits")
-      .select("id, site_survey_id, status, ticket_id, installation_project_id")
+      .select("id, site_survey_id, status, ticket_id, installation_project_id, technician_id")
       .eq("site_survey_id", surveyId)
       .is("ticket_id", null)
       .is("installation_project_id", null)
@@ -1520,6 +1529,14 @@ export async function finalizeSurveyExecution(
   }
   if (visitData.ticket_id !== null || safeNullableText(visitData.installation_project_id)) {
     throw new Error("Solo se puede finalizar la visita tecnica del levantamiento.");
+  }
+
+  const assignedTechnicianId = safeNullableText(visitData.technician_id);
+  if (!assignedTechnicianId) {
+    throw new Error("Este levantamiento no tiene tecnico asignado.");
+  }
+  if (assignedTechnicianId !== authUserId) {
+    throw new Error("Solo el tecnico asignado puede finalizar este levantamiento.");
   }
 
   const normalizedVisitStatus = normalizeVisitStatus(visitData.status);

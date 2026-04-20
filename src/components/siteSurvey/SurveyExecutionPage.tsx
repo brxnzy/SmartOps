@@ -148,6 +148,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
   const isCancelled = surveyStatus === "cancelado";
   const showStartAction = !isFinalized && normalizedSurveyStatus === "pendiente";
   const canStartByTechnician = !visitTechnicianId || !userId || visitTechnicianId === userId;
+  const canFinalizeByTechnician = Boolean(userId) && Boolean(visitTechnicianId) && visitTechnicianId === userId;
   const canStartByDate = !visitScheduledStart || Date.now() >= new Date(visitScheduledStart).getTime();
   const canStartCurrentVisit =
     canStartSurvey &&
@@ -297,6 +298,22 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
       return;
     }
 
+    if (!visitTechnicianId) {
+      notifications.warning({
+        title: "Tecnico requerido",
+        description: "Este levantamiento no tiene tecnico asignado.",
+      });
+      return;
+    }
+
+    if (!userId || visitTechnicianId !== userId) {
+      notifications.warning({
+        title: "Tecnico no asignado",
+        description: "Solo el tecnico asignado puede finalizar este levantamiento.",
+      });
+      return;
+    }
+
     if (checkedChecklistCount === 0) {
       notifications.warning({
         title: "Validacion pendiente",
@@ -414,8 +431,19 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
           ) : (
             <Button
               type="button"
-              onClick={() => setConfirmFinalizeOpen(true)}
-              disabled={finalizing}
+              onClick={() => {
+                if (!canFinalizeByTechnician) {
+                  notifications.warning({
+                    title: "Tecnico no asignado",
+                    description: visitTechnicianId
+                      ? "Solo el tecnico asignado puede finalizar este levantamiento."
+                      : "Este levantamiento no tiene tecnico asignado.",
+                  });
+                  return;
+                }
+                setConfirmFinalizeOpen(true);
+              }}
+              disabled={finalizing || !canFinalizeByTechnician}
               className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
               icon={<CheckCircle2 size={14} />}
             >
@@ -542,7 +570,7 @@ export default function SurveyExecutionPage({ surveyId, companyId, onBack }: Sur
             <Button
               type="button"
               onClick={() => void finalize()}
-              disabled={finalizing}
+              disabled={finalizing || !canFinalizeByTechnician}
               className="border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
               icon={<CheckCircle2 size={14} />}
             >
