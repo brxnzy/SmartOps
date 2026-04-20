@@ -309,13 +309,19 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    const { data: authData, error: authError } = await withTimeout(
-      "auth.getUser",
-      authClient.auth.getUser(accessToken),
-      requestId
-    );
-    if (authError || !authData.user) {
-      return jsonResponse(401, { error: "Invalid access token" });
+    const isServiceRoleRequest = accessToken === serviceRoleKey;
+    let authUserId: string | null = null;
+
+    if (!isServiceRoleRequest) {
+      const { data: authData, error: authError } = await withTimeout(
+        "auth.getUser",
+        authClient.auth.getUser(accessToken),
+        requestId
+      );
+      if (authError || !authData.user) {
+        return jsonResponse(401, { error: "Invalid access token" });
+      }
+      authUserId = authData.user.id;
     }
 
     payload = (await req.json().catch(() => ({}))) as Partial<SendEmailPayload>;
@@ -331,14 +337,14 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: "No hay destinatarios validos." });
     }
 
-    if (companyId) {
+    if (companyId && !isServiceRoleRequest) {
       const { data: companyMembership, error: membershipError } = await withTimeout(
         "db.validateCompanyMembership",
         adminClient
           .from("user_roles")
           .select("user_id")
           .eq("company_id", companyId)
-          .eq("user_id", authData.user.id)
+          .eq("user_id", authUserId)
           .maybeSingle<UserRoleRow>(),
         requestId
       );

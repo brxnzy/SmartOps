@@ -96,6 +96,12 @@ export const PERMISSIONS = {
   installationProjectsInventoryConsume: "installation_projects.inventory.consume",
   emailHistoryRead: "email_history.read",
   emailHistoryRetry: "email_history.retry",
+  paymentsRead: "payments.read",
+  paymentsCreateManual: "payments.create_manual",
+  paymentsReview: "payments.review",
+  paymentsReceiptSend: "payments.receipt.send",
+  paymentsStatementRead: "payments.statement.read",
+  paymentsStatementDownload: "payments.statement.download",
 } as const;
 
 export type AppPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

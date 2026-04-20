@@ -333,11 +333,56 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    let paymentAccountId: string | null = null;
+    try {
+      const { data: paymentAccountData, error: paymentAccountError } = await adminClient
+        .rpc("create_payment_account_from_delivery_act", {
+          p_delivery_act_id: actId,
+          p_created_by: authData.user.id,
+        })
+        .single<{
+          account_id: string;
+        }>();
+
+      if (paymentAccountError) {
+        console.log(`[sign-delivery-act] request_id=${requestId} payment_account_error=${paymentAccountError.message}`);
+      } else {
+        paymentAccountId = paymentAccountData?.account_id ?? null;
+      }
+
+      if (paymentAccountId) {
+        const invoiceResponse = await fetch(`${supabaseUrl}/functions/v1/payments_actions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceRoleKey}`,
+            apikey: supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            mode: "issue_account_invoice",
+            accountId: paymentAccountId,
+          }),
+        });
+
+        if (!invoiceResponse.ok) {
+          const rawResponse = await invoiceResponse.text().catch(() => "");
+          console.log(
+            `[sign-delivery-act] request_id=${requestId} payment_invoice_error status=${invoiceResponse.status} body=${rawResponse}`
+          );
+        }
+      }
+    } catch (error) {
+      console.log(
+        `[sign-delivery-act] request_id=${requestId} payment_account_exception=${(error as Error)?.message ?? String(error)}`
+      );
+    }
+
     return jsonResponse(200, {
       actId,
       status,
       pdfUrl: pdfUrl || null,
       projectFinalized,
+      paymentAccountId,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

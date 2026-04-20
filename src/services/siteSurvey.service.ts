@@ -123,12 +123,15 @@ export async function listSiteSurveys(companyId: string): Promise<SiteSurveySumm
         | null
         | undefined
     );
+    const completedAt = safeNullableText(row.completed_at);
+    const normalizedStatus = normalizeSurveyStatus(safeNullableText(row.status));
+    const effectiveStatus = completedAt ? "completado" : normalizedStatus ?? "pendiente";
 
     return {
       id: safeText(row.id),
       createdAt: safeText(row.created_at ?? new Date().toISOString()),
-      status: normalizeSurveyStatus(safeNullableText(row.status)) ?? "pendiente",
-      completedAt: safeNullableText(row.completed_at),
+      status: effectiveStatus,
+      completedAt,
       companyId: safeNullableText(row.company_id),
       customerId: safeNullableText(row.customer_id),
       customerName: safeNullableText(customer?.users?.name),

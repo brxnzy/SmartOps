@@ -507,11 +507,16 @@ export default function SiteSurvey() {
         ) : (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {surveys.map((survey) => {
-              const statusKey = normalizeSurveyStatus(survey.status) ?? "pendiente";
+              const statusKey = isCompleted(survey)
+                ? "completado"
+                : normalizeSurveyStatus(survey.status) ?? "pendiente";
               const visitStatusKey = normalizeVisitStatus(survey.visitStatus);
               const statusClass = STATUS_STYLES[statusKey] ?? "border-slate-200 bg-slate-50 text-slate-700";
               const showProgramVisitCta =
                 statusKey === "pendiente" && visitStatusKey === "cancelada";
+              const statusLabel = isCompleted(survey)
+                ? formatSurveyStatusLabel("completado")
+                : formatSurveyStatusLabel(survey.status);
 
               return (
                 <article
@@ -531,7 +536,7 @@ export default function SiteSurvey() {
                       </div>
                     </div>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass}`}>
-                      {formatSurveyStatusLabel(survey.status)}
+                      {statusLabel}
                     </span>
                   </div>
 
