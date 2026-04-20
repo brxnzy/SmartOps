@@ -1,17 +1,23 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Home, Store, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
+import PlanLimitReachedModal from "../../components/PlanLimitReachedModal";
 import { PERMISSIONS } from "../../constants/permissions";
 import { useAuth } from "../../hooks/useAuth";
+import useCompanyEntitlements from "../../hooks/useCompanyEntitlements";
 import CustomerDeleteModal from "../../components/customers/CustomerDeleteModal";
 import CustomerFilters from "../../components/customers/CustomerFilters";
 import CustomerModal from "../../components/customers/CustomerModal";
 import CustomerTable from "../../components/customers/CustomerTable";
+import { notifications } from "../../services/notification.service";
+import { getCompanyClientsCount } from "../../services/planUsage.service";
+import { formatRemaining, getRemaining } from "../../utils/planLimitUi";
 import { useCustomers } from "../../hooks/useCustomers";
 
 export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
+  const { entitlements } = useCompanyEntitlements();
   const navigate = useNavigate();
   const companyId = companyProfile?.id ?? null;
   const canCreate = useMemo(() => canAccess(PERMISSIONS.customersCreate), [canAccess]);
@@ -48,7 +54,55 @@ export default function Customers() {
     pageSize: 8,
   });
 
-  
+  const [clientsCount, setClientsCount] = useState<number | null>(null);
+  const [isLimitModalOpen, setLimitModalOpen] = useState(false);
+  const limitToastShownRef = useRef<string | null>(null);
+
+  const maxClients = entitlements?.limits?.maxClients ?? null;
+  const remainingClients = useMemo(() => {
+    if (clientsCount === null) return null;
+    return getRemaining(maxClients, clientsCount);
+  }, [clientsCount, maxClients]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    setClientsCount(null);
+
+    getCompanyClientsCount(companyId)
+      .then((count) => {
+        setClientsCount(count);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    if (clientsCount === null) return;
+
+    const toastKey = `${companyId}:${maxClients ?? "unlimited"}`;
+    if (limitToastShownRef.current === toastKey) return;
+    limitToastShownRef.current = toastKey;
+
+    notifications.info({
+      title: "Límites de plan",
+      description: formatRemaining("clientes", getRemaining(maxClients, clientsCount)),
+    });
+
+    if (maxClients !== null && clientsCount >= maxClients) {
+      setLimitModalOpen(true);
+    }
+  }, [companyId, clientsCount, maxClients]);
+
+  const handleCreateClick = () => {
+    if (remainingClients === 0) {
+      setLimitModalOpen(true);
+      return;
+    }
+
+    openCreateModal();
+  };
 
   return (
     <section className="space-y-5">
@@ -98,7 +152,7 @@ export default function Customers() {
         type={query.type}
         onSearchChange={setSearch}
         onTypeChange={setType}
-        onCreate={openCreateModal}
+        onCreate={handleCreateClick}
         disabled={loading || submitting || !canCreate}
       />
 
@@ -174,6 +228,13 @@ export default function Customers() {
         submitting={submitting}
         onClose={closeDeleteModal}
         onConfirm={handleDelete}
+      />
+
+      <PlanLimitReachedModal
+        open={isLimitModalOpen}
+        onClose={() => setLimitModalOpen(false)}
+        resourceLabel="clientes"
+        planName={entitlements?.planName}
       />
     </section>
   );

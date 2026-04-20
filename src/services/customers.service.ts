@@ -4,6 +4,7 @@ import { logAuditEvent } from "./audit.service";
 import {
   createCustomerViaInvitation,
 } from "./customerInvitations.service";
+import { toPlanAwareErrorMessage } from "../utils/planLimits";
 import type {
   Customer,
   CustomerInput,
@@ -15,6 +16,10 @@ let cachedCustomerRoleId: string | null = null;
 
 function buildErrorMessage(error: PostgrestError | null, fallback: string): string {
   if (!error) return fallback;
+
+  if (error.code === "P0001") {
+    return toPlanAwareErrorMessage(error, fallback);
+  }
 
   if (error.code === "23505") {
     return "Ya existe un cliente con ese documento fiscal en esta compania.";

@@ -47,6 +47,7 @@ export async function registerUser(input: RegisterInput) {
         company_address: input.companyAddress,
         company_phone: input.companyPhone,
         company_rnc: input.companyRnc,
+        plan_key: input.planKey ?? null,
       }
     }
   })

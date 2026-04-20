@@ -1,7 +1,9 @@
 import useAuth from "../../hooks/useAuth";
+import useCompanyEntitlements from "../../hooks/useCompanyEntitlements";
 
 export default function AdminDashboard() {
   const { authUser, userProfile, companyProfile, roleProfile } = useAuth();
+  const { entitlements, loading: entitlementsLoading } = useCompanyEntitlements();
 
   return (
     <section className="space-y-6">
@@ -39,6 +41,12 @@ export default function AdminDashboard() {
             <div>
               <dt className="font-medium text-slate-500">Nombre</dt>
               <dd>{companyProfile?.name ?? "No asignada"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Plan actual</dt>
+              <dd>
+                {entitlementsLoading ? "Cargando..." : entitlements?.planName ?? "Sin plan"}
+              </dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">RNC</dt>

@@ -28,6 +28,11 @@ export interface CompanyUserQuery {
 export interface CompanyUsersResult {
   items: CompanyUser[];
   total: number;
+  companyTotals?: {
+    technicians: number;
+    clients: number;
+    total: number;
+  };
 }
 
 export interface UserFormValues {

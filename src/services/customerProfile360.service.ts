@@ -3,6 +3,7 @@ import { logAuditEvent } from "./audit.service";
 import { listBudgetsForCustomer } from "./budget.service";
 import { listInstallationProjectsByCustomer } from "./installation.service";
 import { listSiteSurveys } from "./siteSurvey.service";
+import { toPlanAwareErrorMessage } from "../utils/planLimits";
 import type {
   CreateCustomerSiteInput,
   CustomerBudgetSummary,
@@ -430,7 +431,7 @@ export async function createCustomerSite(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "No se pudo crear el sitio.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo crear el sitio."));
   }
   const created = mapSites([data])[0];
   await logAuditEvent({
@@ -598,7 +599,7 @@ export async function createCustomerSiteZone(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "No se pudo crear la zona.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo crear la zona."));
   }
   const created = mapSiteZones([data])[0];
   await logAuditEvent({

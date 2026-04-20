@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { toPlanAwareErrorMessage } from "../utils/planLimits";
 import type {
   CreateInstalledDeviceInput,
   InstalledDeviceListItem,
@@ -164,7 +165,7 @@ export async function upsertInstalledDevicesFromLayout(params: {
     .returns<Array<{ id: string }>>();
 
   if (error) {
-    throw new Error(error.message || "No se pudieron sincronizar los dispositivos instalados.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudieron sincronizar los dispositivos instalados."));
   }
 
   return { insertedOrUpdated: (data ?? []).length };
@@ -198,7 +199,7 @@ export async function createInstalledDevice(input: CreateInstalledDeviceInput): 
     .single<{ id: string }>();
 
   if (error || !data?.id) {
-    throw new Error(error?.message || "No se pudo registrar el dispositivo instalado.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo registrar el dispositivo instalado."));
   }
 
   return data.id;
