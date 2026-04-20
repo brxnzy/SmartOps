@@ -9,6 +9,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsers } from "../../hooks/useUsers";
 import { notifications } from "../../services/notification.service";
 import type { CompanyUser } from "../../types/userManagement.types";
+import { downloadPDF } from "../../utils/reportPdf";
 
 export default function UsersAdmin() {
   const { authUser, companyProfile, canAccess } = useAuth();
@@ -51,6 +52,10 @@ export default function UsersAdmin() {
     }),
     [items, total]
   );
+
+  const handleDownload = () => {
+    downloadPDF(items, 'users_report.pdf', ['name', 'idCard', 'roleName', 'isDisabled'], companyProfile?.name ?? "SmartOps");
+  };
 
   const handleDisableClick = async (user: CompanyUser) => {
     if (user.id === authUser?.id) {
@@ -117,6 +122,7 @@ export default function UsersAdmin() {
         onSearchChange={setSearch}
         onRoleChange={setRoleId}
         onCreate={openCreateModal}
+        onDownload={handleDownload}
         canCreate={canCreate}
         disabled={loading || submitting}
       />

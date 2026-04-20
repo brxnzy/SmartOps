@@ -9,11 +9,14 @@ import CustomerFilters from "../../components/customers/CustomerFilters";
 import CustomerModal from "../../components/customers/CustomerModal";
 import CustomerTable from "../../components/customers/CustomerTable";
 import { useCustomers } from "../../hooks/useCustomers";
+import { downloadPDF } from "../../utils/reportPdf";
 
 export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
   const navigate = useNavigate();
-  const companyId = companyProfile?.id ?? null;
+  const handleDownload = () => {
+    downloadPDF(items, 'customers_report.pdf', ['name', 'tax_id', 'email', 'phone', 'type'], companyProfile?.name ?? "SmartOps");
+  };
   const canWrite = useMemo(() => {
     return (
       canAccess("customers:create") ||
@@ -47,7 +50,7 @@ export default function Customers() {
     handleDelete,
     setPage,
   } = useCustomers({
-    companyId,
+    companyId: companyProfile?.id || null,
     invitedByUserId: authUser?.id,
     pageSize: 8,
   });
@@ -103,6 +106,7 @@ export default function Customers() {
         onSearchChange={setSearch}
         onTypeChange={setType}
         onCreate={openCreateModal}
+        onDownload={handleDownload}
         disabled={loading || submitting || !canWrite}
       />
 

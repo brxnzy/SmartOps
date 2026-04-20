@@ -6,6 +6,21 @@ import { useAuth } from "../../hooks/useAuth";
 import { listCompanyTickets } from "../../services/tickets.service";
 import type { TicketListItem, TicketStatus } from "../../types/ticketing.types";
 
+function downloadCSV(data: any[], filename: string, headers?: string[]) {
+  let csv = '';
+  if (headers) {
+    csv += headers.join(',') + '\n';
+  }
+  csv += data.map(row => headers ? headers.map(h => row[h] || '').join(',') : Object.values(row).map(v => v || '').join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const STATUS_LABELS: Record<TicketStatus, string> = {
   abierto: "Abierto",
   en_proceso: "En proceso",
@@ -109,6 +124,10 @@ export default function AdminTickets() {
     return base;
   }, [tickets]);
 
+  const handleDownload = () => {
+    downloadCSV(filtered, 'tickets_report.csv', ['id', 'code', 'customerId', 'customerName', 'siteId', 'siteName', 'categoryId', 'categoryName', 'description', 'status', 'assignedUserId', 'assignedUserName', 'createdAt', 'updatedAt']);
+  };
+
   return (
     <section className="space-y-6">
       <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -139,7 +158,7 @@ export default function AdminTickets() {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2">
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
         <div>
           <label className="text-xs font-semibold text-slate-500">Buscar</label>
           <input
@@ -163,6 +182,15 @@ export default function AdminTickets() {
             <option value="resuelto">Resuelto</option>
             <option value="cerrado">Cerrado</option>
           </select>
+        </div>
+        <div className="flex items-end">
+          <Button
+            type="button"
+            onClick={handleDownload}
+            className="w-full bg-green-600 text-white hover:bg-green-500"
+          >
+            Descargar Reporte
+          </Button>
         </div>
       </div>
 

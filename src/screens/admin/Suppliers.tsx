@@ -5,6 +5,7 @@ import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import useSuppliers from "../../hooks/useSuppliers";
 import { formatPhoneDigits } from "../../utils/formatters";
+import { downloadPDF } from "../../utils/reportPdf";
 
 export default function Suppliers() {
   const {
@@ -39,6 +40,10 @@ export default function Suppliers() {
     confirmDeleteSupplier,
   } = useSuppliers();
 
+  const handleDownload = () => {
+    downloadPDF(filteredSuppliers, 'suppliers_report.pdf', ['name', 'email', 'phone', 'address']);
+  };
+
   return (
     <section className="space-y-6">
       <header className="px-1 flex items-center justify-between">
@@ -48,14 +53,24 @@ export default function Suppliers() {
         </div>
 
         {canCreate && (
-          <Button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!companyId || submitting}
-            className="bg-blue-600 text-white hover:bg-blue-500"
-          >
-            Nuevo proveedor
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={handleDownload}
+              disabled={!companyId || submitting}
+              className="bg-green-600 text-white hover:bg-green-500"
+            >
+              Descargar Reporte
+            </Button>
+            <Button
+              type="button"
+              onClick={openCreateModal}
+              disabled={!companyId || submitting}
+              className="bg-blue-600 text-white hover:bg-blue-500"
+            >
+              Nuevo proveedor
+            </Button>
+          </div>
         )}
       </header>
 

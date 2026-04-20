@@ -1,4 +1,4 @@
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, Plus, Search, Download } from "lucide-react";
 import Button from "../Button";
 import Input from "../Input";
 import type { CustomerFiltersProps } from "../../types/interfaces";
@@ -10,8 +10,9 @@ export default function CustomerFilters({
   onSearchChange,
   onTypeChange,
   onCreate,
+  onDownload,
   disabled = false,
-}: CustomerFiltersProps) {
+}: CustomerFiltersProps & { onDownload?: () => void }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -49,6 +50,18 @@ export default function CustomerFilters({
         >
           Nuevo cliente
         </Button>
+
+        {onDownload && (
+          <Button
+            type="button"
+            onClick={onDownload}
+            disabled={disabled}
+            icon={<Download size={16} />}
+            className="border-green-600 bg-green-600 text-white hover:bg-green-700"
+          >
+            Descargar Reporte
+          </Button>
+        )}
       </div>
     </div>
   );
