@@ -2,6 +2,7 @@ import { useState } from "react";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import useDeviceInventory from "../../hooks/useDeviceInventory";
+import { downloadPDF } from "../../utils/reportPdf";
 
 export default function DeviceInventory() {
   const {
@@ -15,6 +16,10 @@ export default function DeviceInventory() {
   } = useDeviceInventory();
   const [exactQuantityByDevice, setExactQuantityByDevice] = useState<Record<string, string>>({});
 
+  const handleDownload = () => {
+    downloadPDF(filteredInventoryRows, 'device_inventory_report.pdf', ['deviceName', 'deviceModel', 'quantity', 'status']);
+  };
+
   const statusClassByValue: Record<string, string> = {
     available: "border-emerald-200 bg-emerald-50 text-emerald-700",
     low_stock: "border-amber-200 bg-amber-50 text-amber-700",
@@ -23,13 +28,20 @@ export default function DeviceInventory() {
 
   return (
     <section className="space-y-6">
-      <header className="px-1">
+      <header className="px-1 flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-slate-800">Inventario de dispositivos</h1>
           <p className="text-sm text-slate-500">
             Visualiza los dispositivos creados y ajusta su cantidad con acciones rapidas.
           </p>
         </div>
+        <Button
+          type="button"
+          onClick={handleDownload}
+          className="bg-green-600 text-white hover:bg-green-500"
+        >
+          Descargar Reporte
+        </Button>
       </header>
 
       <Input

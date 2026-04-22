@@ -1,14 +1,22 @@
+import { useState, useEffect } from "react";
 
-import { useEffect, useState } from "react";
-import { downloadPDF } from "../../utils/reportPdf";
-import { supabase } from "../../libs/supabase";
-import useAuth from "../../hooks/useAuth";
-import useCompanyEntitlements from "../../hooks/useCompanyEntitlements";
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://ucuenkqcpdibheuyabdb.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjdWVua3FjcGRpYmhldXlhYmRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk0MDgwMDYsImV4cCI6MjA1NDk4NDAwNn0.O3x0uB9pB0JOJGmfh7-ov8zFANuOoxqNPfz0GJFpT7Y";
 
-async function fetchTable(table: string, select: string = "*") {
-  const { data, error } = await supabase.from(table).select(select);
-  if (error) throw new Error(`${table}: ${error.message}`);
-  return data || [];
+async function supabase(table: string, select: string = "*", params: string = "") {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/${table}?select=${select}${params}`,
+    {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    }
+  );
+  if (!res.ok) throw new Error(`${table}: ${res.status}`);
+  return res.json();
 }
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
@@ -60,8 +68,7 @@ function fmt(n: number | string, decimals: number = 0): string {
   });
 }
 
-// ─── ATOMS ────────────────────────────────────────────────────────────────────
-
+// ─── COMPONENTS ───────────────────────────────────────────────────────────────
 
 function Spinner() {
   return (
@@ -95,55 +102,35 @@ function StatCard({ label, value, accent, sub }: { label: string; value: string 
   );
 }
 
-function SectionTitle({ icon, children, onDownload }: { icon?: string; children: React.ReactNode; onDownload?: () => void }) {
+function SectionTitle({ icon, children }: { icon?: string; children: React.ReactNode }) {
   return (
     <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: C.text, textTransform: "uppercase", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
       {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
       <div style={{ flex: 1 }}>{children}</div>
-      {onDownload && (
-        <button
-          onClick={onDownload}
-          style={{
-            background: C.accent,
-            color: C.text,
-            border: 'none',
-            borderRadius: 4,
-            padding: '4px 8px',
-            fontSize: 11,
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          📥 Descargar Reporte
-        </button>
-      )}
       <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.accent} 0%, transparent 100%)` }} />
     </div>
   );
 }
 
-// ─── BAR CHART (pure CSS, no external lib) ────────────────────────────────────
 function BarChart({
   title,
   data,
   color = C.accent,
   horizontal = false,
   formatValue,
-  onDownload,
 }: {
   title?: string;
   data: Array<{ label: string; value: number; color?: string }>;
   color?: string;
   horizontal?: boolean;
   formatValue?: (v: number) => string;
-  onDownload?: () => void;
 }) {
   const max = Math.max(...data.map((d: any) => d.value), 1);
 
   if (horizontal) {
     return (
       <div>
-        {title && <SectionTitle onDownload={onDownload}>{title}</SectionTitle>}
+        {title && <SectionTitle>{title}</SectionTitle>}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {data.map((d: any, i: number) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -171,7 +158,7 @@ function BarChart({
 
   return (
     <div>
-      {title && <SectionTitle onDownload={onDownload}>{title}</SectionTitle>}
+      {title && <SectionTitle>{title}</SectionTitle>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 160, minHeight: 140 }}>
         {data.slice(0, 12).map((d: any, i: number) => (
           <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
@@ -196,7 +183,7 @@ function BarChart({
 }
 
 // ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
-export default function AdminDashboard() {
+export default function Dashboard() {
   const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -215,17 +202,19 @@ export default function AdminDashboard() {
           site_surveys,
           brands,
           device_types,
+          suppliers,
           automation_kits,
         ] = await Promise.all([
-          fetchTable("tickets", "id,status,sla_type,category_id,customer_id,created_at"),
-          fetchTable("customers", "user_id,type,created_at"),
-          fetchTable("devices", "id,name,brand_id,device_type_id,price,created_at"),
-          fetchTable("device_inventory", "device_id,quantity,status"),
-          fetchTable("technical_visits", "id,status,scheduled_start,created_at"),
-          fetchTable("site_surveys", "id,status,created_at"),
-          fetchTable("brands", "id,name"),
-          fetchTable("device_types", "id,name"),
-          fetchTable("kits", "id,name,price,created_at"),
+          supabase("tickets", "id,status,sla_type,category_id,customer_id,created_at"),
+          supabase("customers", "user_id,type,created_at"),
+          supabase("devices", "id,name,brand_id,device_type_id,price,created_at"),
+          supabase("device_inventory", "device_id,quantity,status"),
+          supabase("technical_visits", "id,status,scheduled_start,created_at"),
+          supabase("site_surveys", "id,status,created_at"),
+          supabase("brands", "id,name"),
+          supabase("device_types", "id,name"),
+          supabase("suppliers", "id,name,created_at"),
+          supabase("automation_kits", "id,name,discount_percent,created_at"),
         ]);
 
         setData({
@@ -237,6 +226,7 @@ export default function AdminDashboard() {
           site_surveys,
           brands,
           device_types,
+          suppliers,
           automation_kits,
         });
 
@@ -330,10 +320,10 @@ export default function AdminDashboard() {
     .sort((a: any, b: any) => b.value - a.value)
     .slice(0, 10);
 
-  const kitsByPrice = automation_kits
+  const kitsByDiscount = automation_kits
     .map((k: any) => ({
       label: k.name.slice(0, 20),
-      value: Number(k.price) || 0,
+      value: k.discount_percent || 0,
       color: C.purple,
     }))
     .sort((a: any, b: any) => b.value - a.value)
@@ -351,7 +341,14 @@ export default function AdminDashboard() {
   }, 0);
 
   return (
-      <div style={{ background: "#fff", minHeight: "100%", fontFamily: "Inter, sans-serif", color: "#222" }}>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+      `}</style>
+
+      <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'IBM Plex Sans', sans-serif", color: C.text }}>
         {/* Header */}
         <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 28px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -387,7 +384,6 @@ export default function AdminDashboard() {
                 title="📊 Tickets por estado"
                 data={ticketsByStatus}
                 horizontal={true}
-                onDownload={() => downloadPDF(tickets, 'tickets_report.pdf', ['id','status','sla_type','category_id','customer_id','created_at'])}
               />
             </div>
 
@@ -397,7 +393,6 @@ export default function AdminDashboard() {
                 title="⚡ Tickets por SLA"
                 data={ticketsBySLA}
                 horizontal={true}
-                onDownload={() => downloadPDF(tickets, 'tickets_report.pdf', ['id','status','sla_type','category_id','customer_id','created_at'])}
               />
             </div>
 
@@ -407,7 +402,6 @@ export default function AdminDashboard() {
                 title="👥 Clientes por tipo"
                 data={customersByType}
                 horizontal={true}
-                onDownload={() => downloadPDF(customers, 'customers_report.pdf', ['user_id','type','created_at'])}
               />
             </div>
 
@@ -417,7 +411,6 @@ export default function AdminDashboard() {
                 title="🚗 Visitas técnicas"
                 data={visitsByStatus}
                 horizontal={true}
-                onDownload={() => downloadPDF(technical_visits, 'technical_visits_report.pdf', ['id','status','scheduled_start','created_at'])}
               />
             </div>
           </div>
@@ -430,14 +423,6 @@ export default function AdminDashboard() {
                 title="🏷️ Top 10 marcas"
                 data={devicesByBrand.length > 0 ? devicesByBrand : [{ label: "Sin datos", value: 0, color: C.gray }]}
                 color={C.accentLight}
-                onDownload={() => {
-                  const devicesWithNames = devices.map((d: any) => ({
-                    ...d,
-                    brand: brands.find((b: any) => b.id === d.brand_id)?.name || '',
-                    device_type: device_types.find((t: any) => t.id === d.device_type_id)?.name || '',
-                  }));
-                  downloadPDF(devicesWithNames, 'devices_report.pdf', ['id','name','brand','device_type','price','created_at']);
-                }}
               />
             </div>
 
@@ -447,14 +432,6 @@ export default function AdminDashboard() {
                 title="🔧 Dispositivos por tipo"
                 data={devicesByType.length > 0 ? devicesByType : [{ label: "Sin datos", value: 0, color: C.gray }]}
                 color={C.accentLight}
-                onDownload={() => {
-                  const devicesWithNames = devices.map((d: any) => ({
-                    ...d,
-                    brand: brands.find((b: any) => b.id === d.brand_id)?.name || '',
-                    device_type: device_types.find((t: any) => t.id === d.device_type_id)?.name || '',
-                  }));
-                  downloadPDF(devicesWithNames, 'devices_report.pdf', ['id','name','brand','device_type','price','created_at']);
-                }}
               />
             </div>
           </div>
@@ -466,17 +443,15 @@ export default function AdminDashboard() {
               <BarChart
                 title="📦 Stock por dispositivo (Top 10)"
                 data={inventoryByDevice.length > 0 ? inventoryByDevice : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                onDownload={() => downloadPDF(device_inventory, 'device_inventory_report.pdf', ['device_id','quantity','status'])}
               />
             </div>
 
-            {/* Kits por precio */}
+            {/* Kits por descuento */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
               <BarChart
-                title="🎁 Kits por precio"
-                data={kitsByPrice.length > 0 ? kitsByPrice : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                formatValue={(v) => `$${fmt(v, 2)}`}
-                onDownload={() => downloadPDF(automation_kits, 'automation_kits_report.pdf', ['id','name','price','created_at'])}
+                title="🎁 Kits por descuento"
+                data={kitsByDiscount.length > 0 ? kitsByDiscount : [{ label: "Sin datos", value: 0, color: C.gray }]}
+                formatValue={(v) => `${v}%`}
               />
             </div>
           </div>
@@ -487,71 +462,10 @@ export default function AdminDashboard() {
               title="📋 Levantamientos por estado"
               data={surveysByStatus.length > 0 ? surveysByStatus : [{ label: "Sin datos", value: 0, color: C.gray }]}
               horizontal={true}
-              onDownload={() => downloadPDF(site_surveys, 'site_surveys_report.pdf', ['id','status','created_at'])}
             />
           </div>
         </div>
-  const { authUser, userProfile, companyProfile, roleProfile } = useAuth();
-  const { entitlements, loading: entitlementsLoading } = useCompanyEntitlements();
-
-  return (
-    <section className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-        <p className="mt-2 text-slate-600">Resumen de la sesion actual y datos base del usuario.</p>
-      </header>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Usuario</h2>
-          <dl className="mt-3 space-y-2 text-sm text-slate-700">
-            <div>
-              <dt className="font-medium text-slate-500">Nombre</dt>
-              <dd>{userProfile?.name ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Correo</dt>
-              <dd>{authUser?.email ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Cedula</dt>
-              <dd>{userProfile?.idCard ?? "No registrada"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Rol</dt>
-              <dd>{roleProfile?.name ?? "Sin rol"}</dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Compania</h2>
-          <dl className="mt-3 space-y-2 text-sm text-slate-700">
-            <div>
-              <dt className="font-medium text-slate-500">Nombre</dt>
-              <dd>{companyProfile?.name ?? "No asignada"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Plan actual</dt>
-              <dd>
-                {entitlementsLoading ? "Cargando..." : entitlements?.planName ?? "Sin plan"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">RNC</dt>
-              <dd>{companyProfile?.rnc ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Telefono</dt>
-              <dd>{companyProfile?.phone ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Direccion</dt>
-              <dd>{companyProfile?.address ?? "No disponible"}</dd>
-            </div>
-          </dl>
-        </article>
-
       </div>
+    </>
   );
 }
