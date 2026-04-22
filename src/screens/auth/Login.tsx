@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import logo from "../../assets/logo.png";
@@ -8,6 +9,7 @@ import useLogin from "../../hooks/useLogin";
 
 const Login: React.FC = () => {
   const { loading, handleLogin, handleChange } = useLogin();
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
@@ -35,10 +37,25 @@ const Login: React.FC = () => {
             <Field label="Contrasena">
               <Input
                 placeholder="Ingrese su contrasena"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 icon={<Lock size={20} />}
                 required
                 onChange={(e) => handleChange("password", e.target.value)}
+                rightElement={
+                  <button
+                    type="button"
+                    aria-label={
+                      showPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+                    }
+                    title={
+                      showPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+                    }
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-md"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                }
               />
             </Field>
 
