@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   AutomationKit,
   AutomationKitInput,
@@ -118,6 +119,19 @@ export async function createAutomationKit(
     throw new Error(buildErrorMessage(itemsError, "No se pudo guardar los productos del kit."));
   }
 
+  await logAuditEvent({
+    action: "create",
+    entity: "kits",
+    entityId: kitRow.id,
+    companyId,
+    newValues: {
+      name: kitRow.name,
+      description: kitRow.description,
+      price: kitRow.price,
+      items: itemsPayload,
+    },
+  });
+
   return mapKit({
     ...kitRow,
     items: itemsData ?? [],
@@ -169,6 +183,18 @@ export async function updateAutomationKit(
     throw new Error(buildErrorMessage(itemsError, "No se pudo actualizar los productos del kit."));
   }
 
+  await logAuditEvent({
+    action: "update",
+    entity: "kits",
+    entityId: kitId,
+    newValues: {
+      name: kitRow.name,
+      description: kitRow.description,
+      price: kitRow.price,
+      items: itemsPayload,
+    },
+  });
+
   return mapKit({
     ...kitRow,
     items: itemsData ?? [],
@@ -180,4 +206,10 @@ export async function deleteAutomationKit(kitId: string): Promise<void> {
   if (error) {
     throw new Error(buildErrorMessage(error, "No se pudo eliminar el kit."));
   }
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "kits",
+    entityId: kitId,
+  });
 }

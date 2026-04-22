@@ -1,14 +1,127 @@
 import landingImg from "../assets/landing.svg";
 import logoImg from "../assets/logo.png";
 import { Link } from "react-router-dom";
-import { BarChart3, CalendarCheck, CircleUserRound, ShieldCheck, Sparkles } from "lucide-react";
+import { BarChart3, CalendarCheck, Check, CircleUserRound, ShieldCheck, Sparkles, X } from "lucide-react";
 import useAuth from "../hooks/useAuth";
+import { useEffect, useMemo, useState } from "react";
+import { listActivePricingPlans } from "../services/pricing.service";
+import type { PricingPlan } from "../types/billing.types";
+import useCompanyEntitlements from "../hooks/useCompanyEntitlements";
 
 const Landing: React.FC = () => {
   const { authUser, userProfile } = useAuth();
+  const { entitlements } = useCompanyEntitlements();
 
   const isAuthenticated = Boolean(authUser);
   const userDisplayName = userProfile?.name ?? "Dashboard";
+
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [plansError, setPlansError] = useState<string | null>(null);
+
+  const fallbackPlans = useMemo<PricingPlan[]>(
+    () => [
+      {
+        id: "basic",
+        key: "basic",
+        name: "Básico",
+        description: "Para empezar y organizar operaciones.",
+        price: 0,
+        billingCycle: "monthly",
+        isActive: true,
+        sortOrder: 1,
+        limits: {
+          maxClients: 10,
+          maxSites: 5,
+          maxDevices: 50,
+          maxTechnicians: 2,
+          maxTicketsPerMonth: 100,
+          allowSimulator: true,
+          allowAdvancedAutomations: false,
+        },
+      },
+      {
+        id: "pro",
+        key: "pro",
+        name: "Pro",
+        description: "Para equipos en crecimiento con más automatización.",
+        price: 49,
+        billingCycle: "monthly",
+        isActive: true,
+        sortOrder: 2,
+        limits: {
+          maxClients: 200,
+          maxSites: 100,
+          maxDevices: 1000,
+          maxTechnicians: 10,
+          maxTicketsPerMonth: 1000,
+          allowSimulator: true,
+          allowAdvancedAutomations: true,
+        },
+      },
+      {
+        id: "enterprise",
+        key: "enterprise",
+        name: "Enterprise",
+        description: "Para operaciones avanzadas y soporte dedicado.",
+        price: 199,
+        billingCycle: "monthly",
+        isActive: true,
+        sortOrder: 3,
+        limits: {
+          maxClients: null,
+          maxSites: null,
+          maxDevices: null,
+          maxTechnicians: null,
+          maxTicketsPerMonth: null,
+          allowSimulator: true,
+          allowAdvancedAutomations: true,
+        },
+      },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    listActivePricingPlans()
+      .then((data) => {
+        if (!active) return;
+        setPlans(data);
+        setPlansError(null);
+      })
+      .catch((error) => {
+        console.error("[Landing] pricing_plans_error", error);
+        if (!active) return;
+        setPlans([]);
+        setPlansError(error instanceof Error ? error.message : "No se pudieron cargar los planes.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visiblePlans = useMemo(() => {
+    if (plans.length === 0) return fallbackPlans;
+
+    const byKey = new Map<string, PricingPlan>();
+    for (const plan of plans) byKey.set(plan.key, plan);
+    for (const plan of fallbackPlans) {
+      if (!byKey.has(plan.key)) byKey.set(plan.key, plan);
+    }
+
+    return Array.from(byKey.values())
+      .filter((plan) => plan.isActive)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [plans, fallbackPlans]);
+
+  const formatLimit = (value: number | null | undefined) => (value === null || value === undefined ? "Ilimitado" : value);
+  const formatPrice = (price: number | null, billingCycle: PricingPlan["billingCycle"]) => {
+    if (!price || price <= 0) return "Gratis";
+    const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
+    return `${currency}/${billingCycle === "annual" ? "año" : "mes"}`;
+  };
 
   return (
     <header className="min-h-screen overflow-x-hidden bg-white">
@@ -23,12 +136,19 @@ const Landing: React.FC = () => {
           </div>
 
           {isAuthenticated ? (
-            <Link to="/admin">
-              <button className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold tracking-wide text-white uppercase transition-colors duration-300 hover:bg-blue-600 focus:outline-none sm:px-5 sm:text-sm">
-                <CircleUserRound size={18} />
-                <span className="max-w-28 truncate normal-case sm:max-w-40">{userDisplayName}</span>
-              </button>
-            </Link>
+            <div className="flex items-center gap-3">
+              {entitlements?.planName && (
+                <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 sm:inline-flex">
+                  Plan: {entitlements.planName}
+                </span>
+              )}
+              <Link to="/admin">
+                <button className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold tracking-wide text-white uppercase transition-colors duration-300 hover:bg-blue-600 focus:outline-none sm:px-5 sm:text-sm">
+                  <CircleUserRound size={18} />
+                  <span className="max-w-28 truncate normal-case sm:max-w-40">{userDisplayName}</span>
+                </button>
+              </Link>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <Link to="/login">
@@ -36,9 +156,9 @@ const Landing: React.FC = () => {
                   Login
                 </button>
               </Link>
-              <Link to="/register">
+              <Link to="/register?plan=basic">
                 <button className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold  tracking-wide text-white transition-colors duration-300 hover:bg-blue-600 sm:px-5 sm:text-sm">
-                  Crear cuenta
+                  Empezar gratis
                 </button>
               </Link>
             </div>
@@ -107,6 +227,146 @@ const Landing: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <section className="bg-slate-50">
+        <div className="container mx-auto px-4 py-12 sm:px-6 lg:py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <ShieldCheck size={14} />
+              Planes y límites
+            </span>
+            <h2 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">Elige el plan ideal para tu operación</h2>
+            <p className="mt-3 text-sm text-slate-600 sm:text-base">
+              Empieza gratis y haz upgrade cuando tu equipo o tus instalaciones crezcan.
+            </p>
+            {plansError && (
+              <p className="mt-4 text-xs text-slate-500">
+                Mostrando planes por defecto (no se pudo cargar desde Supabase).
+              </p>
+            )}
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {visiblePlans.slice(0, 3).map((plan) => {
+              const isBasic = plan.key === "basic";
+              const isFeatured = plan.key === "pro";
+              const isCurrentPlan = isAuthenticated && entitlements?.planKey === plan.key;
+              const limits = plan.limits;
+              return (
+                <div
+                  key={plan.key}
+                  className={[
+                    "group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition",
+                    isFeatured ? "border-blue-200 shadow-blue-100" : "border-slate-200",
+                  ].join(" ")}
+                >
+                  {isFeatured && (
+                    <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                      Más popular
+                    </div>
+                  )}
+
+
+                  {isCurrentPlan && (
+                    <div className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">Plan actual</div>
+                  )}
+
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
+                      <p className="mt-1 text-sm text-slate-600">{plan.description ?? ""}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-slate-900">{formatPrice(plan.price, plan.billingCycle)}</p>
+                      <p className="mt-1 text-xs text-slate-500">Facturación {plan.billingCycle === "annual" ? "anual" : "mensual"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Límites</p>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                      <div>
+                        <dt className="text-xs text-slate-500">Usuarios</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxTechnicians)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Sitios</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxSites)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Dispositivos</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxDevices)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Tickets / mes</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxTicketsPerMonth)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Funcionalidades</p>
+                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                      <li className="flex items-center justify-between gap-3">
+                        <span>Simulador</span>
+                        {limits?.allowSimulator ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                            <Check size={14} /> Sí
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            <X size={14} /> No
+                          </span>
+                        )}
+                      </li>
+                      <li className="flex items-center justify-between gap-3">
+                        <span>Automatizaciones avanzadas</span>
+                        {limits?.allowAdvancedAutomations ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                            <Check size={14} /> Sí
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            <X size={14} /> No
+                          </span>
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-6">
+                    <Link to={`/register?plan=${encodeURIComponent(plan.key)}`}>
+                      <button
+                        onClick={() => {
+                          try {
+                            localStorage.setItem("pending_plan_key", plan.key);
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        className={[
+                          "inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
+                          isFeatured
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-slate-900 text-white hover:bg-slate-800",
+                        ].join(" ")}
+                      >
+                        {isBasic ? "Empezar gratis" : "Elegir plan"}
+                        <span className="text-white/80 transition group-hover:translate-x-0.5">→</span>
+                      </button>
+                    </Link>
+                    {!isBasic && (
+                      <p className="mt-2 text-center text-xs text-slate-500">
+                        El upgrade se configura al completar el registro.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       <section className="relative overflow-hidden bg-slate-50">
         <div className="pointer-events-none absolute inset-0">
@@ -207,6 +467,133 @@ const Landing: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-slate-50 hidden">
+        <div className="container mx-auto px-4 py-12 sm:px-6 lg:py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <ShieldCheck size={14} />
+              Planes y límites
+            </span>
+            <h2 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">Elige el plan ideal para tu operación</h2>
+            <p className="mt-3 text-sm text-slate-600 sm:text-base">
+              Empieza gratis y haz upgrade cuando tu equipo o tus instalaciones crezcan.
+            </p>
+            {plansError && (
+              <p className="mt-4 text-xs text-slate-500">
+                Mostrando planes por defecto (no se pudo cargar desde Supabase).
+              </p>
+            )}
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {visiblePlans.slice(0, 3).map((plan) => {
+              const isBasic = plan.key === "basic";
+              const isFeatured = plan.key === "pro";
+              const limits = plan.limits;
+              return (
+                <div
+                  key={plan.key}
+                  className={[
+                    "group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition",
+                    isFeatured ? "border-blue-200 shadow-blue-100" : "border-slate-200",
+                  ].join(" ")}
+                >
+                  {isFeatured && (
+                    <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                      Más popular
+                    </div>
+                  )}
+
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
+                      <p className="mt-1 text-sm text-slate-600">{plan.description ?? ""}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-slate-900">{formatPrice(plan.price, plan.billingCycle)}</p>
+                      <p className="mt-1 text-xs text-slate-500">Facturación {plan.billingCycle === "annual" ? "anual" : "mensual"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Límites</p>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                      <div>
+                        <dt className="text-xs text-slate-500">Usuarios</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxTechnicians)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Sitios</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxSites)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Dispositivos</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxDevices)}</dd>
+                      </div>
+                      <div className="col-span-2">
+                        <dt className="text-xs text-slate-500">Tickets / mes</dt>
+                        <dd className="font-semibold text-slate-900">{formatLimit(limits?.maxTicketsPerMonth)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Funcionalidades</p>
+                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                      <li className="flex items-center justify-between gap-3">
+                        <span>Simulador</span>
+                        {limits?.allowSimulator ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                            <Check size={14} /> Sí
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            <X size={14} /> No
+                          </span>
+                        )}
+                      </li>
+                      <li className="flex items-center justify-between gap-3">
+                        <span>Automatizaciones avanzadas</span>
+                        {limits?.allowAdvancedAutomations ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                            <Check size={14} /> Sí
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            <X size={14} /> No
+                          </span>
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-6">
+                    <Link to={isBasic ? "/register" : "/register"}>
+                      <button
+                        className={[
+                          "inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
+                          isFeatured
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-slate-900 text-white hover:bg-slate-800",
+                        ].join(" ")}
+                      >
+                        {isBasic ? "Empezar gratis" : "Elegir plan"}
+                        <span className="text-white/80 transition group-hover:translate-x-0.5">→</span>
+                      </button>
+                    </Link>
+                    {!isBasic && (
+                      <p className="mt-2 text-center text-xs text-slate-500">
+                        El upgrade se configura al completar el registro.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

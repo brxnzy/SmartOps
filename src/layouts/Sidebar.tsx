@@ -5,6 +5,7 @@ import logo from "../assets/logo.png";
 import useSidebar from "../hooks/useSidebar";
 import { notifications } from "../services/notification.service";
 import Button from "../components/Button";
+import { isSuperAdminRole } from "../utils/roles";
 
 export default function Sidebar() {
   const location = useLocation();
@@ -24,6 +25,9 @@ export default function Sidebar() {
   const prevPathRef = useRef(location.pathname);
   const transitionTimeoutRef = useRef<number | null>(null);
   const routeToastIdRef = useRef<string | null>(null);
+  const companyLabel = isSuperAdminRole(roleProfile?.name)
+    ? "Vista global"
+    : companyProfile?.name ?? "Sin compania";
 
   useEffect(() => {
     const previousPath = prevPathRef.current;
@@ -85,13 +89,11 @@ export default function Sidebar() {
           <img
             src={companyProfile?.logoUrl ?? logo}
             alt={companyProfile?.name ? `Logo ${companyProfile.name}` : "SmartOps logo"}
-            className="h-12 w-12 rounded-full  object-contain p-1"
+            className="h-12 w-12 rounded-full  object-cover p-1"
           />
           <div className="min-w-0">
             <p className="text-xl font-semibold leading-tight text-slate-800">SmartOps</p>
-            <p className="truncate text-xs font-medium text-slate-500">
-              {companyProfile?.name ?? "Sin compania"}
-            </p>
+            <p className="truncate text-xs font-medium text-slate-500">{companyLabel}</p>
           </div>
         </div>
 

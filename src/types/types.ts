@@ -10,6 +10,7 @@ export type RegisterInput = {
   companyAddress: string;
   companyPhone: string;
   companyRnc: string;
+  planKey?: string | null;
 };
 
 
@@ -137,3 +138,5 @@ export type DeviceInventoryRow = {
   last_updated: string | null;
   device: DeviceInventoryDeviceJoinRow | null;
 };
+
+

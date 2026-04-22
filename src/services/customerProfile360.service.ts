@@ -1,8 +1,16 @@
 import { supabase } from "../libs/supabase";
 import { logAuditEvent } from "./audit.service";
+import { listBudgetsForCustomer } from "./budget.service";
+import { listInstallationProjectsByCustomer } from "./installation.service";
+import { listSiteSurveys } from "./siteSurvey.service";
+import { toPlanAwareErrorMessage } from "../utils/planLimits";
 import type {
   CreateCustomerSiteInput,
+  CustomerBudgetSummary,
+  CustomerInstalledDeviceSummary,
   CustomerProfile360Data,
+  CustomerProjectSummary,
+  CustomerSurveySummary,
   CustomerSite,
   CustomerSiteAttachment,
   CustomerSiteAttachmentAsset,
@@ -73,6 +81,9 @@ function toTimelineEvents(data: {
   invitationStatus: string;
   invitationEmail: string | null;
   sites: CustomerSite[];
+  surveys: CustomerSurveySummary[];
+  budgets: CustomerBudgetSummary[];
+  projects: CustomerProjectSummary[];
 }): CustomerTimelineEvent[] {
   const events: CustomerTimelineEvent[] = [
     {
@@ -106,7 +117,91 @@ function toTimelineEvents(data: {
       }))
   );
 
+  events.push(
+    ...data.surveys
+      .filter((item) => item.createdAt)
+      .map((item) => ({
+        id: `survey-${item.id}`,
+        type: "survey",
+        title: `Levantamiento ${item.status}`,
+        description: `${item.siteName ?? "Sitio"} · visita ${item.visitStatus ?? "sin_visita"}`,
+        at: item.createdAt as string,
+      }))
+  );
+
+  events.push(
+    ...data.budgets.map((item) => ({
+      id: `budget-${item.id}`,
+      type: "budget",
+      title: `Cotizacion ${item.status}`,
+      description: `${item.siteName ?? "Sitio"} · Total ${item.total.toLocaleString("es-DO", { style: "currency", currency: "USD" })}`,
+      at: item.createdAt,
+    }))
+  );
+
+  events.push(
+    ...data.projects
+      .filter((item) => item.createdAt)
+      .map((item) => ({
+        id: `project-${item.id}`,
+        type: "project",
+        title: `Proyecto ${item.status}`,
+        description: `${item.siteName ?? "Sitio"} · visita ${item.visitStatus ?? "sin_visita"}`,
+        at: item.createdAt as string,
+      }))
+  );
+
   return events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+}
+
+function mapSurveys(data: Awaited<ReturnType<typeof listSiteSurveys>>, customerId: string): CustomerSurveySummary[] {
+  return data
+    .filter((survey) => survey.customerId === customerId)
+    .map((survey) => ({
+      id: survey.id,
+      status: survey.status ?? "pendiente",
+      visitStatus: survey.visitStatus,
+      siteName: survey.siteName,
+      technicianName: survey.technicianName,
+      scheduledStart: survey.scheduledStart,
+      scheduledEnd: survey.scheduledEnd,
+      createdAt: survey.createdAt,
+      completedAt: survey.completedAt,
+    }))
+    .sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
+}
+
+function mapBudgets(data: Awaited<ReturnType<typeof listBudgetsForCustomer>>): CustomerBudgetSummary[] {
+  return data.map((budget) => ({
+    id: budget.id,
+    status: budget.status,
+    quoteStatus: budget.quoteStatus ?? null,
+    siteName: budget.siteName,
+    subtotal: budget.subtotal,
+    taxAmount: budget.taxAmount,
+    total: budget.total,
+    createdAt: budget.createdAt,
+    sentAt: budget.sentAt,
+    approvedAt: budget.approvedAt,
+    rejectedAt: budget.rejectedAt,
+    expiresAt: budget.expiresAt,
+  }));
+}
+
+function mapProjects(data: Awaited<ReturnType<typeof listInstallationProjectsByCustomer>>, sites: CustomerSite[]): CustomerProjectSummary[] {
+  const siteNameById = new Map(sites.map((site) => [site.id, site.name]));
+  return data.map((project) => ({
+    id: project.id,
+    budgetId: project.budgetId,
+    status: project.status,
+    siteName: siteNameById.get(project.siteId) ?? null,
+    technicianName: project.technicianName,
+    visitStatus: project.technicalVisitStatus,
+    scheduledStart: project.scheduledStart,
+    scheduledEnd: project.scheduledEnd,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  }));
 }
 
 async function getCustomerRoleId(): Promise<string> {
@@ -198,15 +293,16 @@ export async function getCustomerProfile360(
         ? "pending"
         : "none";
 
-  const [
-    siteResponse,
-  ] = await Promise.all([
+  const [siteResponse, surveysResponse, budgetsResponse, projectsResponse] = await Promise.all([
     supabase
       .from("customer_sites")
       .select("*")
       .eq("company_id", companyId)
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false }),
+    listSiteSurveys(companyId),
+    listBudgetsForCustomer(companyId, customerId),
+    listInstallationProjectsByCustomer(companyId, customerId),
   ]);
 
   if (siteResponse.error) {
@@ -218,6 +314,54 @@ export async function getCustomerProfile360(
   }
 
   const sites = mapSites((siteResponse.data ?? []) as Array<Record<string, unknown>>);
+  const surveys = mapSurveys(surveysResponse, customerId);
+  const budgets = mapBudgets(budgetsResponse);
+  const projects = mapProjects(projectsResponse, sites);
+
+  const projectIds = projects.map((project) => project.id);
+  let devices: CustomerInstalledDeviceSummary[] = [];
+
+  if (projectIds.length > 0) {
+    const { data: consumptionRows, error: consumptionError } = await supabase
+      .from("installation_project_inventory_consumption")
+      .select("project_id, device_id, quantity, consumed_at, devices:device_id ( name, model )")
+      .eq("company_id", companyId)
+      .in("project_id", projectIds)
+      .order("consumed_at", { ascending: false });
+
+    if (consumptionError) {
+      throw new Error(consumptionError.message || "No se pudo cargar consumo de dispositivos del cliente.");
+    }
+
+    const aggregate = new Map<
+      string,
+      { deviceId: string; deviceName: string | null; deviceModel: string | null; totalQuantity: number; lastInstalledAt: string | null }
+    >();
+
+    (consumptionRows ?? []).forEach((row) => {
+      const deviceId = safeText(row.device_id);
+      if (!deviceId) return;
+      const deviceRow = Array.isArray(row.devices) ? row.devices[0] : row.devices;
+      const quantity = Number(row.quantity ?? 0);
+      const consumedAt = safeDate(row.consumed_at);
+      const current = aggregate.get(deviceId) ?? {
+        deviceId,
+        deviceName: safeNullableText(deviceRow?.name),
+        deviceModel: safeNullableText(deviceRow?.model),
+        totalQuantity: 0,
+        lastInstalledAt: null,
+      };
+
+      current.totalQuantity += Number.isFinite(quantity) ? quantity : 0;
+      if (!current.lastInstalledAt && consumedAt) {
+        current.lastInstalledAt = consumedAt;
+      }
+
+      aggregate.set(deviceId, current);
+    });
+
+    devices = Array.from(aggregate.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
+  }
 
   const profile = {
     id: userResponse.data.id,
@@ -234,6 +378,10 @@ export async function getCustomerProfile360(
 
   const kpis = {
     sites: sites.length,
+    surveys: surveys.length,
+    budgets: budgets.length,
+    projects: projects.length,
+    devices: devices.reduce((acc, item) => acc + item.totalQuantity, 0),
   };
 
   const timeline = toTimelineEvents({
@@ -241,12 +389,19 @@ export async function getCustomerProfile360(
     invitationEmail: profile.invitationEmail,
     invitationStatus: profile.invitationStatus,
     sites,
+    surveys,
+    budgets,
+    projects,
   });
 
   return {
     profile,
     kpis,
     sites,
+    surveys,
+    budgets,
+    projects,
+    devices,
     timeline,
   };
 }
@@ -276,7 +431,7 @@ export async function createCustomerSite(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "No se pudo crear el sitio.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo crear el sitio."));
   }
   const created = mapSites([data])[0];
   await logAuditEvent({
@@ -444,7 +599,7 @@ export async function createCustomerSiteZone(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "No se pudo crear la zona.");
+    throw new Error(toPlanAwareErrorMessage(error, "No se pudo crear la zona."));
   }
   const created = mapSiteZones([data])[0];
   await logAuditEvent({
@@ -611,4 +766,3 @@ export async function deleteCustomerSiteWithAttachments(
 
   return { filesRemoved: true };
 }
-

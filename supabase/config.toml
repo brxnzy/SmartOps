@@ -399,3 +399,15 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/user_status/deno.json"
 entrypoint = "./functions/user_status/index.ts"
+
+[functions.send_email_notification]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send_email_notification/deno.json"
+entrypoint = "./functions/send_email_notification/index.ts"
+
+[functions.payments_actions]
+enabled = true
+verify_jwt = false
+import_map = "./functions/payments_actions/deno.json"
+entrypoint = "./functions/payments_actions/index.ts"

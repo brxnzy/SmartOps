@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SIDEBAR_ITEMS from "../constants/navigation";
-import  CUSTOMER_SIDEBAR_ITEMS  from "../constants/customerNavigation";
+import CUSTOMER_SIDEBAR_ITEMS from "../constants/customerNavigation";
+import SUPERADMIN_SIDEBAR_ITEMS from "../constants/superadminNavigation";
 import useAuth from "./useAuth";
+import { isCustomerRole, isSuperAdminRole } from "../utils/roles";
 
 const useSidebar = () => {
   const navigate = useNavigate();
@@ -10,11 +12,16 @@ const useSidebar = () => {
   const { logout, userProfile, roleProfile, companyProfile, canAccess } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const isCustomer = roleProfile?.name?.trim().toLowerCase() === "customer";
+  const isCustomer = isCustomerRole(roleProfile?.name);
+  const isSuperAdmin = isSuperAdminRole(roleProfile?.name);
 
   const visibleSidebarItems = useMemo(() => {
     if (isCustomer) {
       return CUSTOMER_SIDEBAR_ITEMS;
+    }
+
+    if (isSuperAdmin) {
+      return SUPERADMIN_SIDEBAR_ITEMS;
     }
 
     return SIDEBAR_ITEMS.flatMap((item) => {
@@ -32,7 +39,7 @@ const useSidebar = () => {
 
       return [];
     });
-  }, [canAccess, isCustomer]);
+  }, [canAccess, isCustomer, isSuperAdmin]);
   const activePaths = useMemo(() => {
     const paths = new Set<string>();
 

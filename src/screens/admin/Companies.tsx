@@ -26,22 +26,18 @@ export default function Companies() {
     fileInputKey,
     filteredCompanies,
     hasChanges,
-    canCreate,
     canUpdate,
-    canDelete,
     setName,
     setAddress,
     setPhone,
     setRnc,
     setSearchTerm,
     setFilterField,
-    openCreateModal,
     openEditModal,
     closeModal,
     handleSubmit,
     handleFileChange,
     handleRemoveLogo,
-    askDeleteCompany,
     cancelDeleteCompany,
     confirmDeleteCompany,
   } = useCompanies();
@@ -60,19 +56,6 @@ export default function Companies() {
             <p className="text-sm text-slate-200/90">
               Administra identidad visual, datos fiscales y contacto.
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {canCreate && (
-              <Button
-                type="button"
-                onClick={openCreateModal}
-                disabled={submitting}
-                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
-              >
-                Nueva compania
-              </Button>
-            )}
           </div>
         </div>
       </header>
@@ -169,16 +152,7 @@ export default function Companies() {
                     </Button>
                   )}
 
-                  {canDelete && (
-                    <Button
-                      type="button"
-                      onClick={() => askDeleteCompany(company)}
-                      disabled={submitting}
-                      className="border-red-300 text-red-700 hover:bg-red-50"
-                    >
-                      Eliminar
-                    </Button>
-                  )}
+                
                 </div>
               </div>
             </article>

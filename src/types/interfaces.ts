@@ -49,6 +49,9 @@ export interface CustomerTableProps {
   totalPages: number; 
   total: number;
   disabled?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canViewDetail?: boolean;
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
   onViewDetail: (customer: Customer) => void;
@@ -148,6 +151,7 @@ export interface FileInputProps extends React.ComponentProps<"input"> {
 
 export interface InputProps extends React.ComponentProps<"input"> {
   icon?: React.ReactNode;
+  rightElement?: React.ReactNode;
 }
 
 

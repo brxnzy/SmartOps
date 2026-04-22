@@ -6,7 +6,23 @@ import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
 import { addTicketComment, getTicketDetail } from "../../services/tickets.service";
-import type { TicketComment, TicketListItem } from "../../types/ticketing.types";
+import type { TicketComment, TicketListItem, TicketStatus } from "../../types/ticketing.types";
+
+const STATUS_LABELS: Record<TicketStatus, string> = {
+  abierto: "Abierto",
+  en_proceso: "En proceso",
+  esperando_cliente: "Esperando cliente",
+  resuelto: "Resuelto",
+  cerrado: "Cerrado",
+};
+
+function statusBadgeClass(status: TicketStatus): string {
+  if (status === "abierto") return "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "en_proceso") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "esperando_cliente") return "bg-purple-50 text-purple-700 border-purple-200";
+  if (status === "resuelto") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
 
 function formatDateTime(value: string | null): string {
   if (!value) return "Sin fecha";
@@ -128,7 +144,13 @@ export default function CustomerTicketDetail() {
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Estado</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{ticket.status}</p>
+          <span
+            className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(
+              ticket.status as TicketStatus
+            )}`}
+          >
+            {STATUS_LABELS[ticket.status as TicketStatus] ?? ticket.status}
+          </span>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Categoria</p>

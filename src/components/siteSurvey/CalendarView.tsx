@@ -7,8 +7,9 @@ import type { EventClickArg } from "@fullcalendar/core";
 import { CalendarClock, Play, RefreshCcw } from "lucide-react";
 import Button from "../Button";
 import { notifications } from "../../services/notification.service";
-import { listTechnicianVisits, startSurveyVisit } from "../../services/siteSurveyExecution.service";
+import { cancelSurveyVisit, listTechnicianVisits, startSurveyVisit } from "../../services/siteSurveyExecution.service";
 import type { SurveyCalendarEvent } from "../../types/siteSurveyExecution.types";
+import { canCancelVisitStatus, canStartVisitStatus, formatVisitStatusLabel } from "../../utils/siteSurveyWorkflow";
 
 interface CalendarViewProps {
   technicianId: string;
@@ -21,6 +22,10 @@ function isStartAllowed(start: string): boolean {
 
 function getStatusColor(status: string | null): { bg: string; border: string } {
   const normalized = (status ?? "").trim().toLowerCase();
+
+  if (normalized.includes("cancel")) {
+    return { bg: "#475569", border: "#334155" };
+  }
 
   if (normalized.includes("complet")) {
     return { bg: "#16a34a", border: "#15803d" };
@@ -39,6 +44,7 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
   const [error, setError] = useState<string | null>(null);
   const [selectedVisit, setSelectedVisit] = useState<SurveyCalendarEvent | null>(null);
   const [starting, setStarting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
 
   const loadVisits = useCallback(async () => {
     setLoading(true);
@@ -90,7 +96,7 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
   }, [visits]);
 
   const handleEventClick = (event: EventClickArg) => {
-    const visitId = Number(event.event.extendedProps.visitId);
+    const visitId = String(event.event.extendedProps.visitId);
     const visit = visits.find((entry) => entry.visitId === visitId) ?? null;
     setSelectedVisit(visit);
   };
@@ -117,7 +123,38 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
     }
   };
 
-  const canStart = selectedVisit ? isStartAllowed(selectedVisit.scheduledStart) : false;
+  const canStart = selectedVisit
+    ? canStartVisitStatus(selectedVisit.status) && isStartAllowed(selectedVisit.scheduledStart)
+    : false;
+
+  const canCancel = selectedVisit ? canCancelVisitStatus(selectedVisit.status) : false;
+
+  const handleCancelVisit = async () => {
+    if (!selectedVisit) return;
+    if (!canCancelVisitStatus(selectedVisit.status)) return;
+
+    const confirmed = window.confirm(
+      "Se cancelara solo la visita tecnica del levantamiento. Deseas continuar?"
+    );
+    if (!confirmed) return;
+
+    setCanceling(true);
+    try {
+      await cancelSurveyVisit(selectedVisit.visitId, selectedVisit.surveyId);
+      notifications.success({
+        title: "Visita cancelada",
+        description: "La visita tecnica fue cancelada correctamente.",
+      });
+      await loadVisits();
+    } catch (err) {
+      notifications.error({
+        title: "Error cancelando visita",
+        description: err instanceof Error ? err.message : "No se pudo cancelar la visita tecnica.",
+      });
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   return (
     <section className="space-y-5">
@@ -177,7 +214,7 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
                 <p className="text-[11px] font-semibold leading-tight">{arg.event.title}</p>
                 <p className="text-[10px] leading-tight text-white/90">{arg.timeText}</p>
                 <p className="text-[10px] leading-tight text-white/90">
-                  {(arg.event.extendedProps?.status as string | undefined) ?? "Pendiente"}
+                  {formatVisitStatusLabel(arg.event.extendedProps?.status as string | null | undefined)}
                 </p>
               </div>
             )}
@@ -203,7 +240,7 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
               <span className="font-medium">Inicio:</span> {new Date(selectedVisit.scheduledStart).toLocaleString("es-DO")}
             </p>
             <p>
-              <span className="font-medium">Estado:</span> {selectedVisit.status ?? "Pendiente"}
+              <span className="font-medium">Estado:</span> {formatVisitStatusLabel(selectedVisit.status)}
             </p>
           </div>
 
@@ -231,6 +268,17 @@ export default function CalendarView({ technicianId, onOpenSurvey }: CalendarVie
                 Disponible a partir de {new Date(selectedVisit.scheduledStart).toLocaleString("es-DO")}
               </span>
             )}
+
+            {canCancel ? (
+              <Button
+                type="button"
+                onClick={() => void handleCancelVisit()}
+                disabled={canceling}
+                className="border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
+              >
+                {canceling ? "Cancelando..." : "Cancelar visita"}
+              </Button>
+            ) : null}
           </div>
         </article>
       ) : null}
