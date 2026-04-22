@@ -189,6 +189,29 @@ function isValidEmail(value: string | null | undefined): value is string {
   return normalized.length > 3 && normalized.includes("@");
 }
 
+async function getAccessToken(): Promise<string> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message || "No se pudo validar la sesion.");
+
+  let accessToken = data.session?.access_token ?? null;
+  const expiresAt = data.session?.expires_at ?? null;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (!accessToken || (typeof expiresAt === "number" && expiresAt <= nowSeconds + 30)) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      throw new Error(refreshError.message || "Sesion expirada. Vuelve a iniciar sesion.");
+    }
+    accessToken = refreshed.session?.access_token ?? null;
+  }
+
+  if (!accessToken) {
+    throw new Error("Sesion expirada. Vuelve a iniciar sesion.");
+  }
+
+  return accessToken;
+}
+
 function formatDateTimeForEmail(value: string | null): string {
   if (!value) return "Sin fecha definida";
   const parsed = Date.parse(value);
@@ -925,7 +948,7 @@ export async function finalizeInstallationProject(input: {
   companyId: string;
   projectId: string;
   userId: string;
-}): Promise<{ alreadyFinalized: boolean; inventoryConsumed: boolean }> {
+}): Promise<{ alreadyFinalized: boolean; inventoryConsumed: boolean; paymentAccountId: string | null }> {
   const { data, error } = await supabase
     .rpc("finalize_installation_project", {
       p_company_id: input.companyId,
@@ -951,9 +974,53 @@ export async function finalizeInstallationProject(input: {
     },
   });
 
+  let paymentAccountId: string | null = null;
+
+  try {
+    const { data: ensuredPayment, error: paymentError } = await supabase
+      .rpc("ensure_payment_account_for_project", {
+        p_project_id: input.projectId,
+        p_created_by: input.userId,
+      })
+      .single<{ account_id: string; delivery_act_id: string; created: boolean }>();
+
+    if (paymentError) {
+      throw new Error(paymentError.message || "No se pudo generar el pago del proyecto.");
+    }
+
+    paymentAccountId = safeNullableText(ensuredPayment?.account_id);
+
+    if (paymentAccountId) {
+      const accessToken = await getAccessToken();
+      const { data: invoiceResult, error: invoiceError } = await supabase.functions.invoke<{
+        accountId?: string;
+        error?: string;
+      }>("payments_actions", {
+        body: {
+          mode: "issue_account_invoice",
+          accountId: paymentAccountId,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (invoiceError) {
+        throw new Error(invoiceError.message || "No se pudo emitir la factura del pago.");
+      }
+
+      if (invoiceResult?.error) {
+        throw new Error(invoiceResult.error);
+      }
+    }
+  } catch (paymentFlowError) {
+    console.error("[installation.service] finalize_payment_flow_error", paymentFlowError);
+  }
+
   return {
     alreadyFinalized: Boolean(data.already_finalized),
     inventoryConsumed: Boolean(data.inventory_consumed),
+    paymentAccountId,
   };
 }
 

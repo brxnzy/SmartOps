@@ -380,13 +380,21 @@ export default function InstallationProjectDetail() {
         userId,
       });
 
+      const completionDescription = result.alreadyFinalized
+        ? result.paymentAccountId
+          ? "El proyecto ya estaba completado y el pago asociado ya existe."
+          : "El proyecto ya estaba completado."
+        : result.inventoryConsumed
+          ? result.paymentAccountId
+            ? "Se completó el proyecto, se aplicó el consumo de inventario y se generó el pago."
+            : "Se completó el proyecto y se aplicó el consumo de inventario."
+          : result.paymentAccountId
+            ? "El proyecto se completó correctamente y el pago fue generado."
+            : "El proyecto se completó correctamente.";
+
       notifications.success({
         title: "Proyecto completado",
-        description: result.alreadyFinalized
-          ? "El proyecto ya estaba completado."
-          : result.inventoryConsumed
-          ? "Se completó el proyecto y se aplicó el consumo de inventario."
-          : "El proyecto se completó correctamente.",
+        description: completionDescription,
       });
 
       await loadProject();

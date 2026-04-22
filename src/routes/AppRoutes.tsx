@@ -49,11 +49,14 @@ import CustomerProfile from "../screens/customer/CustomerProfile";
 import CustomerQuotes from "../screens/customer/CustomerQuotes";
 import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
 import CustomerNotifications from "../screens/customer/CustomerNotifications";
+import CustomerPayments from "../screens/customer/CustomerPayments";
+import CustomerPaymentDetail from "../screens/customer/CustomerPaymentDetail";
 import DeliveryActPage from "../screens/DeliveryAct";
 import SuperAdminAreaRoute from "./SuperAdminAreaRoute";
 import SuperAdminDefaultRoute from "./SuperAdminDefaultRoute";
 import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
 import SuperAdminCompanyDetail from "../screens/superadmin/SuperAdminCompanyDetail";
+import Payments from "../screens/admin/Payments";
 
 
 export default function AppRoutes() {
@@ -342,6 +345,14 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="payments"
+          element={
+            <PermissionRoute permission={PERMISSIONS.paymentsRead}>
+              <Payments />
+            </PermissionRoute>
+          }
+        />
 
         <Route
           path="acta/:actId"
@@ -367,6 +378,8 @@ export default function AppRoutes() {
         <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
         <Route path="quotes" element={<CustomerQuotes />} />
         <Route path="quotes/:budgetId" element={<CustomerQuoteDetail />} />
+        <Route path="payments" element={<CustomerPayments />} />
+        <Route path="payments/:accountId" element={<CustomerPaymentDetail />} />
         <Route path="notifications" element={<CustomerNotifications />} />
         <Route path="profile" element={<CustomerProfile />} />
       </Route>
