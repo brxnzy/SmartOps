@@ -1,9 +1,11 @@
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, Layers, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
 import EmptyState from "../../components/EmptyState";
+import { getCompanyEntitlements } from "../../services/billing.service";
 import { getSuperadminCompanyDetail } from "../../services/superadmin.service";
+import type { CompanyEntitlements } from "../../types/billing.types";
 import type { SuperadminCompanySummary } from "../../types/superadmin";
 import { formatDate, initialsFromName } from "../../utils/utils";
 
@@ -11,6 +13,9 @@ export default function SuperAdminCompanyDetail() {
   const navigate = useNavigate();
   const { companyId } = useParams<{ companyId: string }>();
   const [company, setCompany] = useState<SuperadminCompanySummary | null>(null);
+  const [entitlements, setEntitlements] = useState<CompanyEntitlements | null>(null);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+  const [entitlementsError, setEntitlementsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,15 +29,36 @@ export default function SuperAdminCompanyDetail() {
 
       setLoading(true);
       setError(null);
+      setEntitlementsError(null);
+      setEntitlementsLoading(true);
 
       try {
-        const response = await getSuperadminCompanyDetail(companyId);
-        setCompany(response);
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error ? loadError.message : "No se pudo cargar la compania."
-        );
+        const [companyResult, planResult] = await Promise.allSettled([
+          getSuperadminCompanyDetail(companyId),
+          getCompanyEntitlements(companyId),
+        ]);
+
+        if (companyResult.status === "fulfilled") {
+          setCompany(companyResult.value);
+        } else {
+          setError(
+            companyResult.reason instanceof Error
+              ? companyResult.reason.message
+              : "No se pudo cargar la compania."
+          );
+        }
+
+        if (planResult.status === "fulfilled") {
+          setEntitlements(planResult.value);
+        } else {
+          setEntitlementsError(
+            planResult.reason instanceof Error
+              ? planResult.reason.message
+              : "No se pudo cargar el plan de la compania."
+          );
+        }
       } finally {
+        setEntitlementsLoading(false);
         setLoading(false);
       }
     };
@@ -102,8 +128,47 @@ export default function SuperAdminCompanyDetail() {
                 </div>
                 <p className="mt-2 text-2xl font-semibold text-white">{company.totalUsers}</p>
               </article>
+
+              <article className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-200">Plan</p>
+                  <Layers size={16} className="text-cyan-200" />
+                </div>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {entitlementsLoading ? "Cargando..." : entitlements?.planName ?? "Sin plan activo"}
+                </p>
+                <p className="mt-1 text-xs text-slate-200/80">
+                  {entitlements?.planKey ? `Clave: ${entitlements.planKey}` : "No hay suscripcion activa registrada."}
+                </p>
+              </article>
             </div>
           </header>
+
+          {entitlementsError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
+              <p className="font-semibold">No se pudo cargar el plan</p>
+              <p className="mt-1">{entitlementsError}</p>
+            </div>
+          ) : null}
+
+          {entitlements && !entitlementsError ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Plan de la compania</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Informacion de solo lectura del plan activo.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Activo</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{entitlements.planName}</p>
+                  <p className="text-xs text-slate-500">Clave: {entitlements.planKey}</p>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section className="space-y-3">
             <div>
