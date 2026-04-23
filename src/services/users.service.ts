@@ -40,6 +40,12 @@ function sanitizeSearch(value: string): string {
   return value.replace(/[(),]/g, " ").trim();
 }
 
+function isCustomerRoleName(roleName: string | null | undefined): boolean {
+  if (!roleName) return false;
+  const normalized = roleName.trim().toLowerCase();
+  return normalized === "customer" || normalized === "cliente" || normalized === "clientes";
+}
+
 function mapUserStatusError(raw: string): string {
   const normalized = raw.trim();
   let message = normalized;
@@ -168,6 +174,7 @@ export async function listUsers(companyId: string, query: CompanyUserQuery): Pro
   }
 
   let mapped = mapUserRows(data ?? []);
+  mapped = mapped.filter((item) => !isCustomerRoleName(item.roleName));
 
   if (query.roleId) {
     mapped = mapped.filter((item) => item.roleId === query.roleId);

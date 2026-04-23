@@ -12,7 +12,11 @@ import { useUsers } from "../../hooks/useUsers";
 import { notifications } from "../../services/notification.service";
 import { getCompanyTechniciansCount } from "../../services/planUsage.service";
 import type { CompanyUser } from "../../types/userManagement.types";
+
+import { downloadPDF } from "../../utils/reportPdf";
+
 import { formatRemaining, getRemaining } from "../../utils/planLimitUi";
+
 
 export default function UsersAdmin() {
   const { authUser, companyProfile, canAccess } = useAuth();
@@ -56,6 +60,21 @@ export default function UsersAdmin() {
     }),
     [items, total]
   );
+
+
+  const handleDownload = () => {
+    downloadPDF(
+      items,
+      "users_report.pdf",
+      ["name", "idCard", "roleName", "isDisabled"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de usuarios",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Relación de usuarios internos y estado actual de acceso.",
+      }
+    );
+  };
 
   const [techniciansCount, setTechniciansCount] = useState<number | null>(null);
   const [isLimitModalOpen, setLimitModalOpen] = useState(false);
@@ -171,6 +190,7 @@ export default function UsersAdmin() {
         roles={roles}
         onSearchChange={setSearch}
         onRoleChange={setRoleId}
+        onDownload={handleDownload}
         onCreate={handleCreateClick}
         canCreate={canCreate}
         disabled={loading || submitting}

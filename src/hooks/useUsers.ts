@@ -28,6 +28,12 @@ interface UserSubmitOptions {
   invitationEmail?: string;
 }
 
+function isCustomerRoleName(roleName: string | null | undefined): boolean {
+  if (!roleName) return false;
+  const normalized = roleName.trim().toLowerCase();
+  return normalized === "customer" || normalized === "cliente" || normalized === "clientes";
+}
+
 export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsersOptions) {
   const [items, setItems] = useState<CompanyUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -57,7 +63,7 @@ export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsers
   const loadRoles = useCallback(async () => {
     try {
       const loadedRoles = await getRolesByCompany(companyId);
-      setRoles(loadedRoles);
+      setRoles(loadedRoles.filter((role) => !isCustomerRoleName(role.name)));
     } catch (err) {
       console.error(err);
       notifications.error({
@@ -87,7 +93,7 @@ export function useUsers({ companyId, invitedByUserId, pageSize = 10 }: UseUsers
         roleId: query.roleId === "all" ? undefined : query.roleId,
       });
 
-      let mergedItems = result.items;
+      let mergedItems = result.items.filter((item) => !isCustomerRoleName(item.roleName));
 
       try {
         const statuses = await listCompanyUsersStatus(companyId);

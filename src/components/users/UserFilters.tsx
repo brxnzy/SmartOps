@@ -1,4 +1,4 @@
-﻿import { Filter, Plus, Search } from "lucide-react";
+﻿import { Filter, Plus, Search, Download } from "lucide-react";
 import Button from "../Button";
 import Input from "../Input";
 import type { Role } from "../../types/Role";
@@ -10,6 +10,7 @@ interface UserFiltersProps {
   onSearchChange: (value: string) => void;
   onRoleChange: (value: string | "all") => void;
   onCreate: () => void;
+  onDownload?: () => void;
   disabled?: boolean;
   canCreate?: boolean;
 }
@@ -21,6 +22,7 @@ export default function UserFilters({
   onSearchChange,
   onRoleChange,
   onCreate,
+  onDownload,
   disabled = false,
   canCreate = false,
 }: UserFiltersProps) {
@@ -63,6 +65,18 @@ export default function UserFilters({
         >
           Nuevo usuario
         </Button>
+
+        {onDownload && (
+          <Button
+            type="button"
+            onClick={onDownload}
+            disabled={disabled}
+            icon={<Download size={16} />}
+            className="border-green-600 bg-green-600 text-white hover:bg-green-700"
+          >
+            Descargar Reporte
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -50,6 +50,15 @@ function formatShortDate(value?: string | null): string | null {
   );
 }
 
+function toDateTimeLocalMinValue(value = new Date()): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export default function Schedule() {
   const { companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
@@ -71,6 +80,7 @@ export default function Schedule() {
   const [reschedulingVisitId, setReschedulingVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const currentDateTimeMin = useMemo(() => toDateTimeLocalMinValue(), []);
   const loadSchedule = useCallback(async () => {
     if (!companyId || !canReadSchedule || (!canReadSurveys && !canReadTickets && !canReadInstallations)) {
       setVisits([]);
@@ -229,8 +239,23 @@ export default function Schedule() {
       return;
     }
 
+    if (Date.parse(rescheduleStart) < Date.now()) {
+      notifications.warning({
+        title: "Fecha invalida",
+        description: "No puedes programar una visita en una fecha pasada.",
+      });
+      return;
+    }
+
     const nextStart = new Date(rescheduleStart).toISOString();
     const nextEnd = rescheduleEnd ? new Date(rescheduleEnd).toISOString() : null;
+    if (nextEnd && Date.parse(nextEnd) < Date.parse(nextStart)) {
+      notifications.warning({
+        title: "Rango invalido",
+        description: "La fecha/hora fin debe ser mayor que inicio.",
+      });
+      return;
+    }
     if (nextEnd && Date.parse(nextEnd) <= Date.parse(nextStart)) {
       notifications.warning({
         title: "Rango invalido",
@@ -540,6 +565,7 @@ export default function Schedule() {
               type="datetime-local"
               value={rescheduleStart}
               onChange={(event) => setRescheduleStart(event.target.value)}
+              min={currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>
@@ -548,6 +574,7 @@ export default function Schedule() {
               type="datetime-local"
               value={rescheduleEnd}
               onChange={(event) => setRescheduleEnd(event.target.value)}
+              min={rescheduleStart || currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>

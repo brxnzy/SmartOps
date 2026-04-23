@@ -23,6 +23,7 @@ import {
   CalendarDays,
   FileText,
   LifeBuoy,
+  WalletCards,
 } from "lucide-react";
 
 
@@ -96,6 +97,12 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         to: "/admin/installation-projects",
         permission: PERMISSIONS.installationProjectsRead,
         icon: <Workflow size={19} />,
+      },
+      {
+        name: "Pagos",
+        to: "/admin/payments",
+        permission: PERMISSIONS.paymentsRead,
+        icon: <WalletCards size={19} />,
       },
     ],
   },

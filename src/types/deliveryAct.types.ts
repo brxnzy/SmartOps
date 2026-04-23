@@ -45,4 +45,5 @@ export type DeliveryActSignResult = {
   actId: string;
   status: DeliveryActStatus;
   pdfUrl: string | null;
+  paymentAccountId?: string | null;
 };

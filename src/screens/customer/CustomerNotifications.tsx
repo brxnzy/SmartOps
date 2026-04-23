@@ -27,6 +27,14 @@ function resolveLink(notification: CustomerNotification, origin: string): string
     return `/acta/${notification.entityId}`;
   }
 
+  if (notification.entityType === "payment_account" && notification.entityId) {
+    return `/customer/payments/${notification.entityId}`;
+  }
+
+  if (notification.entityType === "payment_transaction" && notification.entityId) {
+    return "/customer/payments";
+  }
+
   return null;
 }
 

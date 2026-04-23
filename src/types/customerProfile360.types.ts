@@ -106,11 +106,21 @@ export interface CustomerProjectSummary {
 }
 
 export interface CustomerInstalledDeviceSummary {
-  deviceId: string;
+  installedDeviceId: string;
+  projectId: string;
+  siteId: string | null;
+  zoneId: string | null;
+  status: string;
   deviceName: string | null;
   deviceModel: string | null;
-  totalQuantity: number;
-  lastInstalledAt: string | null;
+  deviceBrand: string | null;
+  siteName: string | null;
+  zoneName: string | null;
+  serial: string | null;
+  mac: string | null;
+  firmware: string | null;
+  locationDetail: string | null;
+  installedAt: string | null;
 }
 
 export interface CustomerProfile360Data {
@@ -161,4 +171,3 @@ export interface SiteDetailModalProps {
   onNext: () => void;
   onSelect: (index: number) => void;
 }
-

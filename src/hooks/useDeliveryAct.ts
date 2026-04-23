@@ -36,11 +36,13 @@ export default function useDeliveryAct(actId: string | null) {
     setSigning(true);
     try {
       console.info("[useDeliveryAct] acceptAct:start", { actId });
-      await signDeliveryAct(actId, null);
+      const result = await signDeliveryAct(actId, null);
       console.info("[useDeliveryAct] acceptAct:success", { actId });
       notifications.success({
         title: "Acta aceptada",
-        description: "El acta fue aceptada y el proyecto se finalizo.",
+        description: result.paymentAccountId
+          ? "El acta fue aceptada, el proyecto se finalizo y el pago fue generado."
+          : "El acta fue aceptada y el proyecto se finalizo.",
       });
       await loadAct();
     } catch (err) {
@@ -60,11 +62,13 @@ export default function useDeliveryAct(actId: string | null) {
       setSigning(true);
       try {
         console.info("[useDeliveryAct] signAct:start", { actId, hasSignature: Boolean(signature) });
-        await signDeliveryAct(actId, signature);
+        const result = await signDeliveryAct(actId, signature);
         console.info("[useDeliveryAct] signAct:success", { actId });
         notifications.success({
           title: "Acta firmada",
-          description: "La firma fue registrada correctamente.",
+          description: result.paymentAccountId
+            ? "La firma fue registrada correctamente y el pago fue generado."
+            : "La firma fue registrada correctamente.",
         });
         await loadAct();
       } catch (err) {

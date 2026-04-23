@@ -4,7 +4,9 @@ import ConfirmModal from "../../components/ConfirmModal";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
+import { useAuth } from "../../hooks/useAuth";
 import useAutomationKits from "../../hooks/useAutomationKits";
+import { downloadPDF } from "../../utils/reportPdf";
 
 function QtyInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
@@ -35,6 +37,7 @@ function QtyInput({ value, onChange }: { value: number; onChange: (value: number
 }
 
 export default function AutomationKits() {
+  const { companyProfile } = useAuth();
   const {
     loading,
     submitting,
@@ -68,6 +71,20 @@ export default function AutomationKits() {
     cancelDeleteKit,
     confirmDeleteKit,
   } = useAutomationKits();
+
+  const handleDownload = () => {
+    downloadPDF(
+      filteredKits,
+      "automation_kits_report.pdf",
+      ["name", "description", "price", "discountPercent"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de kits",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Inventario comercial de kits y descuentos configurados.",
+      }
+    );
+  };
 
   const [showProducts, setShowProducts] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -136,14 +153,24 @@ export default function AutomationKits() {
         </div>
 
         {canCreate && (
-          <Button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!companyId || submitting}
-            className="bg-blue-600 text-white hover:bg-blue-500"
-          >
-            Crear kit
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={handleDownload}
+              disabled={!companyId || submitting}
+              className="bg-green-600 text-white hover:bg-green-500"
+            >
+              Descargar Reporte
+            </Button>
+            <Button
+              type="button"
+              onClick={openCreateModal}
+              disabled={!companyId || submitting}
+              className="bg-blue-600 text-white hover:bg-blue-500"
+            >
+              Crear kit
+            </Button>
+          </div>
         )}
       </header>
 

@@ -1,5 +1,5 @@
 import type { DefaultAdminRoute, SidebarItem } from "../types/Navigation";
-import { Bell, ClipboardList, FileText, UserRound } from "lucide-react";
+import { Bell, ClipboardList, FileText, UserRound, WalletCards } from "lucide-react";
 
 const CUSTOMER_SIDEBAR_ITEMS: SidebarItem[] = [
   {
@@ -11,6 +11,11 @@ const CUSTOMER_SIDEBAR_ITEMS: SidebarItem[] = [
     name: "Cotizaciones",
     to: "/customer/quotes",
     icon: <FileText />,
+  },
+  {
+    name: "Pagos",
+    to: "/customer/payments",
+    icon: <WalletCards />,
   },
   {
     name: "Notificaciones",

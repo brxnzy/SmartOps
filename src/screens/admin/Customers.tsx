@@ -14,16 +14,32 @@ import { notifications } from "../../services/notification.service";
 import { getCompanyClientsCount } from "../../services/planUsage.service";
 import { formatRemaining, getRemaining } from "../../utils/planLimitUi";
 import { useCustomers } from "../../hooks/useCustomers";
+import { downloadPDF } from "../../utils/reportPdf";
 
 export default function Customers() {
   const { authUser, companyProfile, canAccess } = useAuth();
   const { entitlements } = useCompanyEntitlements();
   const navigate = useNavigate();
+
+  const handleDownload = () => {
+    downloadPDF(
+      items,
+      "customers_report.pdf",
+      ["name", "tax_id", "email", "phone", "type"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de clientes",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Listado consolidado de clientes registrados para la compañía actual.",
+      }
+    );
+  };
   const companyId = companyProfile?.id ?? null;
   const canCreate = useMemo(() => canAccess(PERMISSIONS.customersCreate), [canAccess]);
   const canUpdate = useMemo(() => canAccess(PERMISSIONS.customersUpdate), [canAccess]);
   const canDelete = useMemo(() => canAccess(PERMISSIONS.customersDelete), [canAccess]);
   const canRead = useMemo(() => canAccess(PERMISSIONS.customersRead), [canAccess]);
+
 
   const {
     items,
@@ -49,7 +65,7 @@ export default function Customers() {
     handleDelete,
     setPage,
   } = useCustomers({
-    companyId,
+    companyId: companyProfile?.id || null,
     invitedByUserId: authUser?.id,
     pageSize: 8,
   });
@@ -152,6 +168,7 @@ export default function Customers() {
         type={query.type}
         onSearchChange={setSearch}
         onTypeChange={setType}
+        onDownload={handleDownload}
         onCreate={handleCreateClick}
         disabled={loading || submitting || !canCreate}
       />
