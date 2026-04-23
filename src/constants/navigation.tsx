@@ -22,6 +22,7 @@ import {
   Workflow,
   CalendarDays,
   FileText,
+  LifeBuoy,
 } from "lucide-react";
 
 
@@ -97,6 +98,11 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
         icon: <Workflow size={19} />,
       },
     ],
+  },
+  {
+    name: "Soporte",
+    to: "/admin/support",
+    icon: <LifeBuoy />,
   },
 
   {
