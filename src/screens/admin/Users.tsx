@@ -63,7 +63,17 @@ export default function UsersAdmin() {
 
 
   const handleDownload = () => {
-    downloadPDF(items, 'users_report.pdf', ['name', 'idCard', 'roleName', 'isDisabled'], companyProfile?.name ?? "SmartOps");
+    downloadPDF(
+      items,
+      "users_report.pdf",
+      ["name", "idCard", "roleName", "isDisabled"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de usuarios",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Relación de usuarios internos y estado actual de acceso.",
+      }
+    );
   };
 
   const [techniciansCount, setTechniciansCount] = useState<number | null>(null);
@@ -180,7 +190,6 @@ export default function UsersAdmin() {
         roles={roles}
         onSearchChange={setSearch}
         onRoleChange={setRoleId}
-        onCreate={openCreateModal}
         onDownload={handleDownload}
         onCreate={handleCreateClick}
         canCreate={canCreate}

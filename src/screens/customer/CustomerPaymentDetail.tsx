@@ -62,7 +62,7 @@ export default function CustomerPaymentDetail() {
       const data = await getPaymentAccountDetail(accountId);
       setAccount(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar la factura.");
+      setError(err instanceof Error ? err.message : "No se pudo cargar la cuenta seleccionada.");
     } finally {
       setLoading(false);
     }
@@ -111,7 +111,7 @@ export default function CustomerPaymentDetail() {
       await loadDetail();
       notifications.success({
         title: "Pago enviado",
-        description: "Tu comprobante fue enviado para revision del administrador.",
+        description: "Tu comprobante fue enviado para revisión del administrador.",
       });
     } catch (err) {
       notifications.error({
@@ -171,7 +171,7 @@ export default function CustomerPaymentDetail() {
               Volver
             </Button>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">Detalle de pago</h1>
-            <p className="mt-2 text-sm text-slate-200">{account?.invoiceNumber ?? "Factura"}</p>
+            <p className="mt-2 text-sm text-slate-200">{account?.invoiceNumber ?? "Documento base"}</p>
           </div>
           <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(account?.status ?? "pending")}`}>
             {account?.status ?? "pending"}
@@ -228,7 +228,7 @@ export default function CustomerPaymentDetail() {
                 className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
               >
                 <Download size={16} />
-                Estado de cuenta PDF
+                Estado de cuenta
               </Button>
               <Button
                 type="button"
@@ -303,7 +303,7 @@ export default function CustomerPaymentDetail() {
 
             {approvedTransactions.length === 0 ? (
               <div className="mt-4">
-                <EmptyState text="Todavia no tienes transacciones aprobadas para esta factura." />
+                <EmptyState text="Todavia no tienes transacciones aprobadas para esta cuenta." />
               </div>
             ) : (
               <div className="mt-4 space-y-3">

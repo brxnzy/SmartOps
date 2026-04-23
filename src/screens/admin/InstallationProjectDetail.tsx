@@ -374,6 +374,16 @@ export default function InstallationProjectDetail() {
     setFinishingProject(true);
 
     try {
+      const synced = await installedDevices.syncFromLayout({
+        layout: project.layout,
+        siteId: project.siteId,
+        zoneId: null,
+      });
+
+      if (!synced) {
+        throw new Error("No se pudieron sincronizar los dispositivos instalados antes de completar el proyecto.");
+      }
+
       const result = await finalizeInstallationProject({
         companyId,
         projectId,
@@ -409,7 +419,7 @@ export default function InstallationProjectDetail() {
     } finally {
       setFinishingProject(false);
     }
-  }, [companyId, finishingProject, loadProject, project, projectId, userId]);
+  }, [companyId, finishingProject, installedDevices, loadProject, project, projectId, userId]);
 
   useEffect(() => {
     if (!projectId) return;

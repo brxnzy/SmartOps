@@ -3,10 +3,12 @@ import ConfirmModal from "../../components/ConfirmModal";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
+import { useAuth } from "../../hooks/useAuth";
 import useDevices from "../../hooks/useDevices";
 import { downloadPDF } from "../../utils/reportPdf";
 
 export default function Devices() {
+  const { companyProfile } = useAuth();
   const {
     protocols,
     deviceTypes,
@@ -56,7 +58,17 @@ export default function Devices() {
   } = useDevices();
 
   const handleDownload = () => {
-    downloadPDF(filteredDevices, 'devices_report.pdf', ['name', 'model', 'price', 'brandId', 'deviceTypeId']);
+    downloadPDF(
+      filteredDevices,
+      "devices_report.pdf",
+      ["name", "model", "price", "brandId", "deviceTypeId"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de dispositivos",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Catálogo consolidado de dispositivos disponibles para la compañía.",
+      }
+    );
   };
 
   return (

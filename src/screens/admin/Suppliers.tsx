@@ -3,11 +3,13 @@ import ConfirmModal from "../../components/ConfirmModal";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
+import { useAuth } from "../../hooks/useAuth";
 import useSuppliers from "../../hooks/useSuppliers";
 import { formatPhoneDigits } from "../../utils/formatters";
 import { downloadPDF } from "../../utils/reportPdf";
 
 export default function Suppliers() {
+  const { companyProfile } = useAuth();
   const {
     loading,
     submitting,
@@ -41,7 +43,17 @@ export default function Suppliers() {
   } = useSuppliers();
 
   const handleDownload = () => {
-    downloadPDF(filteredSuppliers, 'suppliers_report.pdf', ['name', 'email', 'phone', 'address']);
+    downloadPDF(
+      filteredSuppliers,
+      "suppliers_report.pdf",
+      ["name", "email", "phone", "address"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de proveedores",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Directorio operativo de proveedores asociados a la compañía.",
+      }
+    );
   };
 
   return (
