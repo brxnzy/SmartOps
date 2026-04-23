@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { PERMISSIONS } from "../constants/permissions";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import Customers from "../screens/admin/Customers";
-import DeviceInventory from "../screens/admin/DeviceInventory";
 import Devices from "../screens/admin/Devices";
 import Suppliers from "../screens/admin/Suppliers";
 import InventoryLoads from "../screens/admin/InventoryLoads";
@@ -28,7 +27,9 @@ import SettingsDeviceTypes from "../screens/admin/settings/SettingsDeviceTypes";
 import SettingsTicketCategories from "../screens/admin/settings/SettingsTicketCategories";
 import SettingsBrands from "../screens/admin/settings/SettingsBrands";
 import SettingsChecklistTemplates from "../screens/admin/settings/SettingsChecklistTemplates";
+import SettingsPostInstallationChecks from "../screens/admin/settings/SettingsPostInstallationChecks";
 import SettingsLogs from "../screens/admin/settings/SettingsLogs";
+import EmailHistory from "../screens/admin/EmailHistory";
 import UsersAdmin from "../screens/admin/Users";
 import CustomerProfile360 from "../screens/admin/CustomerProfile360";
 import Account from "../screens/admin/Account";
@@ -37,10 +38,29 @@ import VisitsCalendar from "../screens/admin/SiteSurvey";
 import Schedule from "../screens/admin/Schedule";
 import AdminTickets from "../screens/admin/Tickets";
 import AdminTicketDetail from "../screens/admin/TicketDetail";
+import BudgetList from "../screens/admin/BudgetList";
+import BudgetDetail from "../screens/admin/BudgetDetail";
+import InstallationProjects from "../screens/admin/InstallationProjects";
+import InstallationProjectDetail from "../screens/admin/InstallationProjectDetail";
 import CustomerTickets from "../screens/customer/CustomerTickets";
 import CustomerTicketCreate from "../screens/customer/CustomerTicketCreate";
 import CustomerTicketDetail from "../screens/customer/CustomerTicketDetail";
 import CustomerProfile from "../screens/customer/CustomerProfile";
+import CustomerQuotes from "../screens/customer/CustomerQuotes";
+import CustomerQuoteDetail from "../screens/customer/CustomerQuoteDetail";
+import CustomerNotifications from "../screens/customer/CustomerNotifications";
+import CustomerPayments from "../screens/customer/CustomerPayments";
+import CustomerPaymentDetail from "../screens/customer/CustomerPaymentDetail";
+import DeliveryActPage from "../screens/DeliveryAct";
+import SuperAdminAreaRoute from "./SuperAdminAreaRoute";
+import SuperAdminDefaultRoute from "./SuperAdminDefaultRoute";
+import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
+import SuperAdminCompanyDetail from "../screens/superadmin/SuperAdminCompanyDetail";
+import AdminSupport from "../screens/admin/Support";
+import SuperAdminSupport from "../screens/superadmin/SuperAdminSupport";
+import SupportRequestDetail from "../screens/admin/SupportRequestDetail";
+import SuperAdminSupportRequestDetail from "../screens/superadmin/SuperAdminSupportRequestDetail";
+import Payments from "../screens/admin/Payments";
 
 
 export default function AppRoutes() {
@@ -138,14 +158,6 @@ export default function AppRoutes() {
           }
         />
         <Route
-          path="inventory/devices"
-          element={
-            <PermissionRoute permission={PERMISSIONS.deviceInventoryRead}>
-              <DeviceInventory />
-            </PermissionRoute>
-          }
-        />
-        <Route
           path="inventory/loads"
           element={
             <PermissionRoute permission={PERMISSIONS.inventoryLoadsRead}>
@@ -180,7 +192,14 @@ export default function AppRoutes() {
           }
         />
 
-        <Route path="schedule" element={<Schedule />} />
+        <Route
+          path="schedule"
+          element={
+            <PermissionRoute permission={PERMISSIONS.scheduleRead}>
+              <Schedule />
+            </PermissionRoute>
+          }
+        />
         <Route
           path="site_surveys"
           element={
@@ -258,10 +277,26 @@ export default function AppRoutes() {
           }
         />
         <Route
+          path="post-installation-checks"
+          element={
+            <PermissionRoute permission={PERMISSIONS.settingsPostInstallationChecksRead}>
+              <SettingsPostInstallationChecks />
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="logs"
           element={
             <PermissionRoute permission={PERMISSIONS.settingsLogsRead}>
               <SettingsLogs />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="email-history"
+          element={
+            <PermissionRoute permission={PERMISSIONS.emailHistoryRead}>
+              <EmailHistory />
             </PermissionRoute>
           }
         />
@@ -282,6 +317,58 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="budgets"
+          element={
+            <PermissionRoute permission={PERMISSIONS.budgetsRead}>
+              <BudgetList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="budgets/:budgetId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.budgetsRead}>
+              <BudgetDetail />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="installation-projects"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsRead}>
+              <InstallationProjects />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="installation-projects/:projectId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsOpen}>
+              <InstallationProjectDetail />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="payments"
+          element={
+            <PermissionRoute permission={PERMISSIONS.paymentsRead}>
+              <Payments />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="acta/:actId"
+          element={
+            <PermissionRoute permission={PERMISSIONS.installationProjectsOpen}>
+              <DeliveryActPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route path="support" element={<AdminSupport />} />
+        <Route path="support/:requestId" element={<SupportRequestDetail />} />
       </Route>
 
       <Route
@@ -296,8 +383,37 @@ export default function AppRoutes() {
         <Route path="tickets" element={<CustomerTickets />} />
         <Route path="tickets/new" element={<CustomerTicketCreate />} />
         <Route path="tickets/:ticketId" element={<CustomerTicketDetail />} />
+        <Route path="quotes" element={<CustomerQuotes />} />
+        <Route path="quotes/:budgetId" element={<CustomerQuoteDetail />} />
+        <Route path="payments" element={<CustomerPayments />} />
+        <Route path="payments/:accountId" element={<CustomerPaymentDetail />} />
+        <Route path="notifications" element={<CustomerNotifications />} />
         <Route path="profile" element={<CustomerProfile />} />
       </Route>
+
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute>
+            <SuperAdminAreaRoute />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<SuperAdminDefaultRoute />} />
+        <Route path="dashboard" element={<SuperAdminDashboard />} />
+        <Route path="companies/:companyId" element={<SuperAdminCompanyDetail />} />
+        <Route path="support" element={<SuperAdminSupport />} />
+        <Route path="support/:requestId" element={<SuperAdminSupportRequestDetail />} />
+      </Route>
+
+      <Route
+        path="/acta/:actId"
+        element={
+          <ProtectedRoute>
+            <DeliveryActPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/403"

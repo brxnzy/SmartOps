@@ -25,6 +25,10 @@ interface ToolbarProps {
   onManualSave: () => void;
   manualSaving: boolean;
   autosaveLabel: string;
+  showSave?: boolean;
+  showWallTools?: boolean;
+  showZoneTools?: boolean;
+  showZoneSelector?: boolean;
 }
 
 function ToolButton({
@@ -72,9 +76,13 @@ export default function Toolbar({
   onManualSave,
   manualSaving,
   autosaveLabel,
+  showSave = true,
+  showWallTools = true,
+  showZoneTools = true,
+  showZoneSelector = true,
 }: ToolbarProps) {
   return (
-    <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur">
+    <div className="border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center gap-2">
         <ToolButton
           active={mode === "select"}
@@ -84,22 +92,26 @@ export default function Toolbar({
           <MousePointer2 size={14} />
           Seleccionar
         </ToolButton>
-        <ToolButton
-          active={mode === "draw-wall"}
-          onClick={() => onModeChange("draw-wall")}
-          title="Dibujar pared"
-        >
-          <ScanLine size={14} />
-          Pared
-        </ToolButton>
-        <ToolButton
-          active={mode === "draw-zone"}
-          onClick={() => onModeChange("draw-zone")}
-          title="Dibujar zona"
-        >
-          <PlusSquare size={14} />
-          Zona
-        </ToolButton>
+        {showWallTools ? (
+          <ToolButton
+            active={mode === "draw-wall"}
+            onClick={() => onModeChange("draw-wall")}
+            title="Dibujar pared"
+          >
+            <ScanLine size={14} />
+            Pared
+          </ToolButton>
+        ) : null}
+        {showZoneTools ? (
+          <ToolButton
+            active={mode === "draw-zone"}
+            onClick={() => onModeChange("draw-zone")}
+            title="Dibujar zona"
+          >
+            <PlusSquare size={14} />
+            Zona
+          </ToolButton>
+        ) : null}
         <ToolButton
           active={mode === "add-device"}
           onClick={() => onModeChange("add-device")}
@@ -141,21 +153,23 @@ export default function Toolbar({
 
         <span className="mx-1 h-5 w-px bg-slate-200" />
 
-        <label className="text-xs font-medium text-slate-500">
-          Zona
-          <select
-            value={selectedZoneId}
-            onChange={(event) => onSelectZone(event.target.value)}
-            className="ml-2 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
-          >
-            <option value="">Seleccionar</option>
-            {zoneOptions.map((zone) => (
-              <option key={zone.id} value={zone.id}>
-                {zone.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showZoneSelector ? (
+          <label className="text-xs font-medium text-slate-500">
+            Zona
+            <select
+              value={selectedZoneId}
+              onChange={(event) => onSelectZone(event.target.value)}
+              className="ml-2 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Seleccionar</option>
+              {zoneOptions.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="text-xs font-medium text-slate-500">
           Dispositivo
@@ -173,17 +187,21 @@ export default function Toolbar({
           </select>
         </label>
 
-        <button
-          type="button"
-          onClick={onManualSave}
-          disabled={manualSaving}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Save size={13} />
-          {manualSaving ? "Guardando..." : "Guardar plano"}
-        </button>
+        {showSave ? (
+          <>
+            <button
+              type="button"
+              onClick={onManualSave}
+              disabled={manualSaving}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Save size={13} />
+              {manualSaving ? "Guardando..." : "Guardar plano"}
+            </button>
 
-        <span className="text-xs text-slate-500">{autosaveLabel}</span>
+            <span className="text-xs text-slate-500">{autosaveLabel}</span>
+          </>
+        ) : null}
       </div>
     </div>
   );

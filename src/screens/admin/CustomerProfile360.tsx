@@ -7,8 +7,12 @@ import { useCustomerProfile360 } from "../../hooks/useCustomerProfile360";
 import type { Customer360TabKey } from "../../types/customerProfile360.types";
 import KpiGrid from "../../components/KpiGrid";
 import CustomerHeader from "./customerProfile360/CustomerHeader";
+import BudgetsSection from "./customerProfile360/sections/BudgetsSection";
+import DevicesSection from "./customerProfile360/sections/DevicesSection";
+import ProjectsSection from "./customerProfile360/sections/ProjectsSection";
 import SitesSection from "./customerProfile360/sections/SitesSection";
 import SummarySection from "./customerProfile360/sections/SummarySection";
+import SurveysSection from "./customerProfile360/sections/SurveysSection";
 
 export default function CustomerProfile360() {
   const { customerId } = useParams<{ customerId: string }>();
@@ -25,6 +29,10 @@ export default function CustomerProfile360() {
     return [
       { key: "summary", label: "Resumen", count: source?.timeline.length ?? 0 },
       { key: "sites", label: "Sitios", count: source?.sites.length ?? 0 },
+      { key: "surveys", label: "Levantamientos", count: source?.surveys.length ?? 0 },
+      { key: "budgets", label: "Cotizaciones", count: source?.budgets.length ?? 0 },
+      { key: "projects", label: "Proyectos", count: source?.projects.length ?? 0 },
+      { key: "devices", label: "Dispositivos", count: source?.devices.length ?? 0 },
     ] satisfies Array<{ key: Customer360TabKey; label: string; count: number }>;
   }, [data]);
 
@@ -86,6 +94,11 @@ export default function CustomerProfile360() {
           onRefresh={refresh}
         />
       ) : null}
+
+      {activeTab === "surveys" ? <SurveysSection surveys={data.surveys} /> : null}
+      {activeTab === "budgets" ? <BudgetsSection budgets={data.budgets} /> : null}
+      {activeTab === "projects" ? <ProjectsSection projects={data.projects} /> : null}
+      {activeTab === "devices" ? <DevicesSection devices={data.devices} /> : null}
 
     </section>
   );

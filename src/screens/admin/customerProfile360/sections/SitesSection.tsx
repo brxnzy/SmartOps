@@ -1,4 +1,6 @@
 import { MapPin, MapPinned } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import PlanLimitReachedModal from "../../../../components/PlanLimitReachedModal";
 import Button from "../../../../components/Button";
 import EmptyState from "../../../../components/EmptyState";
 import { formatDate } from "../../../../utils/utils";
@@ -9,6 +11,10 @@ import SiteZoneModal from "../sites/SiteZoneModal";
 import SiteZonesModal from "../sites/SiteZonesModal";
 import type { SitesSectionProps } from "../../../../types/customerProfile360.types";
 import useSitesSection from "../../../../hooks/useSitesSection";
+import useCompanyEntitlements from "../../../../hooks/useCompanyEntitlements";
+import { notifications } from "../../../../services/notification.service";
+import { getCompanySitesCount } from "../../../../services/planUsage.service";
+import { formatRemaining, getRemaining } from "../../../../utils/planLimitUi";
 
 export default function SitesSection({
   companyId,
@@ -16,6 +22,7 @@ export default function SitesSection({
   sites,
   onRefresh,
 }: SitesSectionProps) {
+  const { entitlements } = useCompanyEntitlements();
   const {
     siteCardPreviews,
     siteCardPreviewLoading,
@@ -66,6 +73,56 @@ export default function SitesSection({
     onRefresh,
   });
 
+  const [companySitesCount, setCompanySitesCount] = useState<number | null>(null);
+  const [isLimitModalOpen, setLimitModalOpen] = useState(false);
+  const limitToastShownRef = useRef<string | null>(null);
+
+  const maxSites = entitlements?.limits?.maxSites ?? null;
+  const remainingSites = useMemo(() => {
+    if (companySitesCount === null) return null;
+    return getRemaining(maxSites, companySitesCount);
+  }, [companySitesCount, maxSites]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    setCompanySitesCount(null);
+
+    getCompanySitesCount(companyId)
+      .then((count) => {
+        setCompanySitesCount(count);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    if (companySitesCount === null) return;
+
+    const toastKey = `${companyId}:${maxSites ?? "unlimited"}`;
+    if (limitToastShownRef.current === toastKey) return;
+    limitToastShownRef.current = toastKey;
+
+    notifications.info({
+      title: "Límites de plan",
+      description: formatRemaining("sitios", getRemaining(maxSites, companySitesCount)),
+    });
+
+    if (maxSites !== null && companySitesCount >= maxSites) {
+      setLimitModalOpen(true);
+    }
+  }, [companyId, companySitesCount, maxSites]);
+
+  const handleCreateSiteClick = () => {
+    if (remainingSites === 0) {
+      setLimitModalOpen(true);
+      return;
+    }
+
+    openCreateSiteModal();
+  };
+
   return (
     <>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -81,7 +138,7 @@ export default function SitesSection({
           </div>
           <Button
             type="button"
-            onClick={openCreateSiteModal}
+            onClick={handleCreateSiteClick}
             className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
           >
             Nuevo sitio
@@ -237,6 +294,13 @@ export default function SitesSection({
           setActiveAttachmentIndex((prev) => (prev + 1) % siteDetailAttachments.length)
         }
         onSelect={(index) => setActiveAttachmentIndex(index)}
+      />
+
+      <PlanLimitReachedModal
+        open={isLimitModalOpen}
+        onClose={() => setLimitModalOpen(false)}
+        resourceLabel="sitios"
+        planName={entitlements?.planName}
       />
     </>
   );

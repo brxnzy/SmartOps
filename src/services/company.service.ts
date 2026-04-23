@@ -3,6 +3,7 @@ import { supabase } from "../libs/supabase";
 import type { Company, CompanyInput, CompanyProfile } from "../types/Company";
 import type { RoleProfile } from "../types/Role";
 import type { UserRoleRow } from "../types/types";
+import { isCustomerRole, isSuperAdminRole } from "../utils/roles";
 import { logAuditEvent } from "./audit.service";
 
 type CompanyRow = {
@@ -44,12 +45,20 @@ export async function getUserCompanyAndRole(userId: string): Promise<{
       roles:role_id ( id, name )
     `)
     .eq("user_id", userId)
-    .limit(1)
     .returns<UserRoleRow[]>();
 
   if (error) throw error;
 
-  const selected = data?.[0] ?? null;
+  const rows = data ?? [];
+
+  // Prefer global SuperAdmin role when present.
+  // Otherwise, prefer a non-customer role tied to a company.
+  const selected =
+    rows.find((row) => isSuperAdminRole(row.roles?.name)) ??
+    rows.find((row) => !!row.company_id && !isCustomerRole(row.roles?.name)) ??
+    rows.find((row) => !!row.company_id) ??
+    rows[0] ??
+    null;
 
   const companyProfile = selected?.companies
     ? {

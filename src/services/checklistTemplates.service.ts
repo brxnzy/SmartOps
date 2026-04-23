@@ -1,4 +1,5 @@
 import { supabase } from "../libs/supabase";
+import { logAuditEvent } from "./audit.service";
 import type {
   ChecklistItem,
   ChecklistTemplate,
@@ -62,6 +63,17 @@ export async function createChecklistTemplate(
 
   if (error) throw error;
 
+  await logAuditEvent({
+    action: "create",
+    entity: "checklist_templates",
+    entityId: data.id,
+    companyId: payload.companyId,
+    newValues: {
+      name: data.name,
+      description: data.description,
+    },
+  });
+
   return mapChecklistTemplate(data);
 }
 
@@ -80,6 +92,17 @@ export async function updateChecklistTemplate(
 
   if (error) throw error;
 
+  await logAuditEvent({
+    action: "update",
+    entity: "checklist_templates",
+    entityId: data.id,
+    companyId: data.company_id,
+    newValues: {
+      name: data.name,
+      description: data.description,
+    },
+  });
+
   return mapChecklistTemplate(data);
 }
 
@@ -90,6 +113,12 @@ export async function deleteChecklistTemplate(templateId: string): Promise<void>
     .eq("id", templateId);
 
   if (error) throw error;
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "checklist_templates",
+    entityId: templateId,
+  });
 }
 
 export async function getChecklistItemsByTemplateIds(
@@ -125,6 +154,17 @@ export async function createChecklistItem(
 
   if (error) throw error;
 
+  await logAuditEvent({
+    action: "create",
+    entity: "checklist_items",
+    entityId: data.id,
+    newValues: {
+      templateId: data.template_id,
+      text: data.text,
+      itemOrder: data.item_order,
+    },
+  });
+
   return mapChecklistItem(data);
 }
 
@@ -143,10 +183,26 @@ export async function updateChecklistItem(
 
   if (error) throw error;
 
+  await logAuditEvent({
+    action: "update",
+    entity: "checklist_items",
+    entityId: data.id,
+    newValues: {
+      text: data.text,
+      itemOrder: data.item_order,
+    },
+  });
+
   return mapChecklistItem(data);
 }
 
 export async function deleteChecklistItem(itemId: string): Promise<void> {
   const { error } = await supabase.from("checklist_items").delete().eq("id", itemId);
   if (error) throw error;
+
+  await logAuditEvent({
+    action: "delete",
+    entity: "checklist_items",
+    entityId: itemId,
+  });
 }

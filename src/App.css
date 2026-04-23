@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700;800&family=Mulish:wght@300;400;500;600&display=swap");
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", sans-serif;
@@ -91,4 +91,28 @@ body {
 
 .smartops-calendar .fc .fc-daygrid-event .fc-event-main {
   padding: 0;
+}
+
+.smartops-calendar .fc .fc-daygrid-dot-event .fc-event-title {
+  font-weight: 600;
+}
+
+.smartops-calendar .fc .fc-daygrid-event-dot {
+  display: none;
+}
+
+.smartops-calendar .fc .fc-timegrid-event,
+.smartops-calendar .fc .fc-daygrid-event {
+  transition: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.smartops-calendar .fc .fc-timegrid-event:hover,
+.smartops-calendar .fc .fc-daygrid-event:hover {
+  box-shadow: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+  transform: none !important;
 }

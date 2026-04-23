@@ -1,4 +1,4 @@
-export type SiteSurveyStatus = "Pendiente" | "En Progreso" | "Completado";
+export type SiteSurveyStatus = "pendiente" | "en_progreso" | "completado" | "cancelado";
 
 export interface SurveyWall {
   id: string;
@@ -32,7 +32,7 @@ export interface SurveyLayout {
 }
 
 export interface SurveyCalendarEvent {
-  visitId: number;
+  visitId: string;
   surveyId: string;
   scheduledStart: string;
   scheduledEnd: string | null;
@@ -40,6 +40,8 @@ export interface SurveyCalendarEvent {
   technicianName: string | null;
   status: string | null;
   ticketId: string | number | null;
+  installationProjectId?: string | null;
+  visitType?: "survey" | "ticket" | "installation";
   siteName: string | null;
   customerName: string | null;
   surveyStatus: string | null;
@@ -62,7 +64,7 @@ export interface SiteSurveyExecutionSummary {
 }
 
 export interface TechnicalVisitExecutionSummary {
-  id: number;
+  id: string;
   siteSurveyId: string;
   scheduledStart: string;
   scheduledEnd: string | null;
@@ -94,6 +96,8 @@ export interface SurveyCatalogDevice {
   name: string;
   model: string;
   label: string;
+  price?: number;
+  installationPrice?: number | null;
 }
 
 export interface SurveyMediaItem {
@@ -127,6 +131,6 @@ export interface ChecklistTemplateOption {
   id: string;
   name: string;
   description: string | null;
-  source: "db" | "mock";
+  source: "db";
   items: ChecklistTemplateItemOption[];
 }

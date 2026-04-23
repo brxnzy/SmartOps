@@ -82,7 +82,7 @@ export interface CreateTechnicalVisitInput {
 }
 
 export interface TechnicalVisitSummary {
-  id: number;
+  id: string;
   ticketId: string | null;
   ticketCode: string | null;
   siteName: string | null;

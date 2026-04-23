@@ -1,6 +1,10 @@
 export type Customer360TabKey =
   | "summary"
-  | "sites";
+  | "sites"
+  | "surveys"
+  | "budgets"
+  | "projects"
+  | "devices";
 
 export interface Customer360BasicProfile {
   id: string;
@@ -17,6 +21,10 @@ export interface Customer360BasicProfile {
 
 export interface Customer360Kpis {
   sites: number;
+  surveys: number;
+  budgets: number;
+  projects: number;
+  devices: number;
 }
 
 export interface CustomerSite {
@@ -57,10 +65,72 @@ export interface CustomerTimelineEvent {
   at: string;
 }
 
+export interface CustomerSurveySummary {
+  id: string;
+  status: string;
+  visitStatus: string | null;
+  siteName: string | null;
+  technicianName: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  createdAt: string | null;
+  completedAt: string | null;
+}
+
+export interface CustomerBudgetSummary {
+  id: string;
+  status: string;
+  quoteStatus: string | null;
+  siteName: string | null;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  createdAt: string;
+  sentAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface CustomerProjectSummary {
+  id: string;
+  budgetId: string;
+  status: string;
+  siteName: string | null;
+  technicianName: string | null;
+  visitStatus: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerInstalledDeviceSummary {
+  installedDeviceId: string;
+  projectId: string;
+  siteId: string | null;
+  zoneId: string | null;
+  status: string;
+  deviceName: string | null;
+  deviceModel: string | null;
+  deviceBrand: string | null;
+  siteName: string | null;
+  zoneName: string | null;
+  serial: string | null;
+  mac: string | null;
+  firmware: string | null;
+  locationDetail: string | null;
+  installedAt: string | null;
+}
+
 export interface CustomerProfile360Data {
   profile: Customer360BasicProfile;
   kpis: Customer360Kpis;
   sites: CustomerSite[];
+  surveys: CustomerSurveySummary[];
+  budgets: CustomerBudgetSummary[];
+  projects: CustomerProjectSummary[];
+  devices: CustomerInstalledDeviceSummary[];
   timeline: CustomerTimelineEvent[];
 }
 
@@ -101,5 +171,3 @@ export interface SiteDetailModalProps {
   onNext: () => void;
   onSelect: (index: number) => void;
 }
-
-
