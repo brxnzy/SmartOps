@@ -13,5 +13,6 @@ export default function CustomerAreaRoute() {
     return <Navigate to="/admin" replace />;
   }
 
+  //comentario
   return <Sidebar />;
 }
