@@ -7,6 +7,10 @@ export type DownloadReportOptions = {
   companyLogoUrl?: string | null;
   subtitle?: string | null;
   generatedBy?: string | null;
+  summary?: Array<{
+    label: string;
+    value: string;
+  }>;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -49,6 +53,9 @@ const FIELD_LABELS: Record<string, string> = {
   receiptNumber: "Recibo",
   submittedAt: "Enviado",
   approvedAt: "Aprobado",
+  paymentDate: "Fecha",
+  method: "Metodo",
+  reference: "Referencia",
   deviceSerial: "Serial",
   macAddress: "MAC",
   siteName: "Sitio",
@@ -60,7 +67,15 @@ function formatValue(value: unknown, field: string) {
   if (field === "isDisabled") return value ? "Deshabilitado" : "Activo";
   if (typeof value === "boolean") return value ? "Si" : "No";
 
-  if (["createdAt", "scheduled_start", "submittedAt", "approvedAt"].includes(field)) {
+  if (field === "method") {
+    const method = String(value);
+    if (method === "cash") return "Efectivo";
+    if (method === "bank_transfer") return "Transferencia";
+    if (method === "card") return "Tarjeta";
+    return "Otros";
+  }
+
+  if (["createdAt", "scheduled_start", "submittedAt", "approvedAt", "paymentDate"].includes(field)) {
     const parsed = new Date(String(value));
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.toLocaleString("es-DO", {
@@ -199,6 +214,14 @@ export function downloadPDF(
     const titleLines = doc.splitTextToSize(title, headerTextWidth).slice(0, 2);
     doc.text(titleLines, headerTextX, headerTextY, { baseline: "top" });
 
+    if (options.subtitle) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(71, 85, 105);
+      const subtitleLines = doc.splitTextToSize(options.subtitle, headerTextWidth).slice(0, 3);
+      doc.text(subtitleLines, headerTextX, headerTextY + 42, { baseline: "top" });
+    }
+
     doc.setFillColor(250, 252, 255);
     doc.roundedRect(metaX, metaY, metaWidth, metaHeight, 12, 12, "F");
     doc.setDrawColor(217, 225, 234);
@@ -235,7 +258,41 @@ export function downloadPDF(
     doc.text(clipText(doc, generatedAt, valueWidth), valueX, row2);
     doc.text(String(rows.length), valueX, row3);
 
-    let cursorY = marginY + 126;
+    let cursorY = marginY + (options.subtitle ? 144 : 126);
+
+    if (options.summary && options.summary.length > 0) {
+      const summaryHeight = 62;
+      const summaryGap = 12;
+      const summaryWidth = contentWidth;
+      const summaryColumns = options.summary.length;
+      const summaryColumnWidth = summaryWidth / summaryColumns;
+
+      doc.setFillColor(250, 252, 255);
+      doc.roundedRect(marginX, cursorY, summaryWidth, summaryHeight, 12, 12, "F");
+      doc.setDrawColor(217, 225, 234);
+      doc.roundedRect(marginX, cursorY, summaryWidth, summaryHeight, 12, 12, "S");
+
+      options.summary.forEach((item, index) => {
+        const columnX = marginX + index * summaryColumnWidth;
+        if (index > 0) {
+          doc.setDrawColor(227, 233, 241);
+          doc.line(columnX, cursorY + 12, columnX, cursorY + summaryHeight - 12);
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(clipText(doc, item.label, summaryColumnWidth - 24), columnX + 12, cursorY + 18);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text(clipText(doc, item.value, summaryColumnWidth - 24), columnX + 12, cursorY + 38);
+      });
+
+      cursorY += summaryHeight + summaryGap;
+    }
+
     const tableStartY = cursorY;
     const tableHeaderHeight = 24;
     const rowHeight = 20;
