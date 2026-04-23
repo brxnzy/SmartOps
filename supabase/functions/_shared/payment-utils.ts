@@ -392,57 +392,16 @@ async function drawDocumentHeader(
     font: fontBold,
     color: COLORS.accent,
   });
-  page.drawText(input.subtitle, {
-    x: 134,
-    y: height - 119,
-    size: 9,
-    font,
-    color: COLORS.muted,
-  });
-
-  page.drawRectangle({
-    x: width - 205,
-    y: height - 124,
-    width: 165,
-    height: 72,
-    color: rgb(1, 1, 1),
-  });
-  page.drawRectangle({
-    x: width - 205,
-    y: height - 124,
-    width: 165,
-    height: 72,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  });
-  page.drawText("Documento", {
-    x: width - 190,
-    y: height - 78,
-    size: 8,
-    font: fontBold,
-    color: COLORS.muted,
-  });
-  page.drawText(input.documentNumber, {
-    x: width - 190,
-    y: height - 93,
-    size: 10,
-    font: fontBold,
-    color: COLORS.ink,
-  });
-  page.drawText("Emitido", {
-    x: width - 190,
-    y: height - 108,
-    size: 8,
-    font: fontBold,
-    color: COLORS.muted,
-  });
-  page.drawText(formatDate(new Date().toISOString()), {
-    x: width - 190,
-    y: height - 120,
-    size: 9,
-    font,
-    color: COLORS.ink,
-  });
+  const subtitle = input.subtitle.trim();
+  if (subtitle) {
+    page.drawText(subtitle, {
+      x: 134,
+      y: height - 119,
+      size: 9,
+      font,
+      color: COLORS.muted,
+    });
+  }
 }
 
 function drawSectionTitle(page: PDFPage, fontBold: PDFFont, x: number, y: number, title: string) {
@@ -630,7 +589,7 @@ export async function buildReceiptPdf(
 
   await drawDocumentHeader(pdfDoc, page, font, fontBold, {
     title: "Recibo de pago",
-    subtitle: "Comprobante emitido por un pago aplicado a la factura de instalación.",
+    subtitle: "",
     documentNumber: transaction.receiptNumber ?? buildDocumentNumber("REC", transaction.id),
     companyName: account.companyName,
     companyLogoUrl: account.companyLogoUrl,
