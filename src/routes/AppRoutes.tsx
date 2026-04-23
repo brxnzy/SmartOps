@@ -56,6 +56,10 @@ import SuperAdminAreaRoute from "./SuperAdminAreaRoute";
 import SuperAdminDefaultRoute from "./SuperAdminDefaultRoute";
 import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
 import SuperAdminCompanyDetail from "../screens/superadmin/SuperAdminCompanyDetail";
+import AdminSupport from "../screens/admin/Support";
+import SuperAdminSupport from "../screens/superadmin/SuperAdminSupport";
+import SupportRequestDetail from "../screens/admin/SupportRequestDetail";
+import SuperAdminSupportRequestDetail from "../screens/superadmin/SuperAdminSupportRequestDetail";
 import Payments from "../screens/admin/Payments";
 
 
@@ -362,6 +366,9 @@ export default function AppRoutes() {
             </PermissionRoute>
           }
         />
+
+        <Route path="support" element={<AdminSupport />} />
+        <Route path="support/:requestId" element={<SupportRequestDetail />} />
       </Route>
 
       <Route
@@ -395,6 +402,8 @@ export default function AppRoutes() {
         <Route index element={<SuperAdminDefaultRoute />} />
         <Route path="dashboard" element={<SuperAdminDashboard />} />
         <Route path="companies/:companyId" element={<SuperAdminCompanyDetail />} />
+        <Route path="support" element={<SuperAdminSupport />} />
+        <Route path="support/:requestId" element={<SuperAdminSupportRequestDetail />} />
       </Route>
 
       <Route

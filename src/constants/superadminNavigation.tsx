@@ -1,4 +1,5 @@
-import { LayoutDashboard } from "lucide-react";
+/* eslint-disable react-refresh/only-export-components */
+import { LayoutDashboard, LifeBuoy } from "lucide-react";
 import type { DefaultAdminRoute, SidebarItem } from "../types/Navigation";
 
 const SUPERADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
@@ -6,6 +7,11 @@ const SUPERADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     name: "Resumen",
     to: "/superadmin/dashboard",
     icon: <LayoutDashboard />,
+  },
+  {
+    name: "Soporte",
+    to: "/superadmin/support",
+    icon: <LifeBuoy />,
   },
 ];
 

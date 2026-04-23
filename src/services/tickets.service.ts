@@ -29,6 +29,7 @@ type TicketDbContext = {
   status: TicketStatus;
   customer_id: string;
   site_id: string | null;
+  assigned_to: string | null;
 };
 
 function safeText(value: unknown, fallback = ""): string {
@@ -93,7 +94,7 @@ async function getCustomerEmailData(
 async function getTicketDbContext(companyId: string, ticketId: string): Promise<TicketDbContext | null> {
   const { data, error } = await supabase
     .from("tickets")
-    .select("id, code, status, customer_id, site_id")
+    .select("id, code, status, customer_id, site_id, assigned_to")
     .eq("company_id", companyId)
     .eq("id", ticketId)
     .maybeSingle<TicketDbContext>();
@@ -263,8 +264,10 @@ export async function getTicketDetail(
   ticket: Ticket;
   comments: TicketComment[];
   attachments: TicketAttachment[];
+  technicalVisits: TechnicalVisitSummary[];
 }> {
-  const [{ data: ticketData, error: ticketError }, commentsResponse, attachmentsResponse] = await Promise.all([
+  const [{ data: ticketData, error: ticketError }, commentsResponse, attachmentsResponse, visitsResponse] =
+    await Promise.all([
     supabase
       .from("tickets")
       .select("*, category:ticket_categories ( id, name )")
@@ -281,6 +284,12 @@ export async function getTicketDetail(
       .select("id, ticket_id, comment_id, file_name, file_path, file_type, uploaded_by, created_at")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("technical_visits")
+      .select("id, ticket_id, scheduled_start, scheduled_end, technician_id, status, technician:users ( id, name )")
+      .eq("company_id", companyId)
+      .eq("ticket_id", ticketId)
+      .order("scheduled_start", { ascending: false }),
   ]);
 
   if (ticketError || !ticketData) {
@@ -293,11 +302,15 @@ export async function getTicketDetail(
   const attachments = await resolveAttachmentUrls(
     (attachmentsResponse.data ?? []).map((row) => mapAttachment(row as Record<string, unknown>))
   );
+  const technicalVisits = (visitsResponse.data ?? []).map((row) =>
+    mapTechnicalVisit(row as Record<string, unknown>)
+  );
 
   return {
     ticket: mapTicket(ticketData as Record<string, unknown>),
     comments,
     attachments,
+    technicalVisits,
   };
 }
 
@@ -555,6 +568,31 @@ export async function createTicketTechnicalVisit(
 
   const technicalVisitId = technicalVisit.id;
 
+  if (input.technicianId) {
+    const { error: updateTicketError } = await supabase
+      .from("tickets")
+      .update({
+        assigned_to: input.technicianId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("company_id", companyId)
+      .eq("id", ticketId);
+
+    if (updateTicketError) {
+      throw new Error(updateTicketError.message || "No se pudo asignar el técnico al ticket.");
+    }
+
+    await logAuditEvent({
+      action: "update",
+      entity: "tickets",
+      entityId: ticketId,
+      companyId,
+      newValues: {
+        assignedTo: input.technicianId,
+      },
+    });
+  }
+
   await logAuditEvent({
     action: "create",
     entity: "technical_visits",
@@ -613,8 +651,49 @@ export async function createTicketTechnicalVisit(
 export async function updateTicketStatus(
   companyId: string,
   ticketId: string,
-  status: TicketStatus
+  status: TicketStatus,
+  actorUserId?: string | null
 ): Promise<TicketListItem> {
+  const ticketContext = await getTicketDbContext(companyId, ticketId);
+  if (!ticketContext) {
+    throw new Error("No se pudo cargar el ticket.");
+  }
+
+  if (status === "en_proceso") {
+    if (!ticketContext.assigned_to) {
+      throw new Error("Debes programar/asignar un técnico antes de iniciar atención.");
+    }
+    if (actorUserId && actorUserId !== ticketContext.assigned_to) {
+      throw new Error("Solo el técnico asignado puede iniciar la atención.");
+    }
+
+    const { data: visit } = await supabase
+      .from("technical_visits")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("ticket_id", ticketId)
+      .eq("technician_id", ticketContext.assigned_to)
+      .order("scheduled_start", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    if (!visit?.id) {
+      throw new Error("Debes programar una visita técnica con el técnico asignado antes de iniciar atención.");
+    }
+  }
+
+  if (status === "resuelto") {
+    if (!ticketContext.assigned_to) {
+      throw new Error("Debes asignar un técnico antes de completar el ticket.");
+    }
+    if (actorUserId && actorUserId !== ticketContext.assigned_to) {
+      throw new Error("Solo el técnico asignado puede completar el ticket.");
+    }
+    if (ticketContext.status !== "en_proceso") {
+      throw new Error("Debes iniciar la atención antes de completar el ticket.");
+    }
+  }
+
   const { data, error } = await supabase
     .from("tickets")
     .update({
