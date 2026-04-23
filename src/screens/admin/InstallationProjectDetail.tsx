@@ -71,6 +71,15 @@ function toIsoFromLocal(value: string): string {
   return new Date(parsed).toISOString();
 }
 
+function toDateTimeLocalMinValue(value = new Date()): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function statusBadge(status: string | null): string {
   if (status === "terminado") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "cancelado") return "border-rose-200 bg-rose-50 text-rose-700";
@@ -174,6 +183,7 @@ export default function InstallationProjectDetail() {
   const [visitStart, setVisitStart] = useState("");
   const [schedulingVisit, setSchedulingVisit] = useState(false);
   const [cancelingVisit, setCancelingVisit] = useState(false);
+  const currentDateTimeMin = useMemo(() => toDateTimeLocalMinValue(), []);
   const [rescheduleVisitModalOpen, setRescheduleVisitModalOpen] = useState(false);
 
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
@@ -619,6 +629,13 @@ export default function InstallationProjectDetail() {
 
     let scheduledStartIso: string;
     try {
+      if (Date.parse(visitStart) < Date.now()) {
+        notifications.warning({
+          title: "Fecha invalida",
+          description: "No puedes programar una visita en una fecha pasada.",
+        });
+        return false;
+      }
       scheduledStartIso = toIsoFromLocal(visitStart);
     } catch {
       notifications.warning({
@@ -1230,6 +1247,7 @@ export default function InstallationProjectDetail() {
               value={visitStart}
               onChange={(event) => setVisitStart(event.target.value)}
               disabled={!canScheduleVisit || isClosed || schedulingVisit}
+              min={currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>
@@ -1384,6 +1402,7 @@ export default function InstallationProjectDetail() {
                       value={visitStart}
                       onChange={(event) => setVisitStart(event.target.value)}
                       disabled={!canScheduleVisit || isClosed}
+                      min={currentDateTimeMin}
                       className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
                     />
                   </Field>

@@ -56,6 +56,15 @@ function toDateTimeLocalValue(value?: string | null): string {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function toDateTimeLocalMinValue(value = new Date()): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function isCompleted(survey: SiteSurveySummary): boolean {
   return isSurveyCompletedStatus(survey.status) || Boolean(survey.completedAt);
 }
@@ -91,6 +100,7 @@ export default function SiteSurvey() {
   const [rescheduleTarget, setRescheduleTarget] = useState<SiteSurveySummary | null>(null);
   const [rescheduleStart, setRescheduleStart] = useState("");
   const [rescheduleEnd, setRescheduleEnd] = useState("");
+  const currentDateTimeMin = useMemo(() => toDateTimeLocalMinValue(), []);
 
   const [formValues, setFormValues] = useState({
     customerId: "",
@@ -392,6 +402,14 @@ export default function SiteSurvey() {
       notifications.warning({
         title: "Campos requeridos",
         description: "Completa cliente, sitio, tecnico y fecha/hora de inicio.",
+      });
+      return;
+    }
+
+    if (Date.parse(formValues.scheduledStart) < Date.now()) {
+      notifications.warning({
+        title: "Fecha invalida",
+        description: "No puedes programar un levantamiento en una fecha pasada.",
       });
       return;
     }
@@ -700,6 +718,7 @@ export default function SiteSurvey() {
                 type="datetime-local"
                 value={formValues.scheduledStart}
                 onChange={(event) => setFormValues((current) => ({ ...current, scheduledStart: event.target.value }))}
+                min={currentDateTimeMin}
                 className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </Field>
@@ -709,6 +728,7 @@ export default function SiteSurvey() {
                 type="datetime-local"
                 value={formValues.scheduledEnd}
                 onChange={(event) => setFormValues((current) => ({ ...current, scheduledEnd: event.target.value }))}
+                min={formValues.scheduledStart || currentDateTimeMin}
                 className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
               />
             </Field>
@@ -748,6 +768,7 @@ export default function SiteSurvey() {
               type="datetime-local"
               value={rescheduleStart}
               onChange={(event) => setRescheduleStart(event.target.value)}
+              min={currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>
@@ -757,6 +778,7 @@ export default function SiteSurvey() {
               type="datetime-local"
               value={rescheduleEnd}
               onChange={(event) => setRescheduleEnd(event.target.value)}
+              min={rescheduleStart || currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>
