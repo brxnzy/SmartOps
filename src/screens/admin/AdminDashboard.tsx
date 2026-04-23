@@ -19,7 +19,9 @@ import Field from "../../components/Field";
 import Input from "../../components/Input";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../libs/supabase";
+import { PERMISSIONS } from "../../constants/permissions";
 import { listInstallationProjects, type InstallationProjectSummary } from "../../services/installation.service";
+import { logAuditEvent } from "../../services/audit.service";
 import { listPaymentAccounts, listCompanyPaymentTransactions } from "../../services/payments.service";
 import { listCompanyTickets } from "../../services/tickets.service";
 import type { PaymentAccountSummary, PaymentMethod, PaymentTransaction } from "../../types/payment.types";
@@ -38,8 +40,6 @@ type DashboardInstalledDevice = {
   zoneName: string | null;
   status: string | null;
 };
-
-type IncomeMethodFilter = "all" | PaymentMethod;
 
 function safeText(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
@@ -142,7 +142,7 @@ function buildMonthlySeries<T>(
     const date = new Date(now.getFullYear(), now.getMonth() - (months - 1 - index), 1);
     return {
       key: monthKey(date),
-      label: `${monthLabel(date)} ${String(date.getFullYear()).slice(-2)}`,
+      label: monthLabel(date),
       value: 0,
     };
   });
@@ -168,11 +168,6 @@ function formatMethod(method: PaymentMethod): string {
   if (method === "bank_transfer") return "Transferencia";
   if (method === "card") return "Tarjeta";
   return "Otros";
-}
-
-function formatIncomeMethodFilter(method: IncomeMethodFilter): string {
-  if (method === "all") return "Todos";
-  return formatMethod(method);
 }
 
 function formatProjectStatus(status: string | null): string {
@@ -292,8 +287,10 @@ function SectionCard({
 }
 
 export default function AdminDashboard() {
-  const { companyProfile } = useAuth();
+  const { companyProfile, canAccess } = useAuth();
   const companyId = companyProfile?.id ?? null;
+  const canReadIncomeReport = canAccess(PERMISSIONS.paymentsStatementRead);
+  const canDownloadIncomeReport = canAccess(PERMISSIONS.paymentsStatementDownload);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -304,8 +301,6 @@ export default function AdminDashboard() {
   const [installedDevices, setInstalledDevices] = useState<DashboardInstalledDevice[]>([]);
   const [rangeFrom, setRangeFrom] = useState(firstDayOfCurrentMonth());
   const [rangeTo, setRangeTo] = useState(todayDateInput());
-  const [incomeMethodFilter, setIncomeMethodFilter] = useState<IncomeMethodFilter>("all");
-  const [incomeSearch, setIncomeSearch] = useState("");
 
   const loadDashboard = useCallback(async () => {
     if (!companyId) {
@@ -397,36 +392,17 @@ export default function AdminDashboard() {
   }, [approvedTransactions]);
 
   const selectedRangeTransactions = useMemo(() => {
-    const query = incomeSearch.trim().toLowerCase();
     return approvedTransactions.filter((transaction) => {
       const paymentDate = transaction.approvedAt ?? transaction.submittedAt;
       if (!isWithinRange(paymentDate, rangeFrom, rangeTo)) return false;
-      if (incomeMethodFilter !== "all" && transaction.method !== incomeMethodFilter) return false;
-
-      if (!query) return true;
-
-      return [
-        transaction.customerName ?? "",
-        transaction.invoiceNumber ?? "",
-        transaction.siteName ?? "",
-        transaction.reference ?? "",
-        formatMethod(transaction.method),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
+      return true;
     });
-  }, [approvedTransactions, incomeMethodFilter, incomeSearch, rangeFrom, rangeTo]);
+  }, [approvedTransactions, rangeFrom, rangeTo]);
 
   const selectedRangeIncome = useMemo(
     () => selectedRangeTransactions.reduce((sum, transaction) => sum + (transaction.amount ?? 0), 0),
     [selectedRangeTransactions]
   );
-
-  const selectedRangeIncomeAverage = useMemo(() => {
-    if (selectedRangeTransactions.length === 0) return 0;
-    return selectedRangeIncome / selectedRangeTransactions.length;
-  }, [selectedRangeIncome, selectedRangeTransactions.length]);
 
   const selectedRangeIncomeByMethod = useMemo(() => {
     const totals: Record<PaymentMethod, number> = {
@@ -544,17 +520,12 @@ export default function AdminDashboard() {
 
   const incomeMethodChart = useMemo(
     () => ({
-      labels: ["Efectivo", "Transferencia", "Tarjeta", "Otros"],
+      labels: ["Efectivo", "Transferencia"],
       datasets: [
         {
-          data: [
-            selectedRangeIncomeByMethod.cash,
-            selectedRangeIncomeByMethod.bank_transfer,
-            selectedRangeIncomeByMethod.card,
-            selectedRangeIncomeByMethod.other,
-          ],
-          backgroundColor: ["#10b981", "#2563eb", "#8b5cf6", "#64748b"],
-          borderColor: ["#d1fae5", "#dbeafe", "#ede9fe", "#e2e8f0"],
+          data: [selectedRangeIncomeByMethod.cash, selectedRangeIncomeByMethod.bank_transfer],
+          backgroundColor: ["#10b981", "#2563eb"],
+          borderColor: ["#d1fae5", "#dbeafe"],
           borderWidth: 1,
         },
       ],
@@ -579,7 +550,18 @@ export default function AdminDashboard() {
   const isIncomeRangeValid = rangeFrom <= rangeTo;
 
   const downloadIncomeReport = () => {
-    if (!isIncomeRangeValid) return;
+    if (!isIncomeRangeValid || !canDownloadIncomeReport) return;
+    void logAuditEvent({
+      action: "download",
+      entity: "payment_statements",
+      companyId,
+      newValues: {
+        rangeFrom,
+        rangeTo,
+        transactionCount: selectedRangeTransactions.length,
+        totalAmount: selectedRangeIncome,
+      },
+    });
     downloadPDF(
       incomeReportRows,
       `reporte_ingresos_${rangeFrom}_${rangeTo}.pdf`,
@@ -587,13 +569,10 @@ export default function AdminDashboard() {
       companyProfile?.name ?? "SmartOps",
       "Reporte de ingresos",
       {
-        subtitle: `Rango ${formatDateOnly(rangeFrom)} - ${formatDateOnly(rangeTo)} · Metodo: ${formatIncomeMethodFilter(
-          incomeMethodFilter
-        )} · Búsqueda: ${incomeSearch.trim() || "Sin filtro"}`,
+        subtitle: `Rango ${formatDateOnly(rangeFrom)} - ${formatDateOnly(rangeTo)}`,
         summary: [
           { label: "Total en rango", value: formatPaymentAmount(selectedRangeIncome) },
           { label: "Transacciones", value: String(selectedRangeTransactions.length) },
-          { label: "Promedio", value: formatPaymentAmount(selectedRangeIncomeAverage) },
         ],
         companyLogoUrl: companyProfile?.logoUrl ?? null,
       }
@@ -868,171 +847,157 @@ export default function AdminDashboard() {
         </SectionCard>
       </section>
 
-      <SectionCard
-        title="Reporte de ingresos"
-        subtitle="Solo transacciones aprobadas con detalle de fecha, metodo, monto y cliente."
-        action={
-          <Button
-            type="button"
-            onClick={downloadIncomeReport}
-            disabled={incomeReportRows.length === 0 || !isIncomeRangeValid}
-            className="border-blue-300 bg-blue-600 text-white hover:bg-blue-500"
-          >
-            <Download className="h-4 w-4" />
-            Descargar PDF
-          </Button>
-        }
-        >
-        <div className="grid gap-4 lg:grid-cols-4">
-          <Field label="Desde">
-            <Input
-              type="date"
-              value={rangeFrom}
-              onChange={(event) => setRangeFrom(event.target.value)}
-              className="border-slate-200 text-slate-700"
-            />
-          </Field>
-          <Field label="Hasta">
-            <Input
-              type="date"
-              value={rangeTo}
-              onChange={(event) => setRangeTo(event.target.value)}
-              className="border-slate-200 text-slate-700"
-            />
-          </Field>
-          <Field label="Metodo">
-            <select
-              value={incomeMethodFilter}
-              onChange={(event) => setIncomeMethodFilter(event.target.value as IncomeMethodFilter)}
-              className="h-[52px] w-full rounded-lg border-2 border-gray-400 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
+      {canReadIncomeReport ? (
+        <SectionCard
+          title="Reporte de ingresos"
+          subtitle="Solo transacciones aprobadas con detalle de fecha, metodo, monto y cliente."
+          action={
+            <Button
+              type="button"
+              onClick={downloadIncomeReport}
+              disabled={incomeReportRows.length === 0 || !isIncomeRangeValid || !canDownloadIncomeReport}
+              className="border-blue-300 bg-blue-600 text-white hover:bg-blue-500"
             >
-              <option value="all">Todos</option>
-              <option value="cash">Efectivo</option>
-              <option value="bank_transfer">Transferencia</option>
-              <option value="card">Tarjeta</option>
-              <option value="other">Otros</option>
-            </select>
-          </Field>
-          <Field label="Buscar">
-            <Input
-              value={incomeSearch}
-              onChange={(event) => setIncomeSearch(event.target.value)}
-              placeholder="Cliente, factura, sitio o referencia"
-              className="border-slate-200 text-slate-700"
-            />
-          </Field>
-        </div>
-
-        {!isIncomeRangeValid ? (
-          <p className="mt-3 text-sm font-medium text-amber-700">
-            La fecha de inicio no puede ser mayor que la fecha final.
-          </p>
-        ) : null}
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total en rango</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Transacciones</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{selectedRangeTransactions.length}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Promedio</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncomeAverage)}</p>
-            </article>
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Clientes únicos</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">
-                {new Set(selectedRangeTransactions.map((transaction) => transaction.customerId)).size}
-              </p>
-            </article>
-          </div>
-
-          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ingresos por método</p>
-                <p className="mt-1 text-sm text-slate-500">Distribución del rango seleccionado.</p>
-              </div>
-            </div>
-            <div className="mt-4 h-56">
-              <Doughnut
-                data={incomeMethodChart}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: "bottom",
-                      labels: { usePointStyle: true, boxWidth: 10, color: "#334155" },
-                    },
-                  },
-                  cutout: "68%",
-                }}
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </Button>
+          }
+        >
+          <div className="grid gap-4 lg:grid-cols-4">
+            <Field label="Desde">
+              <Input
+                type="date"
+                value={rangeFrom}
+                onChange={(event) => setRangeFrom(event.target.value)}
+                className="border-slate-200 text-slate-700"
               />
-            </div>
-          </article>
-        </div>
-
-        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-auto text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3">Cliente</th>
-                  <th className="px-4 py-3">Sitio</th>
-                  <th className="px-4 py-3">Metodo</th>
-                  <th className="px-4 py-3">Monto</th>
-                  <th className="px-4 py-3">Factura</th>
-                  <th className="px-4 py-3">Referencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {selectedRangeTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8">
-                      <EmptyState text="No hay ingresos para el rango seleccionado." />
-                    </td>
-                  </tr>
-                ) : (
-                  selectedRangeTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="align-top">
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-700">{formatDateTime(transaction.approvedAt ?? transaction.submittedAt)}</td>
-                      <td className="px-4 py-3 text-slate-700">{transaction.customerName ?? "-"}</td>
-                      <td className="px-4 py-3 text-slate-600">{transaction.siteName ?? "-"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${methodPillClass(transaction.method)}`}>
-                          {formatMethod(transaction.method)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{formatPaymentAmount(transaction.amount)}</td>
-                      <td className="px-4 py-3 text-slate-600">{transaction.invoiceNumber ?? "-"}</td>
-                      <td className="px-4 py-3 text-slate-600">{transaction.reference ?? "-"}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {selectedRangeTransactions.length > 0 ? (
-                <tfoot className="border-t border-slate-100 bg-slate-50">
-                  <tr>
-                    <td className="px-4 py-3 font-semibold text-slate-700" colSpan={4}>
-                      Total
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</td>
-                    <td className="px-4 py-3 text-slate-500" colSpan={2}>
-                      {selectedRangeTransactions.length} transacciones
-                    </td>
-                  </tr>
-                </tfoot>
-              ) : null}
-            </table>
+            </Field>
+            <Field label="Hasta">
+              <Input
+                type="date"
+                value={rangeTo}
+                onChange={(event) => setRangeTo(event.target.value)}
+                className="border-slate-200 text-slate-700"
+              />
+            </Field>
+            <div className="hidden lg:block" />
+            <div className="hidden lg:block" />
           </div>
-        </div>
-      </SectionCard>
+
+          {!isIncomeRangeValid ? (
+            <p className="mt-3 text-sm font-medium text-amber-700">
+              La fecha de inicio no puede ser mayor que la fecha final.
+            </p>
+          ) : null}
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total en rango</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</p>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Transacciones</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{selectedRangeTransactions.length}</p>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Clientes únicos</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {new Set(selectedRangeTransactions.map((transaction) => transaction.customerId)).size}
+                </p>
+              </article>
+            </div>
+
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ingresos por método</p>
+                  <p className="mt-1 text-sm text-slate-500">Distribución del rango seleccionado.</p>
+                </div>
+              </div>
+              <div className="mt-4 h-56">
+                <Doughnut
+                  data={incomeMethodChart}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: { usePointStyle: true, boxWidth: 10, color: "#334155" },
+                      },
+                    },
+                    cutout: "68%",
+                  }}
+                />
+              </div>
+            </article>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full table-auto text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Sitio</th>
+                    <th className="px-4 py-3">Metodo</th>
+                    <th className="px-4 py-3">Monto</th>
+                    <th className="px-4 py-3">Factura</th>
+                    <th className="px-4 py-3">Referencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {selectedRangeTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8">
+                        <EmptyState text="No hay ingresos para el rango seleccionado." />
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedRangeTransactions.map((transaction) => (
+                      <tr key={transaction.id} className="align-top">
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-700">{formatDateTime(transaction.approvedAt ?? transaction.submittedAt)}</td>
+                        <td className="px-4 py-3 text-slate-700">{transaction.customerName ?? "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">{transaction.siteName ?? "-"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${methodPillClass(transaction.method)}`}>
+                            {formatMethod(transaction.method)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-900">{formatPaymentAmount(transaction.amount)}</td>
+                        <td className="px-4 py-3 text-slate-600">{transaction.invoiceNumber ?? "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          <span
+                            className="block max-w-[220px] truncate"
+                            title={transaction.reference ?? "-"}
+                          >
+                            {transaction.reference ?? "-"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {selectedRangeTransactions.length > 0 ? (
+                  <tfoot className="border-t border-slate-100 bg-slate-50">
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-slate-700" colSpan={4}>
+                        Total
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</td>
+                      <td className="px-4 py-3 text-slate-500" colSpan={2}>
+                        {selectedRangeTransactions.length} transacciones
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
+              </table>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
     </section>
   );
 }

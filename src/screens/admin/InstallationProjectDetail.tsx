@@ -80,6 +80,17 @@ function toDateTimeLocalMinValue(value = new Date()): string {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function isSameLocalDate(value: string | null, today = new Date()): boolean {
+  if (!value) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return (
+    parsed.getFullYear() === today.getFullYear() &&
+    parsed.getMonth() === today.getMonth() &&
+    parsed.getDate() === today.getDate()
+  );
+}
+
 function statusBadge(status: string | null): string {
   if (status === "terminado") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "cancelado") return "border-rose-200 bg-rose-50 text-rose-700";
@@ -485,12 +496,17 @@ export default function InstallationProjectDetail() {
     Boolean(project?.scheduledStart) &&
     Boolean(project?.technicianId) &&
     project?.technicalVisitStatus !== "cancelada";
+  const visitScheduledForToday = visitScheduledReady && isSameLocalDate(project?.scheduledStart ?? null);
 
   const finalizeBlockers = useMemo(() => {
     const blockers: string[] = [];
 
     if (!deliveryActReady) {
       blockers.push(deliveryAct.act ? "Acta pendiente de firma/aceptación" : "Falta generar el acta");
+    }
+
+    if (!visitScheduledForToday) {
+      blockers.push(visitScheduledReady ? "La visita tecnica debe ser hoy" : "Falta visita tecnica programada para hoy");
     }
 
     if (!hasDevicesInPlan) {
@@ -506,7 +522,7 @@ export default function InstallationProjectDetail() {
     }
 
     return blockers;
-  }, [deliveryAct.act, deliveryActReady, hasDevicesInPlan, inventoryError, inventoryLoading, inventorySufficient]);
+  }, [deliveryAct.act, deliveryActReady, hasDevicesInPlan, inventoryError, inventoryLoading, inventorySufficient, visitScheduledForToday, visitScheduledReady]);
   const canFinalizeFromModal =
     Boolean(project?.siteId) &&
     Boolean(closingProject) &&
@@ -514,7 +530,8 @@ export default function InstallationProjectDetail() {
     Boolean(hasDevicesInPlan) &&
     Boolean(inventorySufficient) &&
     !inventoryLoading &&
-    !inventoryError;
+    !inventoryError &&
+    visitScheduledForToday;
 
   const handleAddPhase = () => {
     const title = newPhaseTitle.trim();
@@ -1362,6 +1379,10 @@ export default function InstallationProjectDetail() {
                 </span>
               </p>
               <p><span className="font-medium text-slate-700">Inicio:</span> {formatDateTime(project.scheduledStart)}</p>
+              <p>
+                <span className="font-medium text-slate-700">Puede finalizar hoy:</span>{" "}
+                {visitScheduledForToday ? "Si" : "No"}
+              </p>
               <p><span className="font-medium text-slate-700">Tecnico:</span> {project.technicianName ?? "Sin asignar"}</p>
             </div>
 
@@ -1557,7 +1578,7 @@ export default function InstallationProjectDetail() {
                 <Button
                   type="button"
                   onClick={() => void handlePrepareClose()}
-                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId || !visitScheduledForToday}
                   className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {installedDevices.syncing ? "Sincronizando..." : "Terminar proyecto"}
