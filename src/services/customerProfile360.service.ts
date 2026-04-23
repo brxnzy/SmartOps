@@ -204,6 +204,35 @@ function mapProjects(data: Awaited<ReturnType<typeof listInstallationProjectsByC
   }));
 }
 
+function mapInstalledDevices(rows: Array<Record<string, unknown>>): CustomerInstalledDeviceSummary[] {
+  return rows.map((row, index) => {
+    const deviceRow = Array.isArray(row.devices) ? row.devices[0] : row.devices;
+    const siteRow = Array.isArray(row.customer_sites) ? row.customer_sites[0] : row.customer_sites;
+    const zoneRow = Array.isArray(row.customer_site_zones) ? row.customer_site_zones[0] : row.customer_site_zones;
+    const deviceRecord = (deviceRow as Record<string, unknown> | null) ?? null;
+    const brandsValue = deviceRecord?.brands;
+    const brandRow = Array.isArray(brandsValue) ? brandsValue[0] : brandsValue;
+
+    return {
+      installedDeviceId: safeText(row.id, `installed-device-${index}`),
+      projectId: safeText(row.project_id, ""),
+      siteId: safeNullableText(row.site_id),
+      zoneId: safeNullableText(row.zone_id),
+      status: normalizeStatus(row.status, "active"),
+      deviceName: safeNullableText(deviceRecord?.name),
+      deviceModel: safeNullableText(deviceRecord?.model),
+      deviceBrand: safeNullableText((brandRow as Record<string, unknown> | null)?.name),
+      siteName: safeNullableText((siteRow as Record<string, unknown> | null)?.name),
+      zoneName: safeNullableText((zoneRow as Record<string, unknown> | null)?.name),
+      serial: safeNullableText(row.serial),
+      mac: safeNullableText(row.mac),
+      firmware: safeNullableText(row.firmware),
+      locationDetail: safeNullableText(row.location_detail),
+      installedAt: safeDate(row.installed_at),
+    };
+  });
+}
+
 async function getCustomerRoleId(): Promise<string> {
   if (cachedCustomerRoleId) return cachedCustomerRoleId;
 
@@ -322,45 +351,39 @@ export async function getCustomerProfile360(
   let devices: CustomerInstalledDeviceSummary[] = [];
 
   if (projectIds.length > 0) {
-    const { data: consumptionRows, error: consumptionError } = await supabase
-      .from("installation_project_inventory_consumption")
-      .select("project_id, device_id, quantity, consumed_at, devices:device_id ( name, model )")
+    const { data: installedDeviceRows, error: installedDevicesError } = await supabase
+      .from("installed_devices")
+      .select(
+        `
+        id,
+        project_id,
+        site_id,
+        zone_id,
+        status,
+        serial,
+        mac,
+        firmware,
+        location_detail,
+        installed_at,
+        devices:catalog_device_id (
+          name,
+          model,
+          brands:brand_id ( name )
+        ),
+        customer_sites:site_id ( name ),
+        customer_site_zones:zone_id ( name )
+        `
+      )
       .eq("company_id", companyId)
       .in("project_id", projectIds)
-      .order("consumed_at", { ascending: false });
+      .is("deleted_at", null)
+      .order("installed_at", { ascending: false });
 
-    if (consumptionError) {
-      throw new Error(consumptionError.message || "No se pudo cargar consumo de dispositivos del cliente.");
+    if (installedDevicesError) {
+      throw new Error(installedDevicesError.message || "No se pudieron cargar los dispositivos instalados del cliente.");
     }
 
-    const aggregate = new Map<
-      string,
-      { deviceId: string; deviceName: string | null; deviceModel: string | null; totalQuantity: number; lastInstalledAt: string | null }
-    >();
-
-    (consumptionRows ?? []).forEach((row) => {
-      const deviceId = safeText(row.device_id);
-      if (!deviceId) return;
-      const deviceRow = Array.isArray(row.devices) ? row.devices[0] : row.devices;
-      const quantity = Number(row.quantity ?? 0);
-      const consumedAt = safeDate(row.consumed_at);
-      const current = aggregate.get(deviceId) ?? {
-        deviceId,
-        deviceName: safeNullableText(deviceRow?.name),
-        deviceModel: safeNullableText(deviceRow?.model),
-        totalQuantity: 0,
-        lastInstalledAt: null,
-      };
-
-      current.totalQuantity += Number.isFinite(quantity) ? quantity : 0;
-      if (!current.lastInstalledAt && consumedAt) {
-        current.lastInstalledAt = consumedAt;
-      }
-
-      aggregate.set(deviceId, current);
-    });
-
-    devices = Array.from(aggregate.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
+    devices = mapInstalledDevices((installedDeviceRows ?? []) as Array<Record<string, unknown>>);
   }
 
   const profile = {
@@ -381,7 +404,7 @@ export async function getCustomerProfile360(
     surveys: surveys.length,
     budgets: budgets.length,
     projects: projects.length,
-    devices: devices.reduce((acc, item) => acc + item.totalQuantity, 0),
+    devices: devices.length,
   };
 
   const timeline = toTimelineEvents({

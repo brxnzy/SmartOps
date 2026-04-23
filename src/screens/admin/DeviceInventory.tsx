@@ -1,10 +1,12 @@
 import { useState } from "react";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
+import { useAuth } from "../../hooks/useAuth";
 import useDeviceInventory from "../../hooks/useDeviceInventory";
 import { downloadPDF } from "../../utils/reportPdf";
 
 export default function DeviceInventory() {
+  const { companyProfile } = useAuth();
   const {
     loading,
     searchTerm,
@@ -17,7 +19,17 @@ export default function DeviceInventory() {
   const [exactQuantityByDevice, setExactQuantityByDevice] = useState<Record<string, string>>({});
 
   const handleDownload = () => {
-    downloadPDF(filteredInventoryRows, 'device_inventory_report.pdf', ['deviceName', 'deviceModel', 'quantity', 'status']);
+    downloadPDF(
+      filteredInventoryRows,
+      "device_inventory_report.pdf",
+      ["deviceName", "deviceModel", "quantity", "status"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de inventario",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Existencias disponibles y estado actual del inventario de dispositivos.",
+      }
+    );
   };
 
   const statusClassByValue: Record<string, string> = {

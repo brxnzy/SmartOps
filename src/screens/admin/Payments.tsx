@@ -335,7 +335,7 @@ export default function Payments() {
         title: decision === "approve" ? "Solicitud aprobada" : "Solicitud rechazada",
         description:
           decision === "approve"
-            ? "La transferencia se aplico correctamente y se genero la factura del pago."
+            ? "La transferencia se aplico correctamente y se generó el recibo del pago."
             : "La solicitud de transferencia fue rechazada.",
       });
     } catch (err) {
@@ -352,7 +352,7 @@ export default function Payments() {
     {
       id: "accounts" as const,
       label: "Cuentas",
-      description: "Facturas, saldos y pagos manuales.",
+      description: "Documentos base, saldos y pagos manuales.",
       count: filteredAccounts.length,
     },
     {
@@ -364,8 +364,8 @@ export default function Payments() {
     {
       id: "history" as const,
       label: "Historial",
-      description: "Todas las transacciones registradas.",
-      count: transactions.length,
+      description: "Pagos aprobados y documentos emitidos.",
+      count: filteredHistory.length,
     },
   ];
 
@@ -377,7 +377,7 @@ export default function Payments() {
             <p className="text-xs uppercase tracking-[0.28em] text-emerald-200/80">Pagos</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Cobros, solicitudes y transacciones</h1>
             <p className="mt-2 text-sm text-slate-200">
-              Administra cuentas pendientes, valida comprobantes de transferencia y descarga la factura de cada pago aplicado.
+              Administra cuentas pendientes, valida comprobantes de transferencia y descarga los documentos emitidos de cada pago aplicado.
             </p>
           </div>
           <Button
@@ -455,8 +455,8 @@ export default function Payments() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">Facturas activas</h2>
-                  <p className="text-sm text-slate-500">Busca por cliente, factura, sitio o cédula.</p>
+                  <h2 className="text-base font-semibold text-slate-900">Cuentas activas</h2>
+                  <p className="text-sm text-slate-500">Busca por cliente, documento, sitio o cédula.</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                   {filteredAccounts.length} registros
@@ -530,7 +530,7 @@ export default function Payments() {
               <div className="space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-slate-500">Factura</p>
+                    <p className="text-sm text-slate-500">Documento base</p>
                     <h2 className="text-2xl font-semibold text-slate-900">{selectedAccount.invoiceNumber}</h2>
                     <p className="mt-1 text-sm text-slate-500">
                       {selectedAccount.customerName ?? "Cliente"} · {selectedAccount.siteName ?? "Sitio"}
@@ -563,7 +563,7 @@ export default function Payments() {
                     className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                   >
                     <FileText size={16} />
-                    Descargar factura
+                    Descargar documento base
                   </Button>
                   <Button
                     type="button"
@@ -588,7 +588,7 @@ export default function Payments() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-base font-semibold text-slate-900">Movimientos de la cuenta</h3>
-                      <p className="text-sm text-slate-500">Aqui ves el saldo actual, los pagos aplicados y las solicitudes pendientes de esta factura.</p>
+                      <p className="text-sm text-slate-500">Aqui ves el saldo actual, los pagos aplicados y las solicitudes pendientes de esta cuenta.</p>
                     </div>
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">
                       {selectedAccount.transactions.length} transacciones
@@ -596,7 +596,7 @@ export default function Payments() {
                   </div>
 
                   {selectedAccount.transactions.length === 0 ? (
-                    <p className="mt-4 text-sm text-slate-500">Aun no hay movimientos para esta factura.</p>
+                    <p className="mt-4 text-sm text-slate-500">Aun no hay movimientos para esta cuenta.</p>
                   ) : (
                     <div className="mt-4 space-y-3">
                       {selectedAccount.transactions.map((transaction) => (
@@ -637,7 +637,7 @@ export default function Payments() {
                                 className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                               >
                                 <Receipt size={16} />
-                                Descargar factura del pago
+                                Descargar recibo del pago
                               </Button>
                             ) : null}
                             {transaction.status === "submitted" ? (
@@ -736,7 +736,7 @@ export default function Payments() {
                   <thead className="bg-slate-50 text-xs uppercase text-slate-400">
                     <tr>
                       <th className="px-3 py-2">Cliente</th>
-                      <th className="px-3 py-2">Factura</th>
+                      <th className="px-3 py-2">Documento</th>
                       <th className="px-3 py-2">Sitio</th>
                       <th className="px-3 py-2">Fecha</th>
                       <th className="px-3 py-2">Referencia</th>
@@ -791,7 +791,7 @@ export default function Payments() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Historial de transacciones</h2>
-              <p className="text-sm text-slate-500">Descarga la factura del pago generado para cada transaccion aprobada.</p>
+              <p className="text-sm text-slate-500">Descarga el recibo generado para cada transaccion aprobada.</p>
             </div>
             <div className="w-full lg:max-w-md">
               <Input
@@ -845,7 +845,7 @@ export default function Payments() {
                           onClick={() => void openDocument(transaction.receiptPdfPath)}
                           className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                         >
-                          Descargar factura del pago
+                          Descargar recibo del pago
                         </Button>
                       ) : null}
                     </div>
@@ -859,7 +859,7 @@ export default function Payments() {
                     <tr>
                       <th className="px-3 py-2">Fecha</th>
                       <th className="px-3 py-2">Cliente</th>
-                      <th className="px-3 py-2">Factura</th>
+                      <th className="px-3 py-2">Documento</th>
                       <th className="px-3 py-2">Metodo</th>
                       <th className="px-3 py-2">Monto</th>
                       <th className="px-3 py-2">Estado</th>
@@ -896,7 +896,7 @@ export default function Payments() {
                                 onClick={() => void openDocument(transaction.receiptPdfPath)}
                                 className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                               >
-                                Descargar factura del pago
+                                Descargar recibo del pago
                               </Button>
                             ) : null}
                           </div>

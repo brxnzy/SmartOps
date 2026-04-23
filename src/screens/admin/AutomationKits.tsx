@@ -4,6 +4,7 @@ import ConfirmModal from "../../components/ConfirmModal";
 import Field from "../../components/Field";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
+import { useAuth } from "../../hooks/useAuth";
 import useAutomationKits from "../../hooks/useAutomationKits";
 import { downloadPDF } from "../../utils/reportPdf";
 
@@ -36,6 +37,7 @@ function QtyInput({ value, onChange }: { value: number; onChange: (value: number
 }
 
 export default function AutomationKits() {
+  const { companyProfile } = useAuth();
   const {
     loading,
     submitting,
@@ -71,7 +73,17 @@ export default function AutomationKits() {
   } = useAutomationKits();
 
   const handleDownload = () => {
-    downloadPDF(filteredKits, 'automation_kits_report.pdf', ['name', 'description', 'price', 'discountPercent']);
+    downloadPDF(
+      filteredKits,
+      "automation_kits_report.pdf",
+      ["name", "description", "price", "discountPercent"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de kits",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Inventario comercial de kits y descuentos configurados.",
+      }
+    );
   };
 
   const [showProducts, setShowProducts] = useState(false);

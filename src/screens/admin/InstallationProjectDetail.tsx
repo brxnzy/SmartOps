@@ -71,6 +71,26 @@ function toIsoFromLocal(value: string): string {
   return new Date(parsed).toISOString();
 }
 
+function toDateTimeLocalMinValue(value = new Date()): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function isSameLocalDate(value: string | null, today = new Date()): boolean {
+  if (!value) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return (
+    parsed.getFullYear() === today.getFullYear() &&
+    parsed.getMonth() === today.getMonth() &&
+    parsed.getDate() === today.getDate()
+  );
+}
+
 function statusBadge(status: string | null): string {
   if (status === "terminado") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "cancelado") return "border-rose-200 bg-rose-50 text-rose-700";
@@ -174,6 +194,7 @@ export default function InstallationProjectDetail() {
   const [visitStart, setVisitStart] = useState("");
   const [schedulingVisit, setSchedulingVisit] = useState(false);
   const [cancelingVisit, setCancelingVisit] = useState(false);
+  const currentDateTimeMin = useMemo(() => toDateTimeLocalMinValue(), []);
   const [rescheduleVisitModalOpen, setRescheduleVisitModalOpen] = useState(false);
 
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
@@ -374,6 +395,16 @@ export default function InstallationProjectDetail() {
     setFinishingProject(true);
 
     try {
+      const synced = await installedDevices.syncFromLayout({
+        layout: project.layout,
+        siteId: project.siteId,
+        zoneId: null,
+      });
+
+      if (!synced) {
+        throw new Error("No se pudieron sincronizar los dispositivos instalados antes de completar el proyecto.");
+      }
+
       const result = await finalizeInstallationProject({
         companyId,
         projectId,
@@ -409,7 +440,7 @@ export default function InstallationProjectDetail() {
     } finally {
       setFinishingProject(false);
     }
-  }, [companyId, finishingProject, loadProject, project, projectId, userId]);
+  }, [companyId, finishingProject, installedDevices, loadProject, project, projectId, userId]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -465,12 +496,17 @@ export default function InstallationProjectDetail() {
     Boolean(project?.scheduledStart) &&
     Boolean(project?.technicianId) &&
     project?.technicalVisitStatus !== "cancelada";
+  const visitScheduledForToday = visitScheduledReady && isSameLocalDate(project?.scheduledStart ?? null);
 
   const finalizeBlockers = useMemo(() => {
     const blockers: string[] = [];
 
     if (!deliveryActReady) {
       blockers.push(deliveryAct.act ? "Acta pendiente de firma/aceptación" : "Falta generar el acta");
+    }
+
+    if (!visitScheduledForToday) {
+      blockers.push(visitScheduledReady ? "La visita tecnica debe ser hoy" : "Falta visita tecnica programada para hoy");
     }
 
     if (!hasDevicesInPlan) {
@@ -486,7 +522,7 @@ export default function InstallationProjectDetail() {
     }
 
     return blockers;
-  }, [deliveryAct.act, deliveryActReady, hasDevicesInPlan, inventoryError, inventoryLoading, inventorySufficient]);
+  }, [deliveryAct.act, deliveryActReady, hasDevicesInPlan, inventoryError, inventoryLoading, inventorySufficient, visitScheduledForToday, visitScheduledReady]);
   const canFinalizeFromModal =
     Boolean(project?.siteId) &&
     Boolean(closingProject) &&
@@ -494,7 +530,8 @@ export default function InstallationProjectDetail() {
     Boolean(hasDevicesInPlan) &&
     Boolean(inventorySufficient) &&
     !inventoryLoading &&
-    !inventoryError;
+    !inventoryError &&
+    visitScheduledForToday;
 
   const handleAddPhase = () => {
     const title = newPhaseTitle.trim();
@@ -609,6 +646,13 @@ export default function InstallationProjectDetail() {
 
     let scheduledStartIso: string;
     try {
+      if (Date.parse(visitStart) < Date.now()) {
+        notifications.warning({
+          title: "Fecha invalida",
+          description: "No puedes programar una visita en una fecha pasada.",
+        });
+        return false;
+      }
       scheduledStartIso = toIsoFromLocal(visitStart);
     } catch {
       notifications.warning({
@@ -1220,6 +1264,7 @@ export default function InstallationProjectDetail() {
               value={visitStart}
               onChange={(event) => setVisitStart(event.target.value)}
               disabled={!canScheduleVisit || isClosed || schedulingVisit}
+              min={currentDateTimeMin}
               className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
             />
           </Field>
@@ -1334,6 +1379,10 @@ export default function InstallationProjectDetail() {
                 </span>
               </p>
               <p><span className="font-medium text-slate-700">Inicio:</span> {formatDateTime(project.scheduledStart)}</p>
+              <p>
+                <span className="font-medium text-slate-700">Puede finalizar hoy:</span>{" "}
+                {visitScheduledForToday ? "Si" : "No"}
+              </p>
               <p><span className="font-medium text-slate-700">Tecnico:</span> {project.technicianName ?? "Sin asignar"}</p>
             </div>
 
@@ -1374,6 +1423,7 @@ export default function InstallationProjectDetail() {
                       value={visitStart}
                       onChange={(event) => setVisitStart(event.target.value)}
                       disabled={!canScheduleVisit || isClosed}
+                      min={currentDateTimeMin}
                       className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
                     />
                   </Field>
@@ -1528,7 +1578,7 @@ export default function InstallationProjectDetail() {
                 <Button
                   type="button"
                   onClick={() => void handlePrepareClose()}
-                  disabled={installedDevices.syncing || finishingProject || !project.siteId}
+                  disabled={installedDevices.syncing || finishingProject || !project.siteId || !visitScheduledForToday}
                   className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {installedDevices.syncing ? "Sincronizando..." : "Terminar proyecto"}

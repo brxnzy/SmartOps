@@ -1,557 +1,1003 @@
-
-import { useEffect, useState } from "react";
-import { downloadPDF } from "../../utils/reportPdf";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  ArcElement,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Filler,
+} from "chart.js";
+import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { CircleDollarSign, Download, HardHat, Loader2, RefreshCcw, ShieldAlert, Ticket, Wrench } from "lucide-react";
+import Button from "../../components/Button";
+import EmptyState from "../../components/EmptyState";
+import Field from "../../components/Field";
+import Input from "../../components/Input";
+import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../libs/supabase";
-import useAuth from "../../hooks/useAuth";
-import useCompanyEntitlements from "../../hooks/useCompanyEntitlements";
+import { PERMISSIONS } from "../../constants/permissions";
+import { listInstallationProjects, type InstallationProjectSummary } from "../../services/installation.service";
+import { logAuditEvent } from "../../services/audit.service";
+import { listPaymentAccounts, listCompanyPaymentTransactions } from "../../services/payments.service";
+import { listCompanyTickets } from "../../services/tickets.service";
+import type { PaymentAccountSummary, PaymentMethod, PaymentTransaction } from "../../types/payment.types";
+import type { TicketListItem } from "../../types/ticketing.types";
+import { formatPaymentAmount } from "../../utils/paymentFormatting";
+import { downloadPDF } from "../../utils/reportPdf";
 
-async function fetchTable(table: string, select: string = "*") {
-  const { data, error } = await supabase.from(table).select(select);
-  if (error) throw new Error(`${table}: ${error.message}`);
-  return data || [];
-}
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
-// ─── THEME ────────────────────────────────────────────────────────────────────
-const C = {
-  bg: "#0D0F12",
-  surface: "#14171C",
-  surfaceAlt: "#1A1E25",
-  border: "#252930",
-  borderHover: "#353B45",
-  accent: "#2563EB",
-  accentLight: "#3B82F6",
-  accentDim: "#1E3A6E",
-  text: "#E8EBF0",
-  textMuted: "#6B7280",
-  textDim: "#4B5563",
-  green: "#10B981",
-  greenDim: "#064E3B",
-  amber: "#F59E0B",
-  amberDim: "#451A03",
-  red: "#EF4444",
-  redDim: "#450A0A",
-  blue: "#3B82F6",
-  blueDim: "#1E3A6E",
-  gray: "#6B7280",
-  grayDim: "#1F2937",
-  purple: "#8B5CF6",
-  purpleDim: "#3F1F7C",
-  cyan: "#06B6D4",
-  cyanDim: "#0A3A40",
+type DashboardInstalledDevice = {
+  id: string;
+  installedAt: string | null;
+  deviceName: string | null;
+  deviceModel: string | null;
+  siteName: string | null;
+  zoneName: string | null;
+  status: string | null;
 };
 
-// ─── UTILITIES ────────────────────────────────────────────────────────────────
-function countBy(arr: any[], key: string): Record<string, number> {
-  return arr.reduce((acc: Record<string, number>, item: any) => {
-    const k = item[key] ?? "N/A";
-    acc[k] = (acc[k] || 0) + 1;
-    return acc;
-  }, {});
+function safeText(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return fallback;
 }
 
-function sumBy(arr: any[], key: string): number {
-  return arr.reduce((sum: number, item: any) => sum + (parseFloat(item[key]) || 0), 0);
+function safeNullableText(value: unknown): string | null {
+  const text = safeText(value, "").trim();
+  return text ? text : null;
 }
 
-function fmt(n: number | string, decimals: number = 0): string {
-  return Number(n || 0).toLocaleString("es-DO", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+function pickSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+function localDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function firstDayOfCurrentMonth(): string {
+  const now = new Date();
+  return localDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+function todayDateInput(): string {
+  return localDateInputValue(new Date());
+}
+
+function parseDateInputStart(value: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseDateInputEnd(value: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(`${value}T23:59:59.999`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isWithinRange(value: string | null, from: string, to: string): boolean {
+  if (!value) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  const start = parseDateInputStart(from);
+  const end = parseDateInputEnd(to);
+
+  if (start && parsed < start) return false;
+  if (end && parsed > end) return false;
+  return true;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-DO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+function formatDateOnly(value: string | null): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-DO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(parsed);
+}
+
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(date: Date): string {
+  return new Intl.DateTimeFormat("es-DO", { month: "short" }).format(date);
+}
+
+function buildMonthlySeries<T>(
+  items: T[],
+  selector: (item: T) => string | null,
+  valueSelector: (item: T) => number,
+  months = 6
+) {
+  const now = new Date();
+  const buckets = Array.from({ length: months }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (months - 1 - index), 1);
+    return {
+      key: monthKey(date),
+      label: monthLabel(date),
+      value: 0,
+    };
+  });
+
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  items.forEach((item) => {
+    const rawDate = selector(item);
+    if (!rawDate) return;
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) return;
+    const bucket = bucketMap.get(monthKey(parsed));
+    if (bucket) {
+      bucket.value += valueSelector(item);
+    }
+  });
+
+  return buckets;
+}
+
+function formatMethod(method: PaymentMethod): string {
+  if (method === "cash") return "Efectivo";
+  if (method === "bank_transfer") return "Transferencia";
+  if (method === "card") return "Tarjeta";
+  return "Otros";
+}
+
+function formatProjectStatus(status: string | null): string {
+  if (status === "en_progreso") return "En progreso";
+  if (status === "terminado") return "Terminado";
+  if (status === "cancelado") return "Cancelado";
+  return "Pendiente";
+}
+
+function statusPillClass(status: string | null): string {
+  if (status === "terminado" || status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "en_progreso" || status === "submitted") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (status === "cancelado" || status === "rejected") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function methodPillClass(method: PaymentMethod): string {
+  if (method === "cash") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (method === "bank_transfer") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (method === "card") return "border-violet-200 bg-violet-50 text-violet-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function topLineColor(index: number): string {
+  const palette = ["#2563eb", "#0f766e", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6"];
+  return palette[index % palette.length];
+}
+
+async function listInstalledDevices(companyId: string): Promise<DashboardInstalledDevice[]> {
+  const { data, error } = await supabase
+    .from("installed_devices")
+    .select(
+      `
+      id,
+      installed_at,
+      status,
+      customer_sites:site_id ( name ),
+      customer_site_zones:zone_id ( name ),
+      devices:catalog_device_id ( name, model )
+    `
+    )
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .order("installed_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar los dispositivos instalados.");
+  }
+
+  return (data ?? []).map((row) => {
+    const site = pickSingle((row as { customer_sites?: unknown }).customer_sites as unknown);
+    const zone = pickSingle((row as { customer_site_zones?: unknown }).customer_site_zones as unknown);
+    const device = pickSingle((row as { devices?: unknown }).devices as unknown);
+
+    return {
+      id: safeText((row as { id?: unknown }).id),
+      installedAt: safeText((row as { installed_at?: unknown }).installed_at, ""),
+      status: safeNullableText((row as { status?: unknown }).status),
+      siteName: typeof site === "object" && site ? safeNullableText((site as { name?: unknown }).name) : null,
+      zoneName: typeof zone === "object" && zone ? safeNullableText((zone as { name?: unknown }).name) : null,
+      deviceName: typeof device === "object" && device ? safeNullableText((device as { name?: unknown }).name) : null,
+      deviceModel: typeof device === "object" && device ? safeNullableText((device as { model?: unknown }).model) : null,
+    };
   });
 }
 
-// ─── ATOMS ────────────────────────────────────────────────────────────────────
-
-
-function Spinner() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, gap: 10, color: C.textMuted, fontSize: 13 }}>
-      <svg width="18" height="18" viewBox="0 0 18 18" style={{ animation: "spin 0.8s linear infinite" }}>
-        <circle cx="9" cy="9" r="7" fill="none" stroke={C.border} strokeWidth="2" />
-        <path d="M9 2a7 7 0 0 1 7 7" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" />
-      </svg>
-      Cargando...
-    </div>
-  );
-}
-
-function StatCard({ label, value, accent, sub }: { label: string; value: string | number; accent?: string; sub?: string }) {
-  return (
-    <div style={{
-      background: C.surface,
-      border: `1px solid ${C.border}`,
-      borderRadius: 8,
-      padding: "16px 20px",
-      borderLeft: accent ? `3px solid ${accent}` : `1px solid ${C.border}`,
-    }}>
-      <div style={{ fontSize: 11, color: C.textMuted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: C.text, lineHeight: 1, fontFamily: "'DM Mono', monospace" }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>{sub}</div>}
-    </div>
-  );
-}
-
-function SectionTitle({ icon, children, onDownload }: { icon?: string; children: React.ReactNode; onDownload?: () => void }) {
-  return (
-    <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: C.text, textTransform: "uppercase", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-      {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
-      <div style={{ flex: 1 }}>{children}</div>
-      {onDownload && (
-        <button
-          onClick={onDownload}
-          style={{
-            background: C.accent,
-            color: C.text,
-            border: 'none',
-            borderRadius: 4,
-            padding: '4px 8px',
-            fontSize: 11,
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          📥 Descargar Reporte
-        </button>
-      )}
-      <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.accent} 0%, transparent 100%)` }} />
-    </div>
-  );
-}
-
-// ─── BAR CHART (pure CSS, no external lib) ────────────────────────────────────
-function BarChart({
-  title,
-  data,
-  color = C.accent,
-  horizontal = false,
-  formatValue,
-  onDownload,
+function MetricCard({
+  label,
+  value,
+  sublabel,
+  icon,
+  accentClassName,
 }: {
-  title?: string;
-  data: Array<{ label: string; value: number; color?: string }>;
-  color?: string;
-  horizontal?: boolean;
-  formatValue?: (v: number) => string;
-  onDownload?: () => void;
+  label: string;
+  value: string;
+  sublabel?: string;
+  icon: ReactNode;
+  accentClassName: string;
 }) {
-  const max = Math.max(...data.map((d: any) => d.value), 1);
-
-  if (horizontal) {
-    return (
-      <div>
-        {title && <SectionTitle onDownload={onDownload}>{title}</SectionTitle>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {data.map((d: any, i: number) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 120, fontSize: 11, color: C.textMuted, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {d.label}
-              </div>
-              <div style={{ flex: 1, background: C.surfaceAlt, borderRadius: 4, height: 28, position: "relative", overflow: "hidden" }}>
-                <div style={{
-                  position: "absolute", left: 0, top: 0, bottom: 0,
-                  width: `${(d.value / max) * 100}%`,
-                  background: d.color || color,
-                  borderRadius: 4,
-                  transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
-                }} />
-                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: C.text, fontFamily: "'DM Mono', monospace", fontWeight: 600, zIndex: 1 }}>
-                  {formatValue ? formatValue(d.value) : d.value}
-                </span>
-              </div>
-            </div>
-          ))}
+  return (
+    <article className={`rounded-2xl border bg-white p-4 shadow-sm ${accentClassName}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+          {sublabel ? <p className="mt-1 text-xs text-slate-500">{sublabel}</p> : null}
         </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 text-slate-600">{icon}</div>
       </div>
+    </article>
+  );
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+        </div>
+        {action}
+      </header>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+export default function AdminDashboard() {
+  const { companyProfile, canAccess } = useAuth();
+  const companyId = companyProfile?.id ?? null;
+  const canReadIncomeReport = canAccess(PERMISSIONS.paymentsStatementRead);
+  const canDownloadIncomeReport = canAccess(PERMISSIONS.paymentsStatementDownload);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<InstallationProjectSummary[]>([]);
+  const [tickets, setTickets] = useState<TicketListItem[]>([]);
+  const [accounts, setAccounts] = useState<PaymentAccountSummary[]>([]);
+  const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
+  const [installedDevices, setInstalledDevices] = useState<DashboardInstalledDevice[]>([]);
+  const [rangeFrom, setRangeFrom] = useState(firstDayOfCurrentMonth());
+  const [rangeTo, setRangeTo] = useState(todayDateInput());
+
+  const loadDashboard = useCallback(async () => {
+    if (!companyId) {
+      setProjects([]);
+      setTickets([]);
+      setAccounts([]);
+      setTransactions([]);
+      setInstalledDevices([]);
+      setLoading(false);
+      setError("No se encontro la compania activa.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [projectRows, ticketRows, accountRows, transactionRows, deviceRows] = await Promise.all([
+        listInstallationProjects(companyId),
+        listCompanyTickets(companyId),
+        listPaymentAccounts(companyId),
+        listCompanyPaymentTransactions(companyId),
+        listInstalledDevices(companyId),
+      ]);
+
+      setProjects(projectRows);
+      setTickets(ticketRows);
+      setAccounts(accountRows);
+      setTransactions(transactionRows);
+      setInstalledDevices(deviceRows);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  const openTickets = useMemo(
+    () => tickets.filter((ticket) => !["resuelto", "cerrado"].includes(ticket.status)),
+    [tickets]
+  );
+
+  const openTicketsByPriority = useMemo(() => {
+    const counts = {
+      urgente: 0,
+      "24h": 0,
+      "48h": 0,
+    };
+
+    openTickets.forEach((ticket) => {
+      counts[ticket.slaType] += 1;
+    });
+
+    return counts;
+  }, [openTickets]);
+
+  const projectsInProgress = useMemo(
+    () => projects.filter((project) => project.status === "en_progreso"),
+    [projects]
+  );
+
+  const pendingAccounts = useMemo(
+    () => accounts.filter((account) => account.amountPending > 0),
+    [accounts]
+  );
+
+  const approvedTransactions = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) => transaction.status === "approved" && typeof transaction.amount === "number" && transaction.amount > 0
+      ),
+    [transactions]
+  );
+
+  const currentMonthIncome = useMemo(() => {
+    const now = new Date();
+    return approvedTransactions.reduce((sum, transaction) => {
+      const approvedAt = transaction.approvedAt ?? transaction.submittedAt;
+      if (!approvedAt) return sum;
+      const parsed = new Date(approvedAt);
+      if (Number.isNaN(parsed.getTime())) return sum;
+      if (parsed.getFullYear() !== now.getFullYear() || parsed.getMonth() !== now.getMonth()) return sum;
+      return sum + (transaction.amount ?? 0);
+    }, 0);
+  }, [approvedTransactions]);
+
+  const selectedRangeTransactions = useMemo(() => {
+    return approvedTransactions.filter((transaction) => {
+      const paymentDate = transaction.approvedAt ?? transaction.submittedAt;
+      if (!isWithinRange(paymentDate, rangeFrom, rangeTo)) return false;
+      return true;
+    });
+  }, [approvedTransactions, rangeFrom, rangeTo]);
+
+  const selectedRangeIncome = useMemo(
+    () => selectedRangeTransactions.reduce((sum, transaction) => sum + (transaction.amount ?? 0), 0),
+    [selectedRangeTransactions]
+  );
+
+  const selectedRangeIncomeByMethod = useMemo(() => {
+    const totals: Record<PaymentMethod, number> = {
+      cash: 0,
+      bank_transfer: 0,
+      card: 0,
+      other: 0,
+    };
+
+    selectedRangeTransactions.forEach((transaction) => {
+      totals[transaction.method] += transaction.amount ?? 0;
+    });
+
+    return totals;
+  }, [selectedRangeTransactions]);
+
+  const selectedRangeDevices = useMemo(
+    () => installedDevices.filter((device) => isWithinRange(device.installedAt, rangeFrom, rangeTo)),
+    [installedDevices, rangeFrom, rangeTo]
+  );
+
+  const devicesLastSixMonths = useMemo(
+    () => buildMonthlySeries(installedDevices, (item) => item.installedAt, () => 1, 6),
+    [installedDevices]
+  );
+
+  const incomeLastSixMonths = useMemo(
+    () => buildMonthlySeries(approvedTransactions, (item) => item.approvedAt ?? item.submittedAt, (item) => item.amount ?? 0, 6),
+    [approvedTransactions]
+  );
+
+  const projectsByStatus = useMemo(() => {
+    const counts = projects.reduce(
+      (acc, project) => {
+        if (project.status === "en_progreso") acc.en_progreso += 1;
+        else if (project.status === "terminado") acc.terminado += 1;
+        else if (project.status === "cancelado") acc.cancelado += 1;
+        else acc.pendiente += 1;
+        return acc;
+      },
+      { pendiente: 0, en_progreso: 0, terminado: 0, cancelado: 0 }
+    );
+
+    return [
+      { label: "Pendientes", value: counts.pendiente },
+      { label: "En progreso", value: counts.en_progreso },
+      { label: "Terminados", value: counts.terminado },
+      { label: "Cancelados", value: counts.cancelado },
+    ];
+  }, [projects]);
+
+  const ticketPriorityChart = useMemo(
+    () => ({
+      labels: ["Urgente", "24h", "48h"],
+      datasets: [
+        {
+          data: [openTicketsByPriority.urgente, openTicketsByPriority["24h"], openTicketsByPriority["48h"]],
+          backgroundColor: ["#dc2626", "#f59e0b", "#2563eb"],
+          borderColor: ["#fee2e2", "#fef3c7", "#dbeafe"],
+          borderWidth: 1,
+        },
+      ],
+    }),
+    [openTicketsByPriority]
+  );
+
+  const incomeLineChart = useMemo(
+    () => ({
+      labels: incomeLastSixMonths.map((bucket) => bucket.label),
+      datasets: [
+        {
+          label: "Ingresos",
+          data: incomeLastSixMonths.map((bucket) => bucket.value),
+          borderColor: "#2563eb",
+          backgroundColor: "rgba(37, 99, 235, 0.12)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointBackgroundColor: "#2563eb",
+        },
+      ],
+    }),
+    [incomeLastSixMonths]
+  );
+
+  const devicesBarChart = useMemo(
+    () => ({
+      labels: devicesLastSixMonths.map((bucket) => bucket.label),
+      datasets: [
+        {
+          label: "Instalados",
+          data: devicesLastSixMonths.map((bucket) => bucket.value),
+          backgroundColor: devicesLastSixMonths.map((_, index) => topLineColor(index)),
+          borderRadius: 8,
+        },
+      ],
+    }),
+    [devicesLastSixMonths]
+  );
+
+  const projectStatusChart = useMemo(
+    () => ({
+      labels: projectsByStatus.map((item) => item.label),
+      datasets: [
+        {
+          label: "Proyectos",
+          data: projectsByStatus.map((item) => item.value),
+          backgroundColor: ["#94a3b8", "#2563eb", "#10b981", "#ef4444"],
+          borderRadius: 8,
+        },
+      ],
+    }),
+    [projectsByStatus]
+  );
+
+  const incomeMethodChart = useMemo(
+    () => ({
+      labels: ["Efectivo", "Transferencia"],
+      datasets: [
+        {
+          data: [selectedRangeIncomeByMethod.cash, selectedRangeIncomeByMethod.bank_transfer],
+          backgroundColor: ["#10b981", "#2563eb"],
+          borderColor: ["#d1fae5", "#dbeafe"],
+          borderWidth: 1,
+        },
+      ],
+    }),
+    [selectedRangeIncomeByMethod]
+  );
+
+  const incomeReportRows = useMemo(
+    () =>
+      selectedRangeTransactions.map((transaction) => ({
+        paymentDate: transaction.approvedAt ?? transaction.submittedAt ?? "",
+        customerName: transaction.customerName ?? "Cliente",
+        siteName: transaction.siteName ?? "-",
+        method: formatMethod(transaction.method),
+        amount: transaction.amount ?? 0,
+        invoiceNumber: transaction.invoiceNumber ?? "-",
+        reference: transaction.reference ?? "-",
+      })),
+    [selectedRangeTransactions]
+  );
+
+  const isIncomeRangeValid = rangeFrom <= rangeTo;
+
+  const downloadIncomeReport = () => {
+    if (!isIncomeRangeValid || !canDownloadIncomeReport) return;
+    void logAuditEvent({
+      action: "download",
+      entity: "payment_statements",
+      companyId,
+      newValues: {
+        rangeFrom,
+        rangeTo,
+        transactionCount: selectedRangeTransactions.length,
+        totalAmount: selectedRangeIncome,
+      },
+    });
+    downloadPDF(
+      incomeReportRows,
+      `reporte_ingresos_${rangeFrom}_${rangeTo}.pdf`,
+      ["paymentDate", "customerName", "siteName", "method", "amount", "invoiceNumber", "reference"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de ingresos",
+      {
+        subtitle: `Rango ${formatDateOnly(rangeFrom)} - ${formatDateOnly(rangeTo)}`,
+        summary: [
+          { label: "Total en rango", value: formatPaymentAmount(selectedRangeIncome) },
+          { label: "Transacciones", value: String(selectedRangeTransactions.length) },
+        ],
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+      }
+    );
+  };
+
+  if (loading) {
+    return (
+      <section className="grid gap-4">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando dashboard operativo...
+          </div>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="h-56 rounded-3xl border border-slate-200 bg-white shadow-sm" />
+          <div className="h-56 rounded-3xl border border-slate-200 bg-white shadow-sm" />
+        </div>
+      </section>
     );
   }
 
-  return (
-    <div>
-      {title && <SectionTitle onDownload={onDownload}>{title}</SectionTitle>}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 160, minHeight: 140 }}>
-        {data.slice(0, 12).map((d: any, i: number) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <div style={{ fontSize: 12, color: C.text, fontWeight: 600, fontFamily: "'DM Mono', monospace", minHeight: 16 }}>
-              {formatValue ? formatValue(d.value) : d.value}
-            </div>
-            <div style={{
-              width: "100%", background: d.color || color,
-              borderRadius: "4px 4px 0 0",
-              height: `${(d.value / max) * 120}px`,
-              minHeight: d.value > 0 ? 4 : 0,
-              transition: "height 0.6s cubic-bezier(0.4,0,0.2,1)",
-            }} />
-            <div style={{ fontSize: 10, color: C.textMuted, textAlign: "center", lineHeight: 1.3, minHeight: 24, overflow: "hidden", textOverflow: "ellipsis" }}>
-              {d.label}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
-export default function AdminDashboard() {
-  const [data, setData] = useState<any>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-
-        const [
-          tickets,
-          customers,
-          devices,
-          device_inventory,
-          technical_visits,
-          site_surveys,
-          brands,
-          device_types,
-          automation_kits,
-        ] = await Promise.all([
-          fetchTable("tickets", "id,status,sla_type,category_id,customer_id,created_at"),
-          fetchTable("customers", "user_id,type,created_at"),
-          fetchTable("devices", "id,name,brand_id,device_type_id,price,created_at"),
-          fetchTable("device_inventory", "device_id,quantity,status"),
-          fetchTable("technical_visits", "id,status,scheduled_start,created_at"),
-          fetchTable("site_surveys", "id,status,created_at"),
-          fetchTable("brands", "id,name"),
-          fetchTable("device_types", "id,name"),
-          fetchTable("kits", "id,name,price,created_at"),
-        ]);
-
-        setData({
-          tickets,
-          customers,
-          devices,
-          device_inventory,
-          technical_visits,
-          site_surveys,
-          brands,
-          device_types,
-          automation_kits,
-        });
-
-        setLoading(false);
-      } catch (err: any) {
-        setError(err.message);
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  if (loading) return <Spinner />;
-  if (error)
+  if (error) {
     return (
-      <div style={{ padding: 28, color: C.red, fontSize: 14 }}>
-        Error: {error}
-      </div>
+      <section className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+        <p className="font-semibold">No se pudo cargar el dashboard</p>
+        <p className="mt-1">{error}</p>
+        <div className="mt-4">
+          <Button
+            type="button"
+            onClick={() => void loadDashboard()}
+            className="border-rose-300 bg-white text-rose-700 hover:bg-rose-100"
+          >
+            Reintentar
+          </Button>
+        </div>
+      </section>
     );
+  }
 
-  const {
-    tickets = [],
-    customers = [],
-    devices = [],
-    device_inventory = [],
-    technical_visits = [],
-    site_surveys = [],
-    brands = [],
-    device_types = [],
-    automation_kits = [],
-  } = data;
-
-  // Datos procesados
-  const ticketsByStatus = Object.entries(countBy(tickets, "status")).map(([k, v]) => ({
-    label: k.charAt(0).toUpperCase() + k.slice(1),
-    value: v,
-    color: { abierto: C.amber, en_proceso: C.blue, resuelto: C.green, cerrado: C.gray, esperando_cliente: C.textMuted }[k as string] || C.gray,
-  }));
-
-  const ticketsBySLA = Object.entries(countBy(tickets, "sla_type"))
-    .filter(([k]) => k !== "N/A")
-    .map(([k, v]) => ({
-      label: k,
-      value: v,
-      color: { urgente: C.red, "24h": C.amber, "48h": C.blue }[k as string] || C.gray,
-    }));
-
-  const customersByType = Object.entries(countBy(customers, "type")).map(([k, v]) => ({
-    label: k === "N/A" ? "Sin especificar" : k.charAt(0).toUpperCase() + k.slice(1),
-    value: v,
-    color: { hogar: C.blue, comercio: C.amber, empresa: C.green }[k as string] || C.gray,
-  }));
-
-  const visitsByStatus = Object.entries(countBy(technical_visits, "status")).map(([k, v]) => ({
-    label: k.charAt(0).toUpperCase() + k.slice(1),
-    value: v,
-    color: { programada: C.blue, completada: C.green, cancelada: C.red }[k as string] || C.gray,
-  }));
-
-  const surveysByStatus = Object.entries(countBy(site_surveys, "status")).map(([k, v]) => ({
-    label: k.charAt(0).toUpperCase() + k.slice(1),
-    value: v,
-    color: { pendiente: C.amber, en_progreso: C.blue, completado: C.green }[k as string] || C.gray,
-  }));
-
-  const devicesByBrand = brands
-    .map((b: any) => ({
-      label: b.name,
-      value: devices.filter((d: any) => d.brand_id === b.id).length,
-      color: C.accent,
-    }))
-    .sort((a: any, b: any) => b.value - a.value)
-    .slice(0, 10);
-
-  const devicesByType = device_types
-    .map((t: any) => ({
-      label: t.name,
-      value: devices.filter((d: any) => d.device_type_id === t.id).length,
-      color: C.accent,
-    }))
-    .sort((a: any, b: any) => b.value - a.value);
-
-  const inventoryByDevice = devices
-    .map((d: any) => {
-      const inv = device_inventory.find((i: any) => i.device_id === d.id);
-      return {
-        label: d.name.slice(0, 18),
-        value: inv?.quantity || 0,
-        color: C.green,
-      };
-    })
-    .sort((a: any, b: any) => b.value - a.value)
-    .slice(0, 10);
-
-  const kitsByPrice = automation_kits
-    .map((k: any) => ({
-      label: k.name.slice(0, 20),
-      value: Number(k.price) || 0,
-      color: C.purple,
-    }))
-    .sort((a: any, b: any) => b.value - a.value)
-    .slice(0, 8);
-
-  // Estadísticas clave
-  const openTickets = tickets.filter((t: any) => !["resuelto", "cerrado"].includes(t.status)).length;
-  const urgentTickets = tickets.filter((t: any) => t.sla_type === "urgente").length;
-  const completedSurveys = site_surveys.filter((s: any) => s.status === "completado").length;
-  const scheduledVisits = technical_visits.filter((v: any) => v.status === "programada").length;
-  const totalInventory = sumBy(device_inventory, "quantity");
-  const totalInventoryValue = devices.reduce((sum: number, d: any) => {
-    const inv = device_inventory.find((i: any) => i.device_id === d.id);
-    return sum + ((inv?.quantity || 0) * (d.price || 0));
-  }, 0);
-
-  return (
-      <div style={{ background: "#fff", minHeight: "100%", fontFamily: "Inter, sans-serif", color: "#222" }}>
-        {/* Header */}
-        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 28px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent, boxShadow: `0 0 8px ${C.accent}` }} />
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.02em" }}>SmartOps</span>
-            <span style={{ color: C.border, fontSize: 20, fontWeight: 100 }}>|</span>
-            <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 400 }}>Dashboard de reportes</span>
-          </div>
-          <span style={{ fontSize: 11, color: C.textMuted }}>
-            {new Date().toLocaleDateString("es-DO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </span>
-        </div>
-
-        {/* Content */}
-        <div style={{ padding: 28, maxWidth: 1600, margin: "0 auto" }}>
-          {/* KPIs */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 32 }}>
-            <StatCard label="Tickets abiertos" value={openTickets} accent={C.amber} />
-            <StatCard label="Tickets urgentes" value={urgentTickets} accent={C.red} />
-            <StatCard label="Levantamientos completados" value={completedSurveys} accent={C.green} />
-            <StatCard label="Visitas programadas" value={scheduledVisits} accent={C.blue} />
-            <StatCard label="Stock total (unidades)" value={totalInventory} accent={C.green} />
-            <StatCard label="Valor inventario" value={`$${fmt(totalInventoryValue)}`} accent={C.cyan} sub={`${devices.length} dispositivos`} />
-            <StatCard label="Clientes registrados" value={customers.length} accent={C.purple} />
-            <StatCard label="Kits de automatización" value={automation_kits.length} accent={C.amber} />
-          </div>
-
-          {/* Gráficos principales */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
-            {/* Tickets por estado */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="📊 Tickets por estado"
-                data={ticketsByStatus}
-                horizontal={true}
-                onDownload={() => downloadPDF(tickets, 'tickets_report.pdf', ['id','status','sla_type','category_id','customer_id','created_at'])}
-              />
-            </div>
-
-            {/* Tickets por SLA */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="⚡ Tickets por SLA"
-                data={ticketsBySLA}
-                horizontal={true}
-                onDownload={() => downloadPDF(tickets, 'tickets_report.pdf', ['id','status','sla_type','category_id','customer_id','created_at'])}
-              />
-            </div>
-
-            {/* Clientes por tipo */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="👥 Clientes por tipo"
-                data={customersByType}
-                horizontal={true}
-                onDownload={() => downloadPDF(customers, 'customers_report.pdf', ['user_id','type','created_at'])}
-              />
-            </div>
-
-            {/* Visitas por estado */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="🚗 Visitas técnicas"
-                data={visitsByStatus}
-                horizontal={true}
-                onDownload={() => downloadPDF(technical_visits, 'technical_visits_report.pdf', ['id','status','scheduled_start','created_at'])}
-              />
-            </div>
-          </div>
-
-          {/* Gráficos de dispositivos */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
-            {/* Dispositivos por marca */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="🏷️ Top 10 marcas"
-                data={devicesByBrand.length > 0 ? devicesByBrand : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                color={C.accentLight}
-                onDownload={() => {
-                  const devicesWithNames = devices.map((d: any) => ({
-                    ...d,
-                    brand: brands.find((b: any) => b.id === d.brand_id)?.name || '',
-                    device_type: device_types.find((t: any) => t.id === d.device_type_id)?.name || '',
-                  }));
-                  downloadPDF(devicesWithNames, 'devices_report.pdf', ['id','name','brand','device_type','price','created_at']);
-                }}
-              />
-            </div>
-
-            {/* Dispositivos por tipo */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="🔧 Dispositivos por tipo"
-                data={devicesByType.length > 0 ? devicesByType : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                color={C.accentLight}
-                onDownload={() => {
-                  const devicesWithNames = devices.map((d: any) => ({
-                    ...d,
-                    brand: brands.find((b: any) => b.id === d.brand_id)?.name || '',
-                    device_type: device_types.find((t: any) => t.id === d.device_type_id)?.name || '',
-                  }));
-                  downloadPDF(devicesWithNames, 'devices_report.pdf', ['id','name','brand','device_type','price','created_at']);
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Inventario */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
-            {/* Top inventario */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="📦 Stock por dispositivo (Top 10)"
-                data={inventoryByDevice.length > 0 ? inventoryByDevice : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                onDownload={() => downloadPDF(device_inventory, 'device_inventory_report.pdf', ['device_id','quantity','status'])}
-              />
-            </div>
-
-            {/* Kits por precio */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-              <BarChart
-                title="🎁 Kits por precio"
-                data={kitsByPrice.length > 0 ? kitsByPrice : [{ label: "Sin datos", value: 0, color: C.gray }]}
-                formatValue={(v) => `$${fmt(v, 2)}`}
-                onDownload={() => downloadPDF(automation_kits, 'automation_kits_report.pdf', ['id','name','price','created_at'])}
-              />
-            </div>
-          </div>
-
-          {/* Levantamientos */}
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-            <BarChart
-              title="📋 Levantamientos por estado"
-              data={surveysByStatus.length > 0 ? surveysByStatus : [{ label: "Sin datos", value: 0, color: C.gray }]}
-              horizontal={true}
-              onDownload={() => downloadPDF(site_surveys, 'site_surveys_report.pdf', ['id','status','created_at'])}
-            />
-          </div>
-        </div>
-  const { authUser, userProfile, companyProfile, roleProfile } = useAuth();
-  const { entitlements, loading: entitlementsLoading } = useCompanyEntitlements();
+  const openTicketsSubtitle = `${openTickets.length} abiertos en total`;
+  const pendingPaymentsSubtitle = `${pendingAccounts.length} cuentas con saldo pendiente`;
+  const devicesRangeSubtitle = `${selectedRangeDevices.length} dispositivos en el rango seleccionado`;
 
   return (
     <section className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-        <p className="mt-2 text-slate-600">Resumen de la sesion actual y datos base del usuario.</p>
+      <header className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">Dashboard operativo</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Empresa instaladora</h1>
+            <p className="max-w-2xl text-sm text-slate-200">
+              Controla proyectos en curso, tickets abiertos, ingresos reales, pagos pendientes y dispositivos instalados.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void loadDashboard()}
+              className="border-white/20 bg-white text-slate-900 hover:bg-slate-100"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Recargar
+            </Button>
+          </div>
+        </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Usuario</h2>
-          <dl className="mt-3 space-y-2 text-sm text-slate-700">
-            <div>
-              <dt className="font-medium text-slate-500">Nombre</dt>
-              <dd>{userProfile?.name ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Correo</dt>
-              <dd>{authUser?.email ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Cedula</dt>
-              <dd>{userProfile?.idCard ?? "No registrada"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Rol</dt>
-              <dd>{roleProfile?.name ?? "Sin rol"}</dd>
-            </div>
-          </dl>
-        </article>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard
+          label="Proyectos en curso"
+          value={String(projectsInProgress.length)}
+          sublabel={`${projects.length} proyectos registrados`}
+          icon={<HardHat className="h-5 w-5" />}
+          accentClassName="border-blue-100"
+        />
+        <MetricCard
+          label="Tickets abiertos"
+          value={String(openTickets.length)}
+          sublabel={`Urgente: ${openTicketsByPriority.urgente} | 24h: ${openTicketsByPriority["24h"]} | 48h: ${openTicketsByPriority["48h"]}`}
+          icon={<Ticket className="h-5 w-5" />}
+          accentClassName="border-amber-100"
+        />
+        <MetricCard
+          label="Ingresos del mes"
+          value={formatPaymentAmount(currentMonthIncome)}
+          sublabel="Solo transacciones aprobadas este mes"
+          icon={<CircleDollarSign className="h-5 w-5" />}
+          accentClassName="border-emerald-100"
+        />
+        <MetricCard
+          label="Pagos pendientes"
+          value={formatPaymentAmount(pendingAccounts.reduce((sum, account) => sum + account.amountPending, 0))}
+          sublabel={pendingPaymentsSubtitle}
+          icon={<ShieldAlert className="h-5 w-5" />}
+          accentClassName="border-rose-100"
+        />
+        <MetricCard
+          label="Instalados en rango"
+          value={String(selectedRangeDevices.length)}
+          sublabel={devicesRangeSubtitle}
+          icon={<Wrench className="h-5 w-5" />}
+          accentClassName="border-teal-100"
+        />
+      </section>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Compania</h2>
-          <dl className="mt-3 space-y-2 text-sm text-slate-700">
-            <div>
-              <dt className="font-medium text-slate-500">Nombre</dt>
-              <dd>{companyProfile?.name ?? "No asignada"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Plan actual</dt>
-              <dd>
-                {entitlementsLoading ? "Cargando..." : entitlements?.planName ?? "Sin plan"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">RNC</dt>
-              <dd>{companyProfile?.rnc ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Telefono</dt>
-              <dd>{companyProfile?.phone ?? "No disponible"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-slate-500">Direccion</dt>
-              <dd>{companyProfile?.address ?? "No disponible"}</dd>
-            </div>
-          </dl>
-        </article>
+      <section className="grid gap-4 xl:grid-cols-2">
+        <SectionCard
+          title="Ingresos mensuales"
+          subtitle="Tendencia de transacciones aprobadas en los ultimos 6 meses."
+        >
+          <div className="h-80">
+            <Line
+              data={incomeLineChart}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: (ctx) => formatPaymentAmount(Number(ctx.raw ?? 0)) } },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    grid: { color: "rgba(148, 163, 184, 0.15)" },
+                    ticks: { callback: (value) => formatPaymentAmount(Number(value)) },
+                  },
+                  x: { grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </SectionCard>
 
-      </div>
+        <SectionCard
+          title="Tickets abiertos por prioridad"
+          subtitle={openTicketsSubtitle}
+        >
+          <div className="h-80">
+            <Doughnut
+              data={ticketPriorityChart}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: { usePointStyle: true, boxWidth: 10, color: "#334155" },
+                  },
+                },
+                cutout: "68%",
+              }}
+            />
+          </div>
+        </SectionCard>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <SectionCard
+          title="Proyectos en curso"
+          subtitle="Seguimiento de las instalaciones activas."
+        >
+          {projectsInProgress.length === 0 ? (
+            <EmptyState text="No hay proyectos en curso ahora mismo." />
+          ) : (
+            <div className="space-y-3">
+              {projectsInProgress.slice(0, 5).map((project) => (
+                <article key={project.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {project.customerName ?? "Cliente"} · {project.siteName ?? "Sitio"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Iniciado: {formatDateOnly(project.createdAt)} · Ultima actualizacion: {formatDateOnly(project.updatedAt)}
+                      </p>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusPillClass(project.status)}`}>
+                      {formatProjectStatus(project.status)}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Pagos pendientes"
+          subtitle="Cuentas con saldo por cobrar."
+        >
+          {pendingAccounts.length === 0 ? (
+            <EmptyState text="No hay pagos pendientes." />
+          ) : (
+            <div className="space-y-3">
+              {pendingAccounts
+                .slice()
+                .sort((a, b) => b.amountPending - a.amountPending)
+                .slice(0, 5)
+                .map((account) => (
+                  <article key={account.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {account.customerName ?? "Cliente"} · {account.siteName ?? "Sitio"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Factura {account.invoiceNumber} · Creada {formatDateOnly(account.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-slate-900">{formatPaymentAmount(account.amountPending)}</p>
+                        <p className="text-xs text-slate-500">Pendiente</p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+            </div>
+          )}
+        </SectionCard>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <SectionCard
+          title="Proyectos por estado"
+          subtitle="Distribucion operativa de la cartera de instalaciones."
+        >
+          <div className="h-72">
+            <Bar
+              data={projectStatusChart}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    grid: { color: "rgba(148, 163, 184, 0.15)" },
+                    ticks: { precision: 0 },
+                  },
+                  x: { grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Dispositivos instalados por periodo"
+          subtitle="Tendencia de instalaciones en los ultimos 6 meses."
+        >
+          <div className="h-72">
+            <Bar
+              data={devicesBarChart}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    grid: { color: "rgba(148, 163, 184, 0.15)" },
+                    ticks: { precision: 0 },
+                  },
+                  x: { grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </SectionCard>
+      </section>
+
+      {canReadIncomeReport ? (
+        <SectionCard
+          title="Reporte de ingresos"
+          subtitle="Solo transacciones aprobadas con detalle de fecha, metodo, monto y cliente."
+          action={
+            <Button
+              type="button"
+              onClick={downloadIncomeReport}
+              disabled={incomeReportRows.length === 0 || !isIncomeRangeValid || !canDownloadIncomeReport}
+              className="border-blue-300 bg-blue-600 text-white hover:bg-blue-500"
+            >
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </Button>
+          }
+        >
+          <div className="grid gap-4 lg:grid-cols-4">
+            <Field label="Desde">
+              <Input
+                type="date"
+                value={rangeFrom}
+                onChange={(event) => setRangeFrom(event.target.value)}
+                className="border-slate-200 text-slate-700"
+              />
+            </Field>
+            <Field label="Hasta">
+              <Input
+                type="date"
+                value={rangeTo}
+                onChange={(event) => setRangeTo(event.target.value)}
+                className="border-slate-200 text-slate-700"
+              />
+            </Field>
+            <div className="hidden lg:block" />
+            <div className="hidden lg:block" />
+          </div>
+
+          {!isIncomeRangeValid ? (
+            <p className="mt-3 text-sm font-medium text-amber-700">
+              La fecha de inicio no puede ser mayor que la fecha final.
+            </p>
+          ) : null}
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total en rango</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</p>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Transacciones</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{selectedRangeTransactions.length}</p>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Clientes únicos</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {new Set(selectedRangeTransactions.map((transaction) => transaction.customerId)).size}
+                </p>
+              </article>
+            </div>
+
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ingresos por método</p>
+                  <p className="mt-1 text-sm text-slate-500">Distribución del rango seleccionado.</p>
+                </div>
+              </div>
+              <div className="mt-4 h-56">
+                <Doughnut
+                  data={incomeMethodChart}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: { usePointStyle: true, boxWidth: 10, color: "#334155" },
+                      },
+                    },
+                    cutout: "68%",
+                  }}
+                />
+              </div>
+            </article>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full table-auto text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Sitio</th>
+                    <th className="px-4 py-3">Metodo</th>
+                    <th className="px-4 py-3">Monto</th>
+                    <th className="px-4 py-3">Factura</th>
+                    <th className="px-4 py-3">Referencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {selectedRangeTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8">
+                        <EmptyState text="No hay ingresos para el rango seleccionado." />
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedRangeTransactions.map((transaction) => (
+                      <tr key={transaction.id} className="align-top">
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-700">{formatDateTime(transaction.approvedAt ?? transaction.submittedAt)}</td>
+                        <td className="px-4 py-3 text-slate-700">{transaction.customerName ?? "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">{transaction.siteName ?? "-"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${methodPillClass(transaction.method)}`}>
+                            {formatMethod(transaction.method)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-900">{formatPaymentAmount(transaction.amount)}</td>
+                        <td className="px-4 py-3 text-slate-600">{transaction.invoiceNumber ?? "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          <span
+                            className="block max-w-[220px] truncate"
+                            title={transaction.reference ?? "-"}
+                          >
+                            {transaction.reference ?? "-"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {selectedRangeTransactions.length > 0 ? (
+                  <tfoot className="border-t border-slate-100 bg-slate-50">
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-slate-700" colSpan={4}>
+                        Total
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">{formatPaymentAmount(selectedRangeIncome)}</td>
+                      <td className="px-4 py-3 text-slate-500" colSpan={2}>
+                        {selectedRangeTransactions.length} transacciones
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
+              </table>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+    </section>
   );
 }

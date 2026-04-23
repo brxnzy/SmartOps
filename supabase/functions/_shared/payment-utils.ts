@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "https://esm.sh/pdf-lib@1.17.1";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { SMARTOPS_LOGO_PNG_BASE64 } from "./smartops-logo.ts";
 
 export type PaymentAccountContext = {
   id: string;
@@ -137,6 +138,42 @@ export function paymentMethodLabel(method: string): string {
   if (method === "bank_transfer") return "Transferencia";
   if (method === "card") return "Tarjeta";
   return "Otros";
+}
+
+const COLORS = {
+  ink: rgb(0.1, 0.14, 0.2),
+  muted: rgb(0.39, 0.45, 0.52),
+  border: rgb(0.86, 0.89, 0.93),
+  softBorder: rgb(0.92, 0.94, 0.97),
+  surface: rgb(0.98, 0.99, 1),
+  surfaceAlt: rgb(0.96, 0.97, 0.985),
+  accent: rgb(0.18, 0.29, 0.46),
+  accentSoft: rgb(0.93, 0.95, 0.98),
+  success: rgb(0.08, 0.44, 0.27),
+  warning: rgb(0.66, 0.42, 0.08),
+  danger: rgb(0.62, 0.15, 0.15),
+};
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "N/D";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "N/D";
+  return parsed.toLocaleDateString("es-DO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function statusLabel(status: string): string {
+  if (status === "paid") return "Pagada";
+  if (status === "partial") return "Parcial";
+  if (status === "reviewing") return "En revisión";
+  if (status === "approved") return "Aprobada";
+  if (status === "rejected") return "Rechazada";
+  if (status === "submitted") return "Enviada";
+  if (status === "pending") return "Pendiente";
+  return status || "N/D";
 }
 
 export async function fetchPaymentAccountContext(
@@ -292,6 +329,10 @@ async function fetchRemoteImage(url: string): Promise<{ bytes: Uint8Array; type:
   }
 }
 
+function getFallbackLogoImage(): { bytes: Uint8Array; type: "png" } {
+  return { bytes: decodeBase64(SMARTOPS_LOGO_PNG_BASE64), type: "png" };
+}
+
 async function drawDocumentHeader(
   pdfDoc: PDFDocument,
   page: PDFPage,
@@ -306,75 +347,99 @@ async function drawDocumentHeader(
   }
 ) {
   const { width, height } = page.getSize();
-  page.drawRectangle({ x: 0, y: height - 126, width, height: 126, color: rgb(0.05, 0.08, 0.14) });
-  page.drawRectangle({ x: 0, y: height - 126, width, height: 6, color: rgb(0.08, 0.62, 0.46) });
-
-  page.drawText(input.title, {
-    x: 40,
-    y: height - 54,
-    size: 24,
-    font: fontBold,
-    color: rgb(1, 1, 1),
-  });
-  page.drawText(input.subtitle, {
-    x: 40,
-    y: height - 78,
-    size: 11,
-    font,
-    color: rgb(0.83, 0.9, 0.97),
-  });
-  page.drawText(input.documentNumber, {
-    x: 40,
-    y: height - 96,
-    size: 10,
-    font: fontBold,
-    color: rgb(0.77, 0.9, 0.85),
-  });
+  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: 0, y: height - 170, width, height: 170, color: COLORS.surfaceAlt });
+  page.drawRectangle({ x: 40, y: height - 56, width: width - 80, height: 2, color: COLORS.ink });
 
   const image = input.companyLogoUrl ? await fetchRemoteImage(input.companyLogoUrl) : null;
-  const boxX = width - 146;
-  const boxY = height - 102;
-  const boxWidth = 104;
-  const boxHeight = 60;
+  const logo = image ?? getFallbackLogoImage();
+  const embedded = logo.type === "png" ? await pdfDoc.embedPng(logo.bytes) : await pdfDoc.embedJpg(logo.bytes);
+  const logoBoxX = 40;
+  const logoBoxY = height - 128;
+  const logoBoxWidth = 78;
+  const logoBoxHeight = 78;
+  const ratio = Math.min((logoBoxWidth - 10) / embedded.width, (logoBoxHeight - 10) / embedded.height, 1);
+  const drawWidth = embedded.width * ratio;
+  const drawHeight = embedded.height * ratio;
 
-  page.drawRectangle({ x: boxX, y: boxY, width: boxWidth, height: boxHeight, color: rgb(1, 1, 1) });
-  page.drawRectangle({ x: boxX, y: boxY, width: boxWidth, height: boxHeight, borderWidth: 1, borderColor: rgb(0.88, 0.91, 0.95) });
+  page.drawRectangle({ x: logoBoxX, y: logoBoxY, width: logoBoxWidth, height: logoBoxHeight, color: rgb(1, 1, 1) });
+  page.drawRectangle({
+    x: logoBoxX,
+    y: logoBoxY,
+    width: logoBoxWidth,
+    height: logoBoxHeight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  });
+  page.drawImage(embedded, {
+    x: logoBoxX + (logoBoxWidth - drawWidth) / 2,
+    y: logoBoxY + (logoBoxHeight - drawHeight) / 2,
+    width: drawWidth,
+    height: drawHeight,
+  });
 
-  if (image) {
-    const embedded = image.type === "png" ? await pdfDoc.embedPng(image.bytes) : await pdfDoc.embedJpg(image.bytes);
-    const ratio = Math.min((boxWidth - 12) / embedded.width, (boxHeight - 12) / embedded.height, 1);
-    const drawWidth = embedded.width * ratio;
-    const drawHeight = embedded.height * ratio;
-    page.drawImage(embedded, {
-      x: boxX + (boxWidth - drawWidth) / 2,
-      y: boxY + (boxHeight - drawHeight) / 2,
-      width: drawWidth,
-      height: drawHeight,
-    });
-  } else {
-    page.drawRectangle({ x: boxX + 10, y: boxY + 12, width: 28, height: 28, color: rgb(0.08, 0.62, 0.46) });
-    page.drawText("SO", {
-      x: boxX + 15,
-      y: boxY + 22,
-      size: 13,
-      font: fontBold,
-      color: rgb(1, 1, 1),
-    });
-    page.drawText("SmartOps", {
-      x: boxX + 46,
-      y: boxY + 29,
-      size: 10,
-      font: fontBold,
-      color: rgb(0.14, 0.2, 0.3),
-    });
-    page.drawText("Platform", {
-      x: boxX + 46,
-      y: boxY + 17,
-      size: 8,
+  page.drawText(input.title, {
+    x: 134,
+    y: height - 82,
+    size: 24,
+    font: fontBold,
+    color: COLORS.ink,
+  });
+  page.drawText(input.companyName, {
+    x: 134,
+    y: height - 104,
+    size: 10,
+    font: fontBold,
+    color: COLORS.accent,
+  });
+  const subtitle = input.subtitle.trim();
+  if (subtitle) {
+    page.drawText(subtitle, {
+      x: 134,
+      y: height - 119,
+      size: 9,
       font,
-      color: rgb(0.45, 0.53, 0.63),
+      color: COLORS.muted,
     });
   }
+}
+
+function drawSectionTitle(page: PDFPage, fontBold: PDFFont, x: number, y: number, title: string) {
+  page.drawText(title, {
+    x,
+    y,
+    size: 10,
+    font: fontBold,
+    color: rgb(0.12, 0.17, 0.24),
+  });
+}
+
+function drawInfoBox(page: PDFPage, x: number, y: number, width: number, height: number) {
+  page.drawRectangle({ x, y, width, height, color: COLORS.surface });
+  page.drawRectangle({ x, y, width, height, borderWidth: 1, borderColor: COLORS.border });
+}
+
+function drawFooter(page: PDFPage, font: PDFFont, fontBold: PDFFont) {
+  page.drawLine({
+    start: { x: 40, y: 54 },
+    end: { x: page.getSize().width - 40, y: 54 },
+    thickness: 1,
+    color: COLORS.border,
+  });
+  page.drawText("SmartOps", {
+    x: 40,
+    y: 38,
+    size: 9,
+    font: fontBold,
+    color: COLORS.ink,
+  });
+  page.drawText("Documento generado para control, seguimiento y consulta interna.", {
+    x: 100,
+    y: 38,
+    size: 8,
+    font,
+    color: COLORS.muted,
+  });
 }
 
 export async function fetchCustomerEmail(adminClient: SupabaseClient, customerId: string): Promise<string | null> {
@@ -383,8 +448,55 @@ export async function fetchCustomerEmail(adminClient: SupabaseClient, customerId
 }
 
 function drawLabelValue(page: PDFPage, font: PDFFont, fontBold: PDFFont, x: number, y: number, label: string, value: string) {
-  page.drawText(label, { x, y, size: 10, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-  page.drawText(value, { x, y: y - 14, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
+  page.drawText(label, { x, y, size: 9, font: fontBold, color: COLORS.muted });
+  page.drawText(value, { x, y: y - 14, size: 10, font, color: COLORS.ink });
+}
+
+function drawMetricCard(
+  page: PDFPage,
+  font: PDFFont,
+  fontBold: PDFFont,
+  x: number,
+  y: number,
+  width: number,
+  label: string,
+  value: string,
+  emphasized = false
+) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height: 64,
+    color: emphasized ? COLORS.accentSoft : rgb(1, 1, 1),
+  });
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height: 64,
+    borderWidth: 1,
+    borderColor: emphasized ? COLORS.accent : COLORS.border,
+  });
+  page.drawText(label, {
+    x: x + 14,
+    y: y + 42,
+    size: 8,
+    font: fontBold,
+    color: COLORS.muted,
+  });
+  page.drawText(value, {
+    x: x + 14,
+    y: y + 18,
+    size: emphasized ? 18 : 14,
+    font: fontBold,
+    color: COLORS.ink,
+  });
+}
+
+function drawTableHeader(page: PDFPage, x: number, y: number, width: number, height: number) {
+  page.drawRectangle({ x, y, width, height, color: COLORS.surfaceAlt });
+  page.drawRectangle({ x, y, width, height, borderWidth: 1, borderColor: COLORS.border });
 }
 
 export async function buildInvoicePdf(account: PaymentAccountContext): Promise<Uint8Array> {
@@ -392,76 +504,71 @@ export async function buildInvoicePdf(account: PaymentAccountContext): Promise<U
   const page = pdfDoc.addPage([595.28, 841.89]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const now = new Date();
   const { width } = page.getSize();
 
   await drawDocumentHeader(pdfDoc, page, font, fontBold, {
     title: "Factura de instalacion",
-    subtitle: account.companyName,
+    subtitle: "Documento emitido al completar y aceptar la instalación del cliente.",
     documentNumber: account.invoiceNumber,
     companyName: account.companyName,
     companyLogoUrl: account.companyLogoUrl,
   });
 
-  drawLabelValue(page, font, fontBold, 40, 648, "Cliente", account.customerName);
-  drawLabelValue(page, font, fontBold, 220, 648, "Cedula", account.customerIdCard ?? "N/D");
-  drawLabelValue(page, font, fontBold, 400, 648, "Fecha", now.toLocaleDateString("es-DO"));
+  drawSectionTitle(page, fontBold, 40, 640, "Información general");
+  drawInfoBox(page, 40, 540, width - 80, 86);
+  drawLabelValue(page, font, fontBold, 52, 600, "Cliente", account.customerName);
+  drawLabelValue(page, font, fontBold, 220, 600, "Cedula", account.customerIdCard ?? "N/D");
+  drawLabelValue(page, font, fontBold, 400, 600, "Sitio", account.siteName ?? "N/D");
+  drawLabelValue(page, font, fontBold, 52, 560, "Empresa", account.companyName);
+  drawLabelValue(page, font, fontBold, 220, 560, "Telefono", account.companyPhone ?? "N/D");
+  drawLabelValue(page, font, fontBold, 400, 560, "RNC", account.companyRnc ?? "N/D");
 
-  drawLabelValue(page, font, fontBold, 40, 593, "Sitio", account.siteName ?? "N/D");
-  drawLabelValue(page, font, fontBold, 220, 593, "Proyecto", account.projectId.slice(0, 8).toUpperCase());
-  drawLabelValue(page, font, fontBold, 400, 593, "Estado", account.status);
-  drawLabelValue(page, font, fontBold, 40, 538, "Empresa", account.companyName);
-  drawLabelValue(page, font, fontBold, 220, 538, "Telefono", account.companyPhone ?? "N/D");
-  drawLabelValue(page, font, fontBold, 400, 538, "RNC", account.companyRnc ?? "N/D");
+  drawSectionTitle(page, fontBold, 40, 508, "Resumen financiero");
+  drawMetricCard(page, font, fontBold, 40, 430, 165, "Total facturado", formatCurrency(account.amountTotal, account.currency), true);
+  drawMetricCard(page, font, fontBold, 215, 430, 165, "Pagado", formatCurrency(account.amountPaid, account.currency));
+  drawMetricCard(page, font, fontBold, 390, 430, 165, "Pendiente", formatCurrency(account.amountPending, account.currency));
 
-  page.drawRectangle({ x: 40, y: 455, width: width - 80, height: 30, color: rgb(0.94, 0.96, 0.99) });
-  page.drawText("Detalle del cobro", { x: 48, y: 466, size: 10, font: fontBold });
-  page.drawText("Monto", { x: width - 125, y: 466, size: 10, font: fontBold });
-
-  page.drawText(`Instalacion completada y aceptada en ${account.siteName ?? "sitio del cliente"}`, {
-    x: 48,
-    y: 430,
+  drawSectionTitle(page, fontBold, 40, 392, "Detalle facturado");
+  drawTableHeader(page, 40, 352, width - 80, 28);
+  page.drawText("Concepto", { x: 52, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Estado", { x: 350, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Monto", { x: width - 112, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawRectangle({ x: 40, y: 300, width: width - 80, height: 52, borderWidth: 1, borderColor: COLORS.border });
+  page.drawText(`Instalación completada y aceptada en ${account.siteName ?? "sitio del cliente"}.`, {
+    x: 52,
+    y: 326,
     size: 10,
     font,
+    color: COLORS.ink,
+  });
+  page.drawText(statusLabel(account.status), {
+    x: 350,
+    y: 326,
+    size: 10,
+    font: fontBold,
+    color: account.amountPending > 0 ? COLORS.warning : COLORS.success,
   });
   page.drawText(formatCurrency(account.amountTotal, account.currency), {
-    x: width - 125,
-    y: 430,
+    x: width - 112,
+    y: 326,
     size: 10,
     font: fontBold,
-  });
-
-  page.drawLine({ start: { x: 40, y: 388 }, end: { x: width - 40, y: 388 }, thickness: 1, color: rgb(0.88, 0.9, 0.94) });
-  page.drawText(`Total facturado: ${formatCurrency(account.amountTotal, account.currency)}`, {
-    x: 40,
-    y: 356,
-    size: 13,
-    font: fontBold,
-  });
-  page.drawText(`Pagado: ${formatCurrency(account.amountPaid, account.currency)}`, {
-    x: 40,
-    y: 332,
-    size: 11,
-    font,
-  });
-  page.drawText(`Pendiente: ${formatCurrency(account.amountPending, account.currency)}`, {
-    x: 40,
-    y: 310,
-    size: 11,
-    font,
+    color: COLORS.ink,
   });
 
   const notes = wrapText(
-    "Documento generado automaticamente al completarse la instalacion y aceptarse el acta de entrega. Puedes usar esta factura para seguimiento, validacion de pagos y soporte postventa.",
-    92
+    "Documento generado al completarse la instalación y aceptarse el acta de entrega. Úselo como soporte operativo y validación del servicio prestado.",
+    95
   );
-  let y = 248;
-  page.drawText("Observaciones", { x: 40, y, size: 11, font: fontBold });
-  y -= 18;
+  let y = 252;
+  drawSectionTitle(page, fontBold, 40, y, "Observaciones");
+  y -= 22;
   notes.forEach((line) => {
-    page.drawText(line, { x: 40, y, size: 10, font });
+    page.drawText(line, { x: 40, y, size: 10, font, color: COLORS.muted });
     y -= 14;
   });
+
+  drawFooter(page, font, fontBold);
 
   return pdfDoc.save();
 }
@@ -481,65 +588,67 @@ export async function buildReceiptPdf(
   const issuedAt = transaction.approvedAt ?? transaction.submittedAt ?? new Date().toISOString();
 
   await drawDocumentHeader(pdfDoc, page, font, fontBold, {
-    title: "Factura de pago",
-    subtitle: account.companyName,
+    title: "Recibo de pago",
+    subtitle: "",
     documentNumber: transaction.receiptNumber ?? buildDocumentNumber("REC", transaction.id),
     companyName: account.companyName,
     companyLogoUrl: account.companyLogoUrl,
   });
 
-  drawLabelValue(page, font, fontBold, 40, 648, "Cliente", account.customerName);
-  drawLabelValue(page, font, fontBold, 220, 648, "Factura origen", account.invoiceNumber);
-  drawLabelValue(page, font, fontBold, 400, 648, "Fecha", new Date(issuedAt).toLocaleDateString("es-DO"));
+  drawSectionTitle(page, fontBold, 40, 640, "Información del pago");
+  drawInfoBox(page, 40, 540, page.getSize().width - 80, 86);
+  drawLabelValue(page, font, fontBold, 52, 600, "Cliente", account.customerName);
+  drawLabelValue(page, font, fontBold, 220, 600, "Factura origen", account.invoiceNumber);
+  drawLabelValue(page, font, fontBold, 400, 600, "Fecha", formatDate(issuedAt));
+  drawLabelValue(page, font, fontBold, 52, 560, "Metodo", paymentMethodLabel(transaction.method));
+  drawLabelValue(page, font, fontBold, 220, 560, "Referencia", transaction.reference ?? "N/D");
+  drawLabelValue(page, font, fontBold, 400, 560, "Sitio", account.siteName ?? "N/D");
 
-  drawLabelValue(page, font, fontBold, 40, 593, "Metodo", paymentMethodLabel(transaction.method));
-  drawLabelValue(page, font, fontBold, 220, 593, "Referencia", transaction.reference ?? "N/D");
-  drawLabelValue(page, font, fontBold, 400, 593, "Sitio", account.siteName ?? "N/D");
-  drawLabelValue(page, font, fontBold, 40, 538, "Empresa", account.companyName);
-  drawLabelValue(page, font, fontBold, 220, 538, "Telefono", account.companyPhone ?? "N/D");
-  drawLabelValue(page, font, fontBold, 400, 538, "RNC", account.companyRnc ?? "N/D");
+  drawSectionTitle(page, fontBold, 40, 508, "Aplicación financiera");
+  drawMetricCard(page, font, fontBold, 40, 430, 165, "Monto aplicado", formatCurrency(transaction.amount, account.currency), true);
+  drawMetricCard(page, font, fontBold, 215, 430, 165, "Factura origen", formatCurrency(account.amountTotal, account.currency));
+  drawMetricCard(page, font, fontBold, 390, 430, 165, "Saldo pendiente", formatCurrency(account.amountPending, account.currency));
 
-  page.drawRectangle({ x: 40, y: 428, width: 515.28, height: 84, color: rgb(0.94, 0.98, 0.96) });
-  page.drawText("Monto aplicado", { x: 56, y: 476, size: 11, font: fontBold, color: rgb(0.06, 0.36, 0.2) });
-  page.drawText(formatCurrency(transaction.amount, account.currency), {
-    x: 56,
-    y: 446,
-    size: 22,
+  drawSectionTitle(page, fontBold, 40, 392, "Detalle");
+  drawTableHeader(page, 40, 352, 515.28, 28);
+  page.drawText("Concepto", { x: 52, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Estado", { x: 350, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Monto", { x: 500, y: 362, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawRectangle({ x: 40, y: 300, width: 515.28, height: 52, borderWidth: 1, borderColor: COLORS.border });
+  page.drawText(`Pago aplicado a la instalación facturada en ${account.siteName ?? "sitio del cliente"}.`, {
+    x: 52,
+    y: 326,
+    size: 10,
+    font,
+    color: COLORS.ink,
+  });
+  page.drawText(statusLabel(transaction.status), {
+    x: 350,
+    y: 326,
+    size: 10,
     font: fontBold,
-    color: rgb(0.06, 0.36, 0.2),
+    color: transaction.status === "approved" ? COLORS.success : COLORS.warning,
   });
-  page.drawText(`Saldo pendiente luego del pago: ${formatCurrency(account.amountPending, account.currency)}`, {
-    x: 300,
-    y: 462,
+  page.drawText(formatCurrency(transaction.amount, account.currency), {
+    x: 500,
+    y: 326,
     size: 10,
-    font,
-    color: rgb(0.16, 0.25, 0.35),
-  });
-  page.drawText(`Total de la factura: ${formatCurrency(account.amountTotal, account.currency)}`, {
-    x: 300,
-    y: 444,
-    size: 10,
-    font,
-    color: rgb(0.16, 0.25, 0.35),
-  });
-
-  page.drawText(`Detalle: pago aplicado a la instalacion facturada en ${account.siteName ?? "sitio del cliente"}.`, {
-    x: 40,
-    y: 380,
-    size: 11,
-    font,
+    font: fontBold,
+    color: COLORS.ink,
   });
 
   if (transaction.notes) {
-    const lines = wrapText(transaction.notes, 92);
-    let y = 326;
-    page.drawText("Notas", { x: 40, y, size: 11, font: fontBold });
+    const lines = wrapText(transaction.notes, 95);
+    let y = 252;
+    drawSectionTitle(page, fontBold, 40, y, "Notas");
     y -= 18;
     lines.forEach((line) => {
-      page.drawText(line, { x: 40, y, size: 10, font });
+      page.drawText(line, { x: 40, y, size: 10, font, color: COLORS.muted });
       y -= 14;
     });
   }
+
+  drawFooter(page, font, fontBold);
 
   return pdfDoc.save();
 }
@@ -556,61 +665,67 @@ export async function buildStatementPdf(
 
   await drawDocumentHeader(pdfDoc, page, font, fontBold, {
     title: "Estado de cuenta",
-    subtitle: account.companyName,
+    subtitle: "Resumen consolidado de pagos y saldo vigente del cliente.",
     documentNumber: buildDocumentNumber("EST", account.id),
     companyName: account.companyName,
     companyLogoUrl: account.companyLogoUrl,
   });
 
-  drawLabelValue(page, font, fontBold, 40, 648, "Cliente", account.customerName);
-  drawLabelValue(page, font, fontBold, 220, 648, "Factura", account.invoiceNumber);
-  drawLabelValue(page, font, fontBold, 400, 648, "Sitio", account.siteName ?? "N/D");
+  drawSectionTitle(page, fontBold, 40, 640, "Resumen de la cuenta");
+  drawInfoBox(page, 40, 540, width - 80, 86);
+  drawLabelValue(page, font, fontBold, 52, 600, "Cliente", account.customerName);
+  drawLabelValue(page, font, fontBold, 220, 600, "Factura", account.invoiceNumber);
+  drawLabelValue(page, font, fontBold, 400, 600, "Sitio", account.siteName ?? "N/D");
+  drawLabelValue(page, font, fontBold, 52, 560, "Total facturado", formatCurrency(account.amountTotal, account.currency));
+  drawLabelValue(page, font, fontBold, 220, 560, "Pagado", formatCurrency(account.amountPaid, account.currency));
+  drawLabelValue(page, font, fontBold, 400, 560, "Pendiente", formatCurrency(account.amountPending, account.currency));
 
-  page.drawText(`Total facturado: ${formatCurrency(account.amountTotal, account.currency)}`, {
-    x: 40,
-    y: 595,
-    size: 11,
-    font: fontBold,
-  });
-  page.drawText(`Pagado: ${formatCurrency(account.amountPaid, account.currency)}`, {
-    x: 40,
-    y: 573,
-    size: 10,
-    font,
-  });
-  page.drawText(`Pendiente: ${formatCurrency(account.amountPending, account.currency)}`, {
-    x: 40,
-    y: 555,
-    size: 10,
-    font,
-  });
+  drawMetricCard(page, font, fontBold, 40, 448, 165, "Estado", statusLabel(account.status), true);
+  drawMetricCard(page, font, fontBold, 215, 448, 165, "Movimientos", String(transactions.length));
+  drawMetricCard(page, font, fontBold, 390, 448, 165, "Última emisión", formatDate(new Date().toISOString()));
 
-  page.drawRectangle({ x: 40, y: 500, width: width - 80, height: 22, color: rgb(0.94, 0.96, 0.99) });
-  page.drawText("Fecha", { x: 45, y: 508, size: 9, font: fontBold });
-  page.drawText("Metodo", { x: 125, y: 508, size: 9, font: fontBold });
-  page.drawText("Estado", { x: 220, y: 508, size: 9, font: fontBold });
-  page.drawText("Referencia", { x: 310, y: 508, size: 9, font: fontBold });
-  page.drawText("Monto", { x: width - 95, y: 508, size: 9, font: fontBold });
+  drawSectionTitle(page, fontBold, 40, 412, "Historial de movimientos");
+  drawTableHeader(page, 40, 376, width - 80, 24);
+  page.drawText("Fecha", { x: 45, y: 385, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Metodo", { x: 125, y: 385, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Estado", { x: 220, y: 385, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Referencia", { x: 305, y: 385, size: 9, font: fontBold, color: COLORS.ink });
+  page.drawText("Monto", { x: width - 95, y: 385, size: 9, font: fontBold, color: COLORS.ink });
 
-  let rowY = 482;
-  transactions.slice(0, 18).forEach((transaction) => {
+  let rowY = 352;
+  transactions.slice(0, 15).forEach((transaction) => {
     const date = transaction.approvedAt ?? transaction.submittedAt ?? "-";
-    page.drawText(date ? new Date(date).toLocaleDateString("es-DO") : "-", { x: 45, y: rowY, size: 8, font });
-    page.drawText(paymentMethodLabel(transaction.method), { x: 125, y: rowY, size: 8, font });
-    page.drawText(transaction.status, { x: 220, y: rowY, size: 8, font });
-    page.drawText(transaction.reference ?? "-", { x: 310, y: rowY, size: 8, font });
+    page.drawRectangle({ x: 40, y: rowY - 8, width: width - 80, height: 20, borderWidth: 0.5, borderColor: COLORS.softBorder });
+    page.drawText(date ? formatDate(date) : "-", { x: 45, y: rowY, size: 8, font, color: COLORS.ink });
+    page.drawText(paymentMethodLabel(transaction.method), { x: 125, y: rowY, size: 8, font, color: COLORS.ink });
+    page.drawText(statusLabel(transaction.status), {
+      x: 220,
+      y: rowY,
+      size: 8,
+      font: fontBold,
+      color:
+        transaction.status === "approved"
+          ? COLORS.success
+          : transaction.status === "rejected"
+            ? COLORS.danger
+            : COLORS.warning,
+    });
+    page.drawText(transaction.reference ?? "-", { x: 305, y: rowY, size: 8, font, color: COLORS.ink });
     page.drawText(transaction.amount === null ? "-" : formatCurrency(transaction.amount, account.currency), {
       x: width - 95,
       y: rowY,
       size: 8,
-      font,
+      font: fontBold,
+      color: COLORS.ink,
     });
-    rowY -= 18;
+    rowY -= 20;
   });
 
   if (transactions.length === 0) {
-    page.drawText("No hay transacciones registradas todavia.", { x: 45, y: rowY, size: 9, font });
+    page.drawText("No hay transacciones registradas todavía.", { x: 45, y: rowY, size: 9, font, color: COLORS.muted });
   }
+
+  drawFooter(page, font, fontBold);
 
   return pdfDoc.save();
 }

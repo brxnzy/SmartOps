@@ -14,6 +14,12 @@ function statusClass(status: string) {
   return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
+function statusLabel(status: string) {
+  if (status === "paid") return "Saldada";
+  if (status === "partial") return "Por abonar";
+  return "Pendiente";
+}
+
 export default function CustomerPayments() {
   const navigate = useNavigate();
   const { authUser } = useAuth();
@@ -75,7 +81,7 @@ export default function CustomerPayments() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Mis pagos</h1>
             <p className="mt-2 text-sm text-slate-200">
-              Consulta tus facturas, revisa saldos pendientes y descarga tus documentos.
+              Consulta tus documentos de cobro, revisa saldos pendientes y descarga tus archivos.
             </p>
           </div>
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
@@ -90,7 +96,7 @@ export default function CustomerPayments() {
           <p className="mt-2 text-2xl font-semibold text-blue-900">{formatPaymentAmount(totals.pendingAmount)}</p>
         </article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-600">Facturas pendientes</p>
+          <p className="text-sm text-slate-600">Cuentas pendientes</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">{totals.pendingCount}</p>
         </article>
         <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
@@ -105,7 +111,7 @@ export default function CustomerPayments() {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Facturas y pagos</h2>
+          <h2 className="text-base font-semibold text-slate-900">Cuentas y pagos</h2>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
             {accounts.length} registros
           </span>
@@ -135,7 +141,7 @@ export default function CustomerPayments() {
                     </p>
                   </div>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(account.status)}`}>
-                    {account.status}
+                    {statusLabel(account.status)}
                   </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -152,7 +158,7 @@ export default function CustomerPayments() {
                     className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                   >
                     <FileText size={16} />
-                    Factura
+                    Documento base
                   </Button>
                   <Button
                     type="button"
@@ -160,7 +166,7 @@ export default function CustomerPayments() {
                     className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                   >
                     <Download size={16} />
-                    Estado
+                    Estado de cuenta
                   </Button>
                 </div>
               </article>

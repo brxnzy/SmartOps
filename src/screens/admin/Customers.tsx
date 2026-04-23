@@ -22,17 +22,18 @@ export default function Customers() {
   const navigate = useNavigate();
 
   const handleDownload = () => {
-    downloadPDF(items, 'customers_report.pdf', ['name', 'tax_id', 'email', 'phone', 'type'], companyProfile?.name ?? "SmartOps");
-  };
-  const canWrite = useMemo(() => {
-    return (
-      canAccess("customers:create") ||
-      canAccess("customers:update") ||
-      canAccess("customers:delete") ||
-      canAccess(PERMISSIONS.customersRead)
+    downloadPDF(
+      items,
+      "customers_report.pdf",
+      ["name", "tax_id", "email", "phone", "type"],
+      companyProfile?.name ?? "SmartOps",
+      "Reporte de clientes",
+      {
+        companyLogoUrl: companyProfile?.logoUrl ?? null,
+        subtitle: "Listado consolidado de clientes registrados para la compañía actual.",
+      }
     );
-  }, [canAccess]);
-
+  };
   const companyId = companyProfile?.id ?? null;
   const canCreate = useMemo(() => canAccess(PERMISSIONS.customersCreate), [canAccess]);
   const canUpdate = useMemo(() => canAccess(PERMISSIONS.customersUpdate), [canAccess]);
@@ -167,14 +168,9 @@ export default function Customers() {
         type={query.type}
         onSearchChange={setSearch}
         onTypeChange={setType}
-
-        onCreate={openCreateModal}
         onDownload={handleDownload}
-        disabled={loading || submitting || !canWrite}
-
         onCreate={handleCreateClick}
         disabled={loading || submitting || !canCreate}
-
       />
 
       {error && (
