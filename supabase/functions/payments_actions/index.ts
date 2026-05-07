@@ -25,6 +25,7 @@ const SUBMITTED_TRANSFER_PLACEHOLDER_AMOUNT = 0.01;
 
 type Mode =
   | "issue_account_invoice"
+  | "ensure_project_payment_account"
   | "record_manual_payment"
   | "submit_transfer_payment"
   | "review_payment_transaction"
@@ -348,6 +349,214 @@ async function issueAccountInvoice(ctx: AuthContext, payload: Record<string, unk
     invoiceNumber: account.invoiceNumber,
     pdfUrl,
     alreadyGenerated: false,
+  };
+}
+
+async function ensureProjectPaymentAccount(ctx: AuthContext, payload: Record<string, unknown>) {
+  const projectId = safeText(payload.projectId);
+  if (!projectId) throw new Error("projectId es requerido.");
+
+  const { data: project, error: projectError } = await ctx.adminClient
+    .from("installation_projects")
+    .select(
+      `
+      id,
+      company_id,
+      budget_id,
+      budgets:budget_id (
+        id,
+        total,
+        site_surveys:survey_id (
+          id,
+          customer_id,
+          customers:customer_id (
+            user_id,
+            users:users!customers_user_id_fkey ( id, name )
+          )
+        )
+      )
+    `
+    )
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectError) {
+    throw new Error(projectError.message || "No se pudo validar el proyecto.");
+  }
+  if (!project) {
+    throw new Error("No se encontro el proyecto.");
+  }
+
+  const companyId = safeText((project as { company_id?: unknown } | null)?.company_id);
+  const budgetId = safeText((project as { budget_id?: unknown } | null)?.budget_id);
+  const budget = pickSingle(
+    (project as { budgets?: Record<string, unknown> | Record<string, unknown>[] | null | undefined }).budgets
+  );
+  const survey = pickSingle(
+    (budget as { site_surveys?: Record<string, unknown> | Record<string, unknown>[] | null | undefined } | null)
+      ?.site_surveys
+  );
+  const customer = pickSingle(
+    (survey as { customers?: Record<string, unknown> | Record<string, unknown>[] | null | undefined } | null)
+      ?.customers
+  );
+  const customerUser = pickSingle(
+    (customer as { users?: Record<string, unknown> | Record<string, unknown>[] | null | undefined } | null)?.users
+  );
+
+  const customerId = safeText((customerUser as { id?: unknown } | null)?.id);
+  const amountTotal = safeNumber((budget as { total?: unknown } | null)?.total);
+  const currency = "USD";
+
+  if (!companyId || !budgetId) {
+    throw new Error("El proyecto no tiene la informacion necesaria para generar el pago.");
+  }
+  if (!customerId) {
+    throw new Error("No se pudo identificar el cliente del proyecto.");
+  }
+  if (amountTotal <= 0) {
+    throw new Error("La cotizacion del proyecto no tiene un total valido.");
+  }
+
+  if (!ctx.isServiceRole) {
+    await ensureCompanyAccess(ctx, companyId);
+  }
+
+  const { data: existing, error: existingError } = await ctx.adminClient
+    .from("payment_accounts")
+    .select(
+      "id, company_id, customer_id, project_id, budget_id, status, currency, amount_total, amount_paid, amount_pending, invoice_number, invoice_pdf_path, invoice_issued_at"
+    )
+    .eq("project_id", projectId)
+    .maybeSingle<{
+      id: string;
+      company_id: string;
+      customer_id: string;
+      project_id: string;
+      budget_id: string;
+      status: string;
+      currency: string | null;
+      amount_total: number;
+      amount_paid: number;
+      amount_pending: number;
+      invoice_number: string | null;
+      invoice_pdf_path: string | null;
+      invoice_issued_at: string | null;
+    }>();
+
+  if (existingError) {
+    throw new Error(existingError.message || "No se pudo validar la cuenta de pago.");
+  }
+
+  const nowIso = new Date().toISOString();
+  let accountId = existing?.id ?? crypto.randomUUID();
+  let created = false;
+  let amountChanged = false;
+  let invoiceNumber = existing?.invoice_number ?? "";
+
+  if (existing) {
+    const currentCurrency = safeText(existing.currency, currency);
+    amountChanged =
+      Math.abs(safeNumber(existing.amount_total, 0) - amountTotal) > 0.0001 ||
+      currentCurrency !== currency ||
+      safeText(existing.customer_id) !== customerId ||
+      safeText(existing.budget_id) !== budgetId;
+
+    if (!invoiceNumber) {
+      invoiceNumber = buildDocumentNumber("FAC", existing.id);
+    }
+
+    const patch: Record<string, unknown> = {
+      company_id: companyId,
+      customer_id: customerId,
+      project_id: projectId,
+      budget_id: budgetId,
+      currency,
+      amount_total: amountTotal,
+      amount_paid: safeNumber(existing.amount_paid, 0),
+      amount_pending: Math.max(0, amountTotal - safeNumber(existing.amount_paid, 0)),
+      invoice_number: invoiceNumber,
+      updated_at: nowIso,
+    };
+
+    if (amountChanged) {
+      patch.invoice_pdf_path = null;
+      patch.invoice_issued_at = null;
+    }
+
+    const { error: updateError } = await ctx.adminClient
+      .from("payment_accounts")
+      .update(patch)
+      .eq("id", existing.id);
+
+    if (updateError) {
+      throw new Error(updateError.message || "No se pudo actualizar la cuenta de pago.");
+    }
+  } else {
+    created = true;
+    invoiceNumber = buildDocumentNumber("FAC", accountId);
+
+    const { error: insertError } = await ctx.adminClient.from("payment_accounts").insert({
+      id: accountId,
+      company_id: companyId,
+      customer_id: customerId,
+      project_id: projectId,
+      budget_id: budgetId,
+      status: "pending",
+      currency,
+      amount_total: amountTotal,
+      amount_paid: 0,
+      amount_pending: amountTotal,
+      invoice_number: invoiceNumber,
+      created_at: nowIso,
+      updated_at: nowIso,
+    });
+
+    if (insertError) {
+      throw new Error(insertError.message || "No se pudo crear la cuenta de pago.");
+    }
+  }
+
+  const shouldIssueInvoice =
+    created || amountChanged || !(existing?.invoice_pdf_path ?? null) || !(existing?.invoice_issued_at ?? null);
+
+  let pdfUrl: string | null = null;
+  let invoiceIssued = false;
+
+  if (shouldIssueInvoice) {
+    const invoiceResult = await issueAccountInvoice(ctx, {
+      accountId,
+      force: true,
+    });
+    pdfUrl = safeNullableText(invoiceResult.pdfUrl);
+    invoiceIssued = true;
+  }
+
+  await insertAuditLog(ctx, {
+    action: created ? "create" : "update",
+    entity: "payment_account",
+    entityId: accountId,
+    companyId,
+    newValues: {
+      projectId,
+      budgetId,
+      amountTotal,
+      currency,
+      created,
+      amountChanged,
+      invoiceIssued,
+    },
+  });
+
+  return {
+    accountId,
+    invoiceNumber,
+    amountTotal,
+    currency,
+    created,
+    amountChanged,
+    invoiceIssued,
+    pdfUrl,
   };
 }
 
@@ -800,6 +1009,11 @@ Deno.serve(async (req: Request) => {
 
     if (mode === "issue_account_invoice") {
       const result = await issueAccountInvoice(ctx, payload);
+      return jsonResponse(200, result);
+    }
+
+    if (mode === "ensure_project_payment_account") {
+      const result = await ensureProjectPaymentAccount(ctx, payload);
       return jsonResponse(200, result);
     }
 

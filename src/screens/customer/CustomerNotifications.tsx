@@ -12,19 +12,30 @@ function formatDateTime(value: string | null): string {
 }
 
 function resolveLink(notification: CustomerNotification, origin: string): string | null {
+  if (notification.entityType === "delivery_act" && notification.entityId) {
+    return `/acta/${notification.entityId}`;
+  }
+
   if (notification.actionUrl) {
-    if (notification.actionUrl.startsWith(origin)) {
-      return notification.actionUrl.replace(origin, "");
+    try {
+      const parsed = new URL(notification.actionUrl);
+      if (parsed.origin === origin) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      if (parsed.pathname.startsWith("/acta/")) {
+        return parsed.pathname + parsed.search + parsed.hash;
+      }
+    } catch {
+      if (notification.actionUrl.startsWith(origin)) {
+        return notification.actionUrl.replace(origin, "");
+      }
     }
+
     return notification.actionUrl;
   }
 
   if (notification.entityType === "budget" && notification.entityId) {
     return `/customer/quotes/${notification.entityId}`;
-  }
-
-  if (notification.entityType === "delivery_act" && notification.entityId) {
-    return `/acta/${notification.entityId}`;
   }
 
   if (notification.entityType === "payment_account" && notification.entityId) {

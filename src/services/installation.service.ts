@@ -996,48 +996,36 @@ export async function finalizeInstallationProject(input: {
     },
   });
 
-  let paymentAccountId: string | null = null;
+  const accessToken = await getAccessToken();
+  const { data: paymentResult, error: paymentError } = await supabase.functions.invoke<{
+    accountId?: string;
+    invoiceNumber?: string;
+    amountTotal?: number;
+    currency?: string;
+    created?: boolean;
+    amountChanged?: boolean;
+    invoiceIssued?: boolean;
+    pdfUrl?: string | null;
+    error?: string;
+  }>("payments_actions", {
+    body: {
+      mode: "ensure_project_payment_account",
+      projectId: input.projectId,
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 
-  try {
-    const { data: ensuredPayment, error: paymentError } = await supabase
-      .rpc("ensure_payment_account_for_project", {
-        p_project_id: input.projectId,
-        p_created_by: input.userId,
-      })
-      .single<{ account_id: string; delivery_act_id: string; created: boolean }>();
-
-    if (paymentError) {
-      throw new Error(paymentError.message || "No se pudo generar el pago del proyecto.");
-    }
-
-    paymentAccountId = safeNullableText(ensuredPayment?.account_id);
-
-    if (paymentAccountId) {
-      const accessToken = await getAccessToken();
-      const { data: invoiceResult, error: invoiceError } = await supabase.functions.invoke<{
-        accountId?: string;
-        error?: string;
-      }>("payments_actions", {
-        body: {
-          mode: "issue_account_invoice",
-          accountId: paymentAccountId,
-        },
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (invoiceError) {
-        throw new Error(invoiceError.message || "No se pudo emitir la factura del pago.");
-      }
-
-      if (invoiceResult?.error) {
-        throw new Error(invoiceResult.error);
-      }
-    }
-  } catch (paymentFlowError) {
-    console.error("[installation.service] finalize_payment_flow_error", paymentFlowError);
+  if (paymentError) {
+    throw new Error(paymentError.message || "No se pudo generar el pago del proyecto.");
   }
+
+  if (paymentResult?.error) {
+    throw new Error(paymentResult.error);
+  }
+
+  const paymentAccountId = safeNullableText(paymentResult?.accountId);
 
   return {
     alreadyFinalized: Boolean(data.already_finalized),
