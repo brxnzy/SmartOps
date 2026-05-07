@@ -335,40 +335,30 @@ Deno.serve(async (req: Request) => {
 
     let paymentAccountId: string | null = null;
     try {
-      const { data: paymentAccountData, error: paymentAccountError } = await adminClient
-        .rpc("create_payment_account_from_delivery_act", {
-          p_delivery_act_id: actId,
-          p_created_by: authData.user.id,
-        })
-        .single<{
-          account_id: string;
-        }>();
+      const paymentResponse = await fetch(`${supabaseUrl}/functions/v1/payments_actions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRoleKey}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          mode: "ensure_project_payment_account",
+          projectId,
+        }),
+      });
 
-      if (paymentAccountError) {
-        console.log(`[sign-delivery-act] request_id=${requestId} payment_account_error=${paymentAccountError.message}`);
+      const rawResponse = await paymentResponse.text().catch(() => "");
+      if (!paymentResponse.ok) {
+        console.log(
+          `[sign-delivery-act] request_id=${requestId} payment_ensure_error status=${paymentResponse.status} body=${rawResponse}`
+        );
       } else {
-        paymentAccountId = paymentAccountData?.account_id ?? null;
-      }
-
-      if (paymentAccountId) {
-        const invoiceResponse = await fetch(`${supabaseUrl}/functions/v1/payments_actions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceRoleKey}`,
-            apikey: supabaseAnonKey,
-          },
-          body: JSON.stringify({
-            mode: "issue_account_invoice",
-            accountId: paymentAccountId,
-          }),
-        });
-
-        if (!invoiceResponse.ok) {
-          const rawResponse = await invoiceResponse.text().catch(() => "");
-          console.log(
-            `[sign-delivery-act] request_id=${requestId} payment_invoice_error status=${invoiceResponse.status} body=${rawResponse}`
-          );
+        const parsed = rawResponse ? (JSON.parse(rawResponse) as { accountId?: string; error?: string }) : {};
+        if (parsed.error) {
+          console.log(`[sign-delivery-act] request_id=${requestId} payment_ensure_error=${parsed.error}`);
+        } else {
+          paymentAccountId = parsed.accountId ?? null;
         }
       }
     } catch (error) {
