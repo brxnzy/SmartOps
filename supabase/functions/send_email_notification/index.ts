@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-service-role",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -291,9 +291,8 @@ Deno.serve(async (req: Request) => {
 
     const authHeader = req.headers.get("Authorization") ?? "";
     const accessToken = authHeader.replace("Bearer ", "").trim();
-    if (!accessToken) {
-      return jsonResponse(401, { error: "Missing authorization header" });
-    }
+    const apiKeyHeader = req.headers.get("apikey")?.trim() ?? "";
+    const internalServiceKey = req.headers.get("x-internal-service-role")?.trim() ?? "";
 
     const authClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -309,10 +308,15 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    const isServiceRoleRequest = accessToken === serviceRoleKey;
+    const isServiceRoleRequest =
+      accessToken === serviceRoleKey || apiKeyHeader === serviceRoleKey || internalServiceKey === serviceRoleKey;
     let authUserId: string | null = null;
 
     if (!isServiceRoleRequest) {
+      if (!accessToken) {
+        return jsonResponse(401, { error: "Missing authorization header" });
+      }
+
       const { data: authData, error: authError } = await withTimeout(
         "auth.getUser",
         authClient.auth.getUser(accessToken),

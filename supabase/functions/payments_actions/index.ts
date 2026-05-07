@@ -17,7 +17,7 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-service-role",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -57,6 +57,12 @@ function safeText(value: unknown, fallback = ""): string {
   return fallback;
 }
 
+function safeNullableText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const normalized = safeText(value, "");
+  return normalized || null;
+}
+
 function safeNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -64,6 +70,12 @@ function safeNumber(value: unknown, fallback = 0): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
+}
+
+function pickSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
 }
 
 function sanitizeFilename(value: string): string {
@@ -91,6 +103,8 @@ async function buildAuthContext(req: Request, allowCronSecret = false): Promise<
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const accessToken = authHeader.replace("Bearer ", "").trim();
+  const apiKeyHeader = req.headers.get("apikey")?.trim() ?? "";
+  const internalServiceKey = req.headers.get("x-internal-service-role")?.trim() ?? "";
   const cronSecret = req.headers.get("x-cron-secret")?.trim() ?? "";
   if (allowCronSecret && cronSecret) {
     const { data } = await adminClient
@@ -112,10 +126,22 @@ async function buildAuthContext(req: Request, allowCronSecret = false): Promise<
   }
 
   if (!accessToken) {
+    if (apiKeyHeader === serviceRoleKey || internalServiceKey === serviceRoleKey) {
+      return {
+        adminClient,
+        authUser: null,
+        isServiceRole: true,
+        supabaseUrl,
+        supabaseAnonKey,
+        serviceRoleKey,
+      };
+    }
+
     throw new Error("Missing authorization header.");
   }
 
-  const isServiceRole = accessToken === serviceRoleKey;
+  const isServiceRole =
+    accessToken === serviceRoleKey || apiKeyHeader === serviceRoleKey || internalServiceKey === serviceRoleKey;
   if (isServiceRole) {
     return {
       adminClient,
@@ -239,8 +265,8 @@ async function sendEmail(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${ctx.serviceRoleKey}`,
-      apikey: ctx.supabaseAnonKey,
+      apikey: ctx.serviceRoleKey,
+      "x-internal-service-role": ctx.serviceRoleKey,
     },
     body: JSON.stringify(payload),
   });
@@ -449,10 +475,18 @@ async function ensureProjectPaymentAccount(ctx: AuthContext, payload: Record<str
   }
 
   const nowIso = new Date().toISOString();
-  let accountId = existing?.id ?? crypto.randomUUID();
+  let currentAccount = existing
+    ? {
+        id: existing.id,
+        invoicePdfPath: existing.invoice_pdf_path,
+        invoiceIssuedAt: existing.invoice_issued_at,
+      }
+    : null;
+  let accountId = currentAccount?.id ?? crypto.randomUUID();
   let created = false;
   let amountChanged = false;
   let invoiceNumber = existing?.invoice_number ?? "";
+  let invoiceError: string | null = null;
 
   if (existing) {
     const currentCurrency = safeText(existing.currency, currency);
@@ -513,23 +547,75 @@ async function ensureProjectPaymentAccount(ctx: AuthContext, payload: Record<str
     });
 
     if (insertError) {
-      throw new Error(insertError.message || "No se pudo crear la cuenta de pago.");
+      const isDuplicateProject =
+        safeText((insertError as { code?: unknown }).code) === "23505" &&
+        safeText((insertError as { message?: unknown }).message).includes("payment_accounts_project_uidx");
+
+      if (!isDuplicateProject) {
+        throw new Error(insertError.message || "No se pudo crear la cuenta de pago.");
+      }
+
+      const { data: duplicated, error: duplicatedError } = await ctx.adminClient
+        .from("payment_accounts")
+        .select(
+          "id, invoice_number, invoice_pdf_path, invoice_issued_at, amount_total, amount_paid, amount_pending, customer_id, budget_id, currency"
+        )
+        .eq("project_id", projectId)
+        .maybeSingle<{
+          id: string;
+          invoice_number: string | null;
+          invoice_pdf_path: string | null;
+          invoice_issued_at: string | null;
+          amount_total: number;
+          amount_paid: number;
+          amount_pending: number;
+          customer_id: string;
+          budget_id: string;
+          currency: string | null;
+        }>();
+
+      if (duplicatedError || !duplicated?.id) {
+        throw new Error(duplicatedError?.message || insertError.message || "No se pudo recuperar la cuenta de pago.");
+      }
+
+      accountId = duplicated.id;
+      currentAccount = {
+        id: duplicated.id,
+        invoicePdfPath: duplicated.invoice_pdf_path,
+        invoiceIssuedAt: duplicated.invoice_issued_at,
+      };
+      created = false;
+      invoiceNumber = safeText(duplicated.invoice_number, buildDocumentNumber("FAC", duplicated.id));
+      amountChanged =
+        Math.abs(safeNumber(duplicated.amount_total, 0) - amountTotal) > 0.0001 ||
+        safeText(duplicated.currency, currency) !== currency ||
+        safeText(duplicated.customer_id) !== customerId ||
+        safeText(duplicated.budget_id) !== budgetId;
     }
   }
 
   const shouldIssueInvoice =
-    created || amountChanged || !(existing?.invoice_pdf_path ?? null) || !(existing?.invoice_issued_at ?? null);
+    created || amountChanged || !(currentAccount?.invoicePdfPath ?? null) || !(currentAccount?.invoiceIssuedAt ?? null);
 
   let pdfUrl: string | null = null;
   let invoiceIssued = false;
 
   if (shouldIssueInvoice) {
-    const invoiceResult = await issueAccountInvoice(ctx, {
-      accountId,
-      force: true,
-    });
-    pdfUrl = safeNullableText(invoiceResult.pdfUrl);
-    invoiceIssued = true;
+    try {
+      const invoiceResult = await issueAccountInvoice(ctx, {
+        accountId,
+        force: true,
+      });
+      pdfUrl = safeNullableText(invoiceResult.pdfUrl);
+      invoiceIssued = true;
+    } catch (error) {
+      invoiceError = error instanceof Error ? error.message : String(error);
+      console.error("[payments_actions] ensure_project_payment_account invoice_issue_error", {
+        projectId,
+        accountId,
+        message: invoiceError,
+      });
+    }
   }
 
   await insertAuditLog(ctx, {
@@ -545,6 +631,7 @@ async function ensureProjectPaymentAccount(ctx: AuthContext, payload: Record<str
       created,
       amountChanged,
       invoiceIssued,
+      invoiceError,
     },
   });
 
@@ -557,6 +644,7 @@ async function ensureProjectPaymentAccount(ctx: AuthContext, payload: Record<str
     amountChanged,
     invoiceIssued,
     pdfUrl,
+    invoiceError,
   };
 }
 
@@ -1045,6 +1133,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(400, { error: "mode invalido." });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error("[payments_actions] unhandled_error", { message });
     return jsonResponse(500, { error: message });
   }
 });

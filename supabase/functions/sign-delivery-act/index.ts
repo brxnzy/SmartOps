@@ -339,8 +339,8 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: supabaseAnonKey,
+          apikey: serviceRoleKey,
+          "x-internal-service-role": serviceRoleKey,
         },
         body: JSON.stringify({
           mode: "ensure_project_payment_account",
