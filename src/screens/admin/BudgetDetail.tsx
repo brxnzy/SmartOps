@@ -9,6 +9,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { notifications } from "../../services/notification.service";
 import {
   getBudgetDetail,
+  replaceBudgetExtraCharges,
   replaceBudgetItems,
   saveBudgetDraft,
   updateBudgetStatus,
@@ -25,7 +26,11 @@ import type {
   SurveyLayout,
   SurveyZoneOption,
 } from "../../types/siteSurveyExecution.types";
-import type { BudgetDetail as BudgetDetailType } from "../../types/budget.types";
+import type {
+  BudgetDetail as BudgetDetailType,
+  BudgetExtraCharge,
+  BudgetExtraChargeType,
+} from "../../types/budget.types";
 import type { BudgetQuote } from "../../types/quote.types";
 import type { InstallationProject } from "../../services/installation.service";
 
@@ -37,12 +42,20 @@ type BudgetRow = {
   zoneName: string;
   quantity: number;
   price: number;
+  installationPrice: number;
 };
+
+type EditableExtraCharge = Pick<BudgetExtraCharge, "id" | "label" | "chargeType" | "amount">;
 
 const DEFAULT_TAX_RATE = 0.18;
 const DEFAULT_QUOTE_VALID_DAYS = 15;
 const DEFAULT_QUOTE_TERMS =
   "Validez sujeta a disponibilidad. La instalacion se coordina con el cliente en un plazo de 10 dias habiles.";
+const EXTRA_CHARGE_TYPE_OPTIONS: Array<{ value: BudgetExtraChargeType; label: string }> = [
+  { value: "viaticos", label: "Viaticos" },
+  { value: "transporte", label: "Transporte" },
+  { value: "extra", label: "Extra" },
+];
 
 function toDateInput(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
@@ -96,6 +109,7 @@ export default function BudgetDetail() {
   const [layout, setLayout] = useState<SurveyLayout>({ walls: [], zones: [], devices: [] });
   const [zones, setZones] = useState<SurveyZoneOption[]>([]);
   const [devicesCatalog, setDevicesCatalog] = useState<SurveyCatalogDevice[]>([]);
+  const [extraCharges, setExtraCharges] = useState<EditableExtraCharge[]>([]);
   const [notes, setNotes] = useState({
     requirements: "",
     observations: "",
@@ -139,6 +153,14 @@ export default function BudgetDetail() {
       setInstallationProject(projectData);
       setZones(surveyData.zones);
       setDevicesCatalog(surveyData.catalogDevices);
+      setExtraCharges(
+        budgetDetail.extraCharges.map((charge) => ({
+          id: charge.id,
+          label: charge.label,
+          chargeType: charge.chargeType,
+          amount: charge.amount,
+        }))
+      );
       setNotes({
         requirements: surveyData.survey.requirements ?? "",
         observations: surveyData.survey.observations ?? "",
@@ -150,6 +172,9 @@ export default function BudgetDetail() {
       setLayout(snapshot);
       setTaxRate(budgetDetail.taxRate ?? DEFAULT_TAX_RATE);
       layoutSignatureRef.current = `${JSON.stringify(snapshot)}::${JSON.stringify({
+        devicesSubtotal: budgetDetail.devicesSubtotal,
+        installationSubtotal: budgetDetail.installationSubtotal,
+        extraChargesSubtotal: budgetDetail.extraChargesSubtotal,
         subtotal: budgetDetail.subtotal,
         taxRate: budgetDetail.taxRate ?? DEFAULT_TAX_RATE,
         taxAmount: budgetDetail.taxAmount,
@@ -197,10 +222,13 @@ export default function BudgetDetail() {
 
   const zoneById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones]);
   const deviceById = useMemo(() => new Map(devicesCatalog.map((device) => [device.id, device])), [devicesCatalog]);
-  const priceByKey = useMemo(() => {
-    const map = new Map<string, number>();
+  const pricingByKey = useMemo(() => {
+    const map = new Map<string, { price: number; installationPrice: number }>();
     budget?.items.forEach((item) => {
-      map.set(buildRowKey(item.deviceId, item.zoneId), item.unitPrice);
+      map.set(buildRowKey(item.deviceId, item.zoneId), {
+        price: item.unitPrice,
+        installationPrice: item.installationUnitPrice,
+      });
     });
     return map;
   }, [budget?.items]);
@@ -214,8 +242,9 @@ export default function BudgetDetail() {
       if (!first) return;
       const device = deviceById.get(first.deviceId);
       const zone = first.zoneId ? zoneById.get(first.zoneId) : null;
-      const storedPrice = priceByKey.get(key);
-      const price = storedPrice ?? device?.price ?? 0;
+      const storedPricing = pricingByKey.get(key);
+      const price = storedPricing?.price ?? device?.price ?? 0;
+      const installationPrice = storedPricing?.installationPrice ?? device?.installationPrice ?? 0;
 
       nextRows.push({
         key,
@@ -225,14 +254,20 @@ export default function BudgetDetail() {
         zoneName: zone?.name ?? "Sin zona",
         quantity: devices.length,
         price,
+        installationPrice,
       });
     });
 
     return nextRows.sort((a, b) => a.deviceLabel.localeCompare(b.deviceLabel));
-  }, [deviceById, layout.devices, priceByKey, zoneById]);
+  }, [deviceById, layout.devices, pricingByKey, zoneById]);
 
-  const rowSubtotals = rows.map((row) => row.quantity * row.price);
-  const subtotal = rowSubtotals.reduce((acc, value) => acc + value, 0);
+  const rowDeviceSubtotals = rows.map((row) => row.quantity * row.price);
+  const rowInstallationSubtotals = rows.map((row) => row.quantity * row.installationPrice);
+  const rowTotals = rows.map((_, index) => (rowDeviceSubtotals[index] ?? 0) + (rowInstallationSubtotals[index] ?? 0));
+  const devicesSubtotal = rowDeviceSubtotals.reduce((acc, value) => acc + value, 0);
+  const installationSubtotal = rowInstallationSubtotals.reduce((acc, value) => acc + value, 0);
+  const extraChargesSubtotal = extraCharges.reduce((acc, charge) => acc + charge.amount, 0);
+  const subtotal = devicesSubtotal + installationSubtotal + extraChargesSubtotal;
   const taxAmount = subtotal * taxRate;
   const total = subtotal + taxAmount;
   const canEditBudgetDraft = canUpdateBudget && budget?.status === "borrador" && !installationProject;
@@ -244,15 +279,39 @@ export default function BudgetDetail() {
       quantity: row.quantity,
       unitPrice: row.price,
       subtotal: row.quantity * row.price,
+      installationUnitPrice: row.installationPrice,
+      installationSubtotal: row.quantity * row.installationPrice,
     }));
   }, [rows]);
 
+  const extraChargesForSave = useMemo(
+    () =>
+      extraCharges
+        .map((charge, index) => ({
+          label: charge.label.trim(),
+          chargeType: charge.chargeType,
+          amount: Math.max(0, charge.amount),
+          itemOrder: index,
+        }))
+        .filter((charge) => charge.label.length > 0 || charge.amount > 0),
+    [extraCharges]
+  );
+
   useEffect(() => {
-    if (!budget || !budgetId || !canEditBudgetDraft) return;
+    if (!budget || !budgetId || !companyId || !canEditBudgetDraft) return;
     if (!hydratedRef.current) return;
 
     const signature = JSON.stringify(layout);
-    const totalsSignature = JSON.stringify({ subtotal, taxRate, taxAmount, total });
+    const totalsSignature = JSON.stringify({
+      devicesSubtotal,
+      installationSubtotal,
+      extraChargesSubtotal,
+      subtotal,
+      taxRate,
+      taxAmount,
+      total,
+      extraCharges: extraChargesForSave,
+    });
     const currentSignature = `${signature}::${totalsSignature}`;
 
     if (currentSignature === layoutSignatureRef.current) return;
@@ -264,12 +323,16 @@ export default function BudgetDetail() {
         saveBudgetDraft({
           budgetId,
           layout,
+          devicesSubtotal,
+          installationSubtotal,
+          extraChargesSubtotal,
           subtotal,
           taxRate,
           taxAmount,
           total,
         }),
         replaceBudgetItems(budgetId, itemsForSave),
+        replaceBudgetExtraCharges(budgetId, companyId, extraChargesForSave),
       ])
         .then(() => {
           layoutSignatureRef.current = currentSignature;
@@ -285,7 +348,22 @@ export default function BudgetDetail() {
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [budget, budgetId, canEditBudgetDraft, itemsForSave, layout, subtotal, taxAmount, taxRate, total]);
+  }, [
+    budget,
+    budgetId,
+    canEditBudgetDraft,
+    companyId,
+    devicesSubtotal,
+    extraChargesForSave,
+    extraChargesSubtotal,
+    installationSubtotal,
+    itemsForSave,
+    layout,
+    subtotal,
+    taxAmount,
+    taxRate,
+    total,
+  ]);
 
   useEffect(() => {
     if (!budget || budget.status !== "enviada" || !budget.expiresAt) return;
@@ -435,6 +513,26 @@ export default function BudgetDetail() {
     } finally {
       setQuoteSubmitting(false);
     }
+  };
+
+  const addExtraCharge = () => {
+    setExtraCharges((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        label: "",
+        chargeType: "extra",
+        amount: 0,
+      },
+    ]);
+  };
+
+  const updateExtraCharge = (id: string, patch: Partial<EditableExtraCharge>) => {
+    setExtraCharges((current) => current.map((charge) => (charge.id === id ? { ...charge, ...patch } : charge)));
+  };
+
+  const removeExtraCharge = (id: string) => {
+    setExtraCharges((current) => current.filter((charge) => charge.id !== id));
   };
 
   if (!budgetId) {
@@ -670,14 +768,15 @@ export default function BudgetDetail() {
                     <th className="px-3 py-2">Dispositivo</th>
                     <th className="px-3 py-2">Zona</th>
                     <th className="px-3 py-2">Cantidad</th>
-                    <th className="px-3 py-2">Precio</th>
-                    <th className="px-3 py-2">Subtotal</th>
+                    <th className="px-3 py-2">Precio equipo</th>
+                    <th className="px-3 py-2">Instalacion</th>
+                    <th className="px-3 py-2">Total linea</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-500">
+                      <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
                         No hay dispositivos cargados en el plano.
                       </td>
                     </tr>
@@ -688,8 +787,9 @@ export default function BudgetDetail() {
                         <td className="px-3 py-3 text-slate-600">{row.zoneName}</td>
                         <td className="px-3 py-3 text-slate-600">{row.quantity}</td>
                         <td className="px-3 py-3 text-slate-600">{formatCurrency(row.price)}</td>
+                        <td className="px-3 py-3 text-slate-600">{formatCurrency(row.installationPrice)}</td>
                         <td className="px-3 py-3 font-semibold text-slate-800">
-                          {formatCurrency(rowSubtotals[index] ?? 0)}
+                          {formatCurrency(rowTotals[index] ?? 0)}
                         </td>
                       </tr>
                     ))
@@ -698,9 +798,83 @@ export default function BudgetDetail() {
               </table>
             </div>
 
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Cargos adicionales</h3>
+                  <p className="text-xs text-slate-500">Agrega viaticos, transporte o extras antes de cotizar.</p>
+                </div>
+                {canEditBudgetDraft ? (
+                  <Button
+                    type="button"
+                    onClick={addExtraCharge}
+                    className="border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  >
+                    Agregar cargo
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {extraCharges.length === 0 ? (
+                  <p className="text-sm text-slate-500">No hay cargos adicionales.</p>
+                ) : (
+                  extraCharges.map((charge) => (
+                    <div key={charge.id} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1.2fr_0.8fr_0.6fr_auto]">
+                      <Field label="Concepto">
+                        <input
+                          type="text"
+                          value={charge.label}
+                          onChange={(event) => updateExtraCharge(charge.id, { label: event.target.value })}
+                          disabled={!canEditBudgetDraft}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                        />
+                      </Field>
+                      <Field label="Tipo">
+                        <select
+                          value={charge.chargeType}
+                          onChange={(event) => updateExtraCharge(charge.id, { chargeType: event.target.value as BudgetExtraChargeType })}
+                          disabled={!canEditBudgetDraft}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                        >
+                          {EXTRA_CHARGE_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Monto">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={charge.amount}
+                          onChange={(event) => updateExtraCharge(charge.id, { amount: Math.max(0, Number(event.target.value) || 0) })}
+                          disabled={!canEditBudgetDraft}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                        />
+                      </Field>
+                      {canEditBudgetDraft ? (
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            onClick={() => removeExtraCharge(charge.id)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-700"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             <div className="mt-6 grid gap-3 md:grid-cols-[1fr_auto]">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                Subtotal {formatCurrency(subtotal)} · Impuestos {formatCurrency(taxAmount)} · Total {formatCurrency(total)}
+                Equipos {formatCurrency(devicesSubtotal)} · Instalacion {formatCurrency(installationSubtotal)} · Extras {formatCurrency(extraChargesSubtotal)} · Impuestos {formatCurrency(taxAmount)} · Total {formatCurrency(total)}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-2 text-sm">
@@ -723,6 +897,18 @@ export default function BudgetDetail() {
                   </div>
                 </div>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
+                  <div className="flex items-center justify-between">
+                    <span>Equipos</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(devicesSubtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Instalacion</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(installationSubtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Extras</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(extraChargesSubtotal)}</span>
+                  </div>
                   <div className="flex items-center justify-between">
                     <span>Subtotal</span>
                     <span className="font-semibold text-slate-800">{formatCurrency(subtotal)}</span>

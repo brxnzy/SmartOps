@@ -21,7 +21,6 @@ import {
   createInstallationProjectTask,
   finalizeInstallationProject,
   getInstallationProjectById,
-  seedInstallationProjectDefaults,
   updateInstallationProjectMetadata,
   updateInstallationProjectPostInstallationCheck,
   updateInstallationProjectTask,
@@ -227,8 +226,6 @@ export default function InstallationProjectDetail() {
     setError(null);
 
     try {
-      await seedInstallationProjectDefaults({ companyId, projectId });
-
       const [projectData, technicianRows] = await Promise.all([
         getInstallationProjectById(projectId, companyId),
         listTechnicians(companyId),
@@ -491,12 +488,23 @@ export default function InstallationProjectDetail() {
     return { total, checked, pending, ready: total > 0 && pending === 0 };
   }, [postCheckDrafts, project]);
 
-  const visitScheduledReady =
+  const hasScheduledVisit =
     Boolean(project?.technicalVisitId) &&
     Boolean(project?.scheduledStart) &&
     Boolean(project?.technicianId) &&
     project?.technicalVisitStatus !== "cancelada";
-  const visitScheduledForToday = visitScheduledReady && isSameLocalDate(project?.scheduledStart ?? null);
+  const visitScheduledReady = !isClosed && hasScheduledVisit;
+  const visitScheduledForToday = !isClosed && visitScheduledReady && isSameLocalDate(project?.scheduledStart ?? null);
+  const visitOverviewLabel = isClosed
+    ? "Proyecto finalizado"
+    : visitScheduledReady
+      ? "Visita técnica programada"
+      : "Visita técnica pendiente";
+  const visitOverviewValue = isClosed
+    ? formatDateTime(project?.completedAt ?? null)
+    : visitScheduledReady
+      ? formatDateTime(project?.scheduledStart ?? null)
+      : "Pendiente";
 
   const finalizeBlockers = useMemo(() => {
     const blockers: string[] = [];
@@ -1047,15 +1055,19 @@ export default function InstallationProjectDetail() {
               <div className="flex items-center gap-2">
                 <span
                   className={`grid h-5 w-5 place-items-center rounded-full border ${
-                    visitScheduledReady ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+                    isClosed
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : visitScheduledReady
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-400"
                   }`}
                   aria-hidden="true"
                 >
-                  {visitScheduledReady ? <Check className="h-3.5 w-3.5" /> : null}
+                  {isClosed || visitScheduledReady ? <Check className="h-3.5 w-3.5" /> : null}
                 </span>
-                <span className="text-sm font-medium text-slate-900">Visita Tecnifa programada</span>
+                <span className="text-sm font-medium text-slate-900">{visitOverviewLabel}</span>
               </div>
-              <span className="text-xs text-slate-500">{visitScheduledReady ? formatDateTime(project.scheduledStart) : "Pendiente"}</span>
+              <span className="text-xs text-slate-500">{visitOverviewValue}</span>
             </div>
           </div>
 
@@ -1374,19 +1386,27 @@ export default function InstallationProjectDetail() {
             <div className="space-y-2 text-sm text-slate-600">
               <p>
                 <span className="font-medium text-slate-700">Estado:</span>{" "}
-                <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${visitStatusBadge(project.technicalVisitStatus)}`}>
-                  {visitStatusLabel(project.technicalVisitStatus)}
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                    isClosed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : visitStatusBadge(project.technicalVisitStatus)
+                  }`}
+                >
+                  {isClosed ? "proyecto finalizado" : visitStatusLabel(project.technicalVisitStatus)}
                 </span>
               </p>
               <p><span className="font-medium text-slate-700">Inicio:</span> {formatDateTime(project.scheduledStart)}</p>
               <p>
                 <span className="font-medium text-slate-700">Puede finalizar hoy:</span>{" "}
-                {visitScheduledForToday ? "Si" : "No"}
+                {isClosed ? "No aplica" : visitScheduledForToday ? "Si" : "No"}
               </p>
               <p><span className="font-medium text-slate-700">Tecnico:</span> {project.technicianName ?? "Sin asignar"}</p>
             </div>
 
-            {visitScheduledReady ? (
+            {isClosed ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                Este proyecto ya fue finalizado. La visita queda como historial y no se puede reprogramar desde aquí.
+              </div>
+            ) : visitScheduledReady ? (
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"

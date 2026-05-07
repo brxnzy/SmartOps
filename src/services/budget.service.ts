@@ -2,7 +2,13 @@
 import { logAuditEvent } from "./audit.service";
 import { sendEmailNotification } from "./email-notification.service";
 import { getSurveyExecutionData } from "./siteSurveyExecution.service";
-import type { BudgetDetail, BudgetItem, BudgetStatus, BudgetSummary } from "../types/budget.types";
+import type {
+  BudgetDetail,
+  BudgetExtraChargeType,
+  BudgetItem,
+  BudgetStatus,
+  BudgetSummary,
+} from "../types/budget.types";
 import type { SurveyLayout } from "../types/siteSurveyExecution.types";
 
 function safeText(value: unknown, fallback = ""): string {
@@ -36,6 +42,12 @@ function normalizeLayout(value: unknown): SurveyLayout {
     return value as SurveyLayout;
   }
   return { walls: [], zones: [], devices: [] };
+}
+
+function normalizeChargeType(value: unknown): BudgetExtraChargeType {
+  const normalized = safeText(value, "extra").toLowerCase();
+  if (normalized === "viaticos" || normalized === "transporte") return normalized;
+  return "extra";
 }
 
 function isValidEmail(value: string | null | undefined): value is string {
@@ -118,6 +130,9 @@ export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
       status,
       created_at,
       updated_at,
+      devices_subtotal,
+      installation_subtotal,
+      extra_charges_subtotal,
       subtotal,
       tax_rate,
       tax_amount,
@@ -160,6 +175,9 @@ export async function listBudgets(companyId: string): Promise<BudgetSummary[]> {
       updatedAt: safeText(row.updated_at ?? new Date().toISOString()),
       customerName: safeNullableText((customerUser as any)?.name),
       siteName: safeNullableText((siteRow as any)?.name),
+      devicesSubtotal: safeNumber(row.devices_subtotal, safeNumber(row.subtotal, 0)),
+      installationSubtotal: safeNumber(row.installation_subtotal, 0),
+      extraChargesSubtotal: safeNumber(row.extra_charges_subtotal, 0),
       subtotal: safeNumber(row.subtotal, 0),
       taxRate: safeNumber(row.tax_rate, 0),
       taxAmount: safeNumber(row.tax_amount, 0),
@@ -184,6 +202,9 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
       status,
       created_at,
       updated_at,
+      devices_subtotal,
+      installation_subtotal,
+      extra_charges_subtotal,
       subtotal,
       tax_rate,
       tax_amount,
@@ -227,6 +248,9 @@ export async function listBudgetsForCustomer(companyId: string, customerId: stri
       updatedAt: safeText(row.updated_at ?? new Date().toISOString()),
       customerName: safeNullableText((customerUser as any)?.name),
       siteName: safeNullableText((siteRow as any)?.name),
+      devicesSubtotal: safeNumber(row.devices_subtotal, safeNumber(row.subtotal, 0)),
+      installationSubtotal: safeNumber(row.installation_subtotal, 0),
+      extraChargesSubtotal: safeNumber(row.extra_charges_subtotal, 0),
       subtotal: safeNumber(row.subtotal, 0),
       taxRate: safeNumber(row.tax_rate, 0),
       taxAmount: safeNumber(row.tax_amount, 0),
@@ -248,8 +272,14 @@ export async function createBudgetFromSurvey(input: {
 }): Promise<BudgetDetail> {
   const surveyData = await getSurveyExecutionData(input.surveyId, input.companyId);
 
-  const devicePriceById = new Map(
-    surveyData.catalogDevices.map((device) => [device.id, Number(device.price ?? 0)])
+  const devicePricingById = new Map(
+    surveyData.catalogDevices.map((device) => [
+      device.id,
+      {
+        unitPrice: Number(device.price ?? 0),
+        installationUnitPrice: Number(device.installationPrice ?? 0),
+      },
+    ])
   );
 
   const grouped = new Map<string, { deviceId: string; zoneId: string | null; quantity: number }>();
@@ -264,7 +294,11 @@ export async function createBudgetFromSurvey(input: {
   });
 
   const items: BudgetItem[] = Array.from(grouped.values()).map((row) => {
-    const unitPrice = devicePriceById.get(row.deviceId) ?? 0;
+    const pricing = devicePricingById.get(row.deviceId) ?? { unitPrice: 0, installationUnitPrice: 0 };
+    const unitPrice = pricing.unitPrice;
+    const installationUnitPrice = pricing.installationUnitPrice;
+    const subtotal = unitPrice * row.quantity;
+    const installationSubtotal = installationUnitPrice * row.quantity;
     return {
       id: crypto.randomUUID(),
       budgetId: "",
@@ -272,11 +306,17 @@ export async function createBudgetFromSurvey(input: {
       zoneId: row.zoneId,
       quantity: row.quantity,
       unitPrice,
-      subtotal: unitPrice * row.quantity,
+      subtotal,
+      installationUnitPrice,
+      installationSubtotal,
+      totalSubtotal: subtotal + installationSubtotal,
     };
   });
 
-  const subtotal = items.reduce((acc, item) => acc + item.subtotal, 0);
+  const devicesSubtotal = items.reduce((acc, item) => acc + item.subtotal, 0);
+  const installationSubtotal = items.reduce((acc, item) => acc + item.installationSubtotal, 0);
+  const extraChargesSubtotal = 0;
+  const subtotal = devicesSubtotal + installationSubtotal + extraChargesSubtotal;
   const taxAmount = subtotal * input.taxRate;
   const total = subtotal + taxAmount;
 
@@ -288,6 +328,9 @@ export async function createBudgetFromSurvey(input: {
       status: "borrador",
       created_by: input.createdBy,
       layout_json: surveyData.survey.layout,
+      devices_subtotal: devicesSubtotal,
+      installation_subtotal: installationSubtotal,
+      extra_charges_subtotal: extraChargesSubtotal,
       subtotal,
       tax_rate: input.taxRate,
       tax_amount: taxAmount,
@@ -308,6 +351,8 @@ export async function createBudgetFromSurvey(input: {
     quantity: item.quantity,
     unit_price: item.unitPrice,
     subtotal: item.subtotal,
+    installation_unit_price: item.installationUnitPrice,
+    installation_subtotal: item.installationSubtotal,
   }));
 
   if (payload.length > 0) {
@@ -325,6 +370,9 @@ export async function createBudgetFromSurvey(input: {
     newValues: {
       surveyId: input.surveyId,
       status: "borrador",
+      devicesSubtotal,
+      installationSubtotal,
+      extraChargesSubtotal,
       subtotal,
       taxRate: input.taxRate,
       taxAmount,
@@ -342,6 +390,9 @@ export async function createBudgetFromSurvey(input: {
     updatedAt: safeText(budgetRow.updated_at ?? new Date().toISOString()),
     customerName: surveyData.survey.customerName ?? null,
     siteName: surveyData.survey.siteName ?? null,
+    devicesSubtotal,
+    installationSubtotal,
+    extraChargesSubtotal,
     subtotal,
     taxRate: input.taxRate,
     taxAmount,
@@ -352,6 +403,7 @@ export async function createBudgetFromSurvey(input: {
     expiresAt: safeNullableText(budgetRow.expires_at),
     layout: surveyData.survey.layout,
     items: items.map((item) => ({ ...item, budgetId })),
+    extraCharges: [],
     approvalMethod: null,
     approvalNotes: null,
     approvedByUserId: null,
@@ -369,6 +421,9 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
       status,
       created_at,
       updated_at,
+      devices_subtotal,
+      installation_subtotal,
+      extra_charges_subtotal,
       subtotal,
       tax_rate,
       tax_amount,
@@ -396,8 +451,19 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
         quantity,
         unit_price,
         subtotal,
+        installation_unit_price,
+        installation_subtotal,
         devices:device_id ( id, name, model ),
         zones:zone_id ( id, name )
+      ),
+      budget_extra_charges (
+        id,
+        company_id,
+        budget_id,
+        label,
+        charge_type,
+        amount,
+        item_order
       )
     `
     )
@@ -419,6 +485,7 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
   const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
   const items = (data.budget_items as any[] | null | undefined) ?? [];
+  const extraCharges = (data.budget_extra_charges as any[] | null | undefined) ?? [];
   const quoteRow = pickSingle(data.budget_quotes as unknown);
 
   return {
@@ -430,6 +497,9 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
     updatedAt: safeText(data.updated_at ?? new Date().toISOString()),
     customerName: safeNullableText((customerUser as any)?.name),
     siteName: safeNullableText((siteRow as any)?.name),
+    devicesSubtotal: safeNumber(data.devices_subtotal, safeNumber(data.subtotal, 0)),
+    installationSubtotal: safeNumber(data.installation_subtotal, 0),
+    extraChargesSubtotal: safeNumber(data.extra_charges_subtotal, 0),
     subtotal: safeNumber(data.subtotal, 0),
     taxRate: safeNumber(data.tax_rate, 0),
     taxAmount: safeNumber(data.tax_amount, 0),
@@ -454,8 +524,22 @@ export async function getBudgetDetail(budgetId: string, companyId: string): Prom
       quantity: safeNumber(row.quantity, 0),
       unitPrice: safeNumber(row.unit_price, 0),
       subtotal: safeNumber(row.subtotal, 0),
+      installationUnitPrice: safeNumber(row.installation_unit_price, 0),
+      installationSubtotal: safeNumber(row.installation_subtotal, 0),
+      totalSubtotal: safeNumber(row.subtotal, 0) + safeNumber(row.installation_subtotal, 0),
       };
     }),
+    extraCharges: extraCharges
+      .map((row) => ({
+        id: safeText(row.id),
+        budgetId: safeText(row.budget_id),
+        companyId: safeText(row.company_id),
+        label: safeText(row.label, "Cargo adicional"),
+        chargeType: normalizeChargeType(row.charge_type),
+        amount: safeNumber(row.amount, 0),
+        itemOrder: safeNumber(row.item_order, 0),
+      }))
+      .sort((a, b) => a.itemOrder - b.itemOrder),
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
@@ -482,6 +566,9 @@ export async function getBudgetDetailForCustomer(
       status,
       created_at,
       updated_at,
+      devices_subtotal,
+      installation_subtotal,
+      extra_charges_subtotal,
       subtotal,
       tax_rate,
       tax_amount,
@@ -509,8 +596,19 @@ export async function getBudgetDetailForCustomer(
         quantity,
         unit_price,
         subtotal,
+        installation_unit_price,
+        installation_subtotal,
         devices:device_id ( id, name, model ),
         zones:zone_id ( id, name )
+      ),
+      budget_extra_charges (
+        id,
+        company_id,
+        budget_id,
+        label,
+        charge_type,
+        amount,
+        item_order
       )
     `
     )
@@ -533,6 +631,7 @@ export async function getBudgetDetailForCustomer(
   const customerUser = pickSingle((customerRow as any)?.users as unknown);
 
   const items = (data.budget_items as any[] | null | undefined) ?? [];
+  const extraCharges = (data.budget_extra_charges as any[] | null | undefined) ?? [];
   const quoteRow = pickSingle(data.budget_quotes as unknown);
 
   return {
@@ -544,6 +643,9 @@ export async function getBudgetDetailForCustomer(
     updatedAt: safeText(data.updated_at ?? new Date().toISOString()),
     customerName: safeNullableText((customerUser as any)?.name),
     siteName: safeNullableText((siteRow as any)?.name),
+    devicesSubtotal: safeNumber(data.devices_subtotal, safeNumber(data.subtotal, 0)),
+    installationSubtotal: safeNumber(data.installation_subtotal, 0),
+    extraChargesSubtotal: safeNumber(data.extra_charges_subtotal, 0),
     subtotal: safeNumber(data.subtotal, 0),
     taxRate: safeNumber(data.tax_rate, 0),
     taxAmount: safeNumber(data.tax_amount, 0),
@@ -568,8 +670,22 @@ export async function getBudgetDetailForCustomer(
       quantity: safeNumber(row.quantity, 0),
       unitPrice: safeNumber(row.unit_price, 0),
       subtotal: safeNumber(row.subtotal, 0),
+      installationUnitPrice: safeNumber(row.installation_unit_price, 0),
+      installationSubtotal: safeNumber(row.installation_subtotal, 0),
+      totalSubtotal: safeNumber(row.subtotal, 0) + safeNumber(row.installation_subtotal, 0),
       };
     }),
+    extraCharges: extraCharges
+      .map((row) => ({
+        id: safeText(row.id),
+        budgetId: safeText(row.budget_id),
+        companyId: safeText(row.company_id),
+        label: safeText(row.label, "Cargo adicional"),
+        chargeType: normalizeChargeType(row.charge_type),
+        amount: safeNumber(row.amount, 0),
+        itemOrder: safeNumber(row.item_order, 0),
+      }))
+      .sort((a, b) => a.itemOrder - b.itemOrder),
     approvalMethod: (safeNullableText(data.approval_method) as BudgetDetail["approvalMethod"]) ?? null,
     approvalNotes: safeNullableText(data.approval_notes),
     approvedByUserId: safeNullableText(data.approved_by_user_id),
@@ -627,6 +743,9 @@ async function ensureBudgetCanBeDecided(budgetId: string): Promise<void> {
 export async function saveBudgetDraft(input: {
   budgetId: string;
   layout: SurveyLayout;
+  devicesSubtotal: number;
+  installationSubtotal: number;
+  extraChargesSubtotal: number;
   subtotal: number;
   taxRate: number;
   taxAmount: number;
@@ -636,6 +755,9 @@ export async function saveBudgetDraft(input: {
     .from("budgets")
     .update({
       layout_json: input.layout,
+      devices_subtotal: input.devicesSubtotal,
+      installation_subtotal: input.installationSubtotal,
+      extra_charges_subtotal: input.extraChargesSubtotal,
       subtotal: input.subtotal,
       tax_rate: input.taxRate,
       tax_amount: input.taxAmount,
@@ -653,6 +775,9 @@ export async function saveBudgetDraft(input: {
     entity: "budgets",
     entityId: input.budgetId,
     newValues: {
+      devicesSubtotal: input.devicesSubtotal,
+      installationSubtotal: input.installationSubtotal,
+      extraChargesSubtotal: input.extraChargesSubtotal,
       subtotal: input.subtotal,
       taxRate: input.taxRate,
       taxAmount: input.taxAmount,
@@ -667,6 +792,8 @@ export async function replaceBudgetItems(budgetId: string, items: Array<{
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  installationUnitPrice: number;
+  installationSubtotal: number;
 }>): Promise<void> {
   const { error: deleteError } = await supabase.from("budget_items").delete().eq("budget_id", budgetId);
   if (deleteError) {
@@ -682,6 +809,8 @@ export async function replaceBudgetItems(budgetId: string, items: Array<{
     quantity: item.quantity,
     unit_price: item.unitPrice,
     subtotal: item.subtotal,
+    installation_unit_price: item.installationUnitPrice,
+    installation_subtotal: item.installationSubtotal,
   }));
 
   const { error } = await supabase.from("budget_items").insert(payload);
@@ -694,6 +823,46 @@ export async function replaceBudgetItems(budgetId: string, items: Array<{
     entity: "budget_items",
     entityId: budgetId,
     newValues: { count: items.length },
+  });
+}
+
+export async function replaceBudgetExtraCharges(
+  budgetId: string,
+  companyId: string,
+  charges: Array<{
+    label: string;
+    chargeType: BudgetExtraChargeType;
+    amount: number;
+    itemOrder: number;
+  }>
+): Promise<void> {
+  const { error: deleteError } = await supabase.from("budget_extra_charges").delete().eq("budget_id", budgetId);
+  if (deleteError) {
+    throw new Error(deleteError.message || "No se pudieron limpiar los cargos extra del presupuesto.");
+  }
+
+  if (charges.length === 0) return;
+
+  const payload = charges.map((charge) => ({
+    budget_id: budgetId,
+    company_id: companyId,
+    label: charge.label,
+    charge_type: charge.chargeType,
+    amount: charge.amount,
+    item_order: charge.itemOrder,
+  }));
+
+  const { error } = await supabase.from("budget_extra_charges").insert(payload);
+  if (error) {
+    throw new Error(error.message || "No se pudieron guardar los cargos extra del presupuesto.");
+  }
+
+  await logAuditEvent({
+    action: "replace",
+    entity: "budget_extra_charges",
+    entityId: budgetId,
+    companyId,
+    newValues: { count: charges.length },
   });
 }
 
