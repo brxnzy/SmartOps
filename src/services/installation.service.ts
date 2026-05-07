@@ -695,7 +695,7 @@ export async function seedInstallationProjectDefaults(input: {
   });
 
   if (error) {
-    throw new Error(error.message || "No se pudo inicializar tareas/checklist del proyecto.");
+    throw new Error(error.message || "No se pudo inicializar los datos base del proyecto.");
   }
 }
 
@@ -781,6 +781,17 @@ export async function createInstallationProjectTask(input: {
   const cleanTitle = input.title.trim();
   if (!cleanTitle) {
     throw new Error("El titulo de la tarea es requerido.");
+  }
+
+  const { data: projectData, error: projectError } = await supabase
+    .from("installation_projects")
+    .select("id")
+    .eq("id", input.projectId)
+    .eq("company_id", input.companyId)
+    .maybeSingle<{ id: string }>();
+
+  if (projectError || !projectData) {
+    throw new Error(projectError?.message || "No se encontro el proyecto para crear la tarea.");
   }
 
   const { data: maxPositionData } = await supabase
@@ -883,6 +894,17 @@ export async function updateInstallationProjectPostInstallationCheck(input: {
   notes?: string | null;
   userId: string;
 }): Promise<void> {
+  const { data: projectData, error: projectError } = await supabase
+    .from("installation_projects")
+    .select("id")
+    .eq("id", input.projectId)
+    .eq("company_id", input.companyId)
+    .maybeSingle<{ id: string }>();
+
+  if (projectError || !projectData) {
+    throw new Error(projectError?.message || "No se encontro el proyecto para actualizar la prueba post instalacion.");
+  }
+
   const { error } = await supabase.rpc("upsert_project_post_installation_check_state", {
     p_company_id: input.companyId,
     p_project_id: input.projectId,

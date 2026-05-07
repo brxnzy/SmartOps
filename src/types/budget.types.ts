@@ -2,6 +2,7 @@
 
 export type BudgetStatus = "borrador" | "enviada" | "aprobada" | "rechazada" | "expirada";
 export type BudgetApprovalMethod = "link" | "internal" | "portal" | null;
+export type BudgetExtraChargeType = "viaticos" | "transporte" | "extra";
 
 export interface BudgetItem {
   id: string;
@@ -14,6 +15,19 @@ export interface BudgetItem {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  installationUnitPrice: number;
+  installationSubtotal: number;
+  totalSubtotal: number;
+}
+
+export interface BudgetExtraCharge {
+  id: string;
+  budgetId: string;
+  companyId: string;
+  label: string;
+  chargeType: BudgetExtraChargeType;
+  amount: number;
+  itemOrder: number;
 }
 
 export interface BudgetSummary {
@@ -25,6 +39,9 @@ export interface BudgetSummary {
   updatedAt: string;
   customerName: string | null;
   siteName: string | null;
+  devicesSubtotal: number;
+  installationSubtotal: number;
+  extraChargesSubtotal: number;
   subtotal: number;
   taxRate: number;
   taxAmount: number;
@@ -39,6 +56,7 @@ export interface BudgetSummary {
 export interface BudgetDetail extends BudgetSummary {
   layout: SurveyLayout;
   items: BudgetItem[];
+  extraCharges: BudgetExtraCharge[];
   approvalMethod: BudgetApprovalMethod;
   approvalNotes: string | null;
   approvedByUserId: string | null;

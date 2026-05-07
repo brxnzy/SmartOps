@@ -17,6 +17,12 @@ export type BudgetItem = {
   price: number;
 };
 
+type BudgetExtraChargeRow = {
+  label?: string | null;
+  charge_type?: string | null;
+  amount?: number | string | null;
+};
+
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -117,6 +123,8 @@ type BudgetItemRow = {
   quantity?: number | string | null;
   unit_price?: number | string | null;
   subtotal?: number | string | null;
+  installation_unit_price?: number | string | null;
+  installation_subtotal?: number | string | null;
   devices?: { name?: string | null; model?: string | null } | { name?: string | null; model?: string | null }[] | null;
   zones?: { name?: string | null } | { name?: string | null }[] | null;
 };
@@ -216,6 +224,9 @@ Deno.serve(async (req: Request) => {
         company_id,
         survey_id,
         status,
+        devices_subtotal,
+        installation_subtotal,
+        extra_charges_subtotal,
         subtotal,
         tax_rate,
         tax_amount,
@@ -234,8 +245,15 @@ Deno.serve(async (req: Request) => {
           quantity,
           unit_price,
           subtotal,
+          installation_unit_price,
+          installation_subtotal,
           devices:device_id ( name, model ),
           zones:zone_id ( name )
+        ),
+        budget_extra_charges (
+          label,
+          charge_type,
+          amount
         )
         `
       )
@@ -278,7 +296,12 @@ Deno.serve(async (req: Request) => {
       customerEmail = authUser?.user?.email ?? null;
     }
 
-    const items: BudgetItem[] = budget.budget_items ?? [];
+    const items: BudgetItemRow[] = ((budget as { budget_items?: BudgetItemRow[] | null }).budget_items ?? []) as BudgetItemRow[];
+    const extraCharges: BudgetExtraChargeRow[] =
+      ((budget as { budget_extra_charges?: BudgetExtraChargeRow[] | null }).budget_extra_charges ?? []) as BudgetExtraChargeRow[];
+    const devicesSubtotal = safeNumber((budget as { devices_subtotal?: unknown }).devices_subtotal, safeNumber((budget as { subtotal?: unknown }).subtotal));
+    const installationSubtotal = safeNumber((budget as { installation_subtotal?: unknown }).installation_subtotal, 0);
+    const extraChargesSubtotal = safeNumber((budget as { extra_charges_subtotal?: unknown }).extra_charges_subtotal, 0);
 
 
     const quoteNumber = buildQuoteNumber(budgetId);
@@ -339,10 +362,11 @@ Deno.serve(async (req: Request) => {
     const tableTop = topY - 55;
     page.drawRectangle({ x: 40, y: tableTop, width: width - 80, height: 18, color: rgb(0.93, 0.94, 0.97) });
     page.drawText("Dispositivo", { x: 45, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText("Zona", { x: 260, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText("Cant.", { x: 360, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText("Precio", { x: 410, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-    page.drawText("Subtotal", { x: 480, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("Zona", { x: 205, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("Cant.", { x: 300, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("Equipo", { x: 345, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("Inst.", { x: 430, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("Total", { x: 500, y: tableTop + 5, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
 
     let rowY = tableTop - 16;
     for (const item of items) {
@@ -350,19 +374,37 @@ Deno.serve(async (req: Request) => {
       const zone = Array.isArray(item.zones) ? item.zones[0] : item.zones;
       const deviceName = safeText(device?.name ?? device?.model ?? "Dispositivo");
       const zoneName = safeText(zone?.name ?? "-");
+      const itemSubtotal = safeNumber(item.subtotal);
+      const itemInstallationSubtotal = safeNumber(item.installation_subtotal);
+      const itemLineTotal = itemSubtotal + itemInstallationSubtotal;
       page.drawText(deviceName, { x: 45, y: rowY, size: 9, font });
-      page.drawText(zoneName, { x: 260, y: rowY, size: 9, font });
-      page.drawText(String(item.quantity ?? 0), { x: 360, y: rowY, size: 9, font });
-      page.drawText(formatCurrency(safeNumber(item.unit_price)), { x: 410, y: rowY, size: 9, font });
-      page.drawText(formatCurrency(safeNumber(item.subtotal)), { x: 480, y: rowY, size: 9, font });
+      page.drawText(zoneName, { x: 205, y: rowY, size: 9, font });
+      page.drawText(String(item.quantity ?? 0), { x: 300, y: rowY, size: 9, font });
+      page.drawText(formatCurrency(itemSubtotal), { x: 345, y: rowY, size: 9, font });
+      page.drawText(formatCurrency(itemInstallationSubtotal), { x: 430, y: rowY, size: 9, font });
+      page.drawText(formatCurrency(itemLineTotal), { x: 500, y: rowY, size: 9, font });
       rowY -= 14;
       if (rowY < 160) break;
     }
 
+    if (extraCharges.length > 0) {
+      rowY -= 8;
+      page.drawText("Cargos adicionales", { x: 40, y: rowY, size: 10, font: fontBold });
+      rowY -= 14;
+      for (const charge of extraCharges) {
+        page.drawText(safeText(charge.label, "Cargo adicional"), { x: 45, y: rowY, size: 9, font });
+        page.drawText(formatCurrency(safeNumber(charge.amount)), { x: 500, y: rowY, size: 9, font });
+        rowY -= 14;
+        if (rowY < 160) break;
+      }
+    }
+
     const totalsY = 140;
-    page.drawText(`Subtotal: ${formatCurrency(safeNumber(budget.subtotal))}`, { x: 360, y: totalsY + 30, size: 10, font });
-    page.drawText(`Impuestos: ${formatCurrency(safeNumber(budget.tax_amount))}`, { x: 360, y: totalsY + 16, size: 10, font });
-    page.drawText(`Total: ${formatCurrency(safeNumber(budget.total))}`, { x: 360, y: totalsY + 2, size: 12, font: fontBold });
+    page.drawText(`Equipos: ${formatCurrency(devicesSubtotal)}`, { x: 330, y: totalsY + 44, size: 10, font });
+    page.drawText(`Instalacion: ${formatCurrency(installationSubtotal)}`, { x: 330, y: totalsY + 30, size: 10, font });
+    page.drawText(`Extras: ${formatCurrency(extraChargesSubtotal)}`, { x: 330, y: totalsY + 16, size: 10, font });
+    page.drawText(`Impuestos: ${formatCurrency(safeNumber(budget.tax_amount))}`, { x: 330, y: totalsY + 2, size: 10, font });
+    page.drawText(`Total: ${formatCurrency(safeNumber(budget.total))}`, { x: 330, y: totalsY - 12, size: 12, font: fontBold });
 
     const termsText = (terms ?? "").trim() || "Validez sujeta a disponibilidad. Instalacion coordinada con el cliente.";
     const termsLines = wrapText(termsText, 90);

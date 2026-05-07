@@ -39,13 +39,25 @@ export default function SettingsPostInstallationChecks() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemText, setEditingItemText] = useState("");
 
+  const resetLocalState = useCallback(() => {
+    setChecklist(null);
+    setItems([]);
+    setName("Pruebas post instalacion");
+    setDescription("");
+    setNewItem("");
+    setEditingItemId(null);
+    setEditingItemText("");
+  }, []);
+
   const loadData = useCallback(async () => {
     if (!companyId || !canRead) {
+      resetLocalState();
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    resetLocalState();
     try {
       const checklistData = await getOrCreatePostInstallationChecklist(companyId);
       const itemRows = await listPostInstallationChecklistItems(checklistData.id);
@@ -55,6 +67,7 @@ export default function SettingsPostInstallationChecks() {
       setName(checklistData.name);
       setDescription(checklistData.description ?? "");
     } catch (error) {
+      resetLocalState();
       notifications.error({
         title: "Error cargando pruebas post instalacion",
         description: error instanceof Error ? error.message : "No se pudo cargar la configuracion.",
@@ -62,7 +75,7 @@ export default function SettingsPostInstallationChecks() {
     } finally {
       setLoading(false);
     }
-  }, [canRead, companyId]);
+  }, [canRead, companyId, resetLocalState]);
 
   useEffect(() => {
     void loadData();

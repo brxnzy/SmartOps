@@ -62,8 +62,20 @@ export default function CustomerQuoteDetail() {
   }, [loadDetail]);
 
   const totals = useMemo(() => {
-    if (!budget) return { subtotal: 0, taxAmount: 0, total: 0 };
+    if (!budget) {
+      return {
+        devicesSubtotal: 0,
+        installationSubtotal: 0,
+        extraChargesSubtotal: 0,
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+      };
+    }
     return {
+      devicesSubtotal: budget.devicesSubtotal,
+      installationSubtotal: budget.installationSubtotal,
+      extraChargesSubtotal: budget.extraChargesSubtotal,
       subtotal: budget.subtotal,
       taxAmount: budget.taxAmount,
       total: budget.total,
@@ -154,7 +166,7 @@ export default function CustomerQuoteDetail() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Detalle</h2>
-                <p className="text-xs text-slate-500">Revisa los dispositivos y el total.</p>
+                <p className="text-xs text-slate-500">Revisa los dispositivos, la instalacion y los cargos adicionales.</p>
               </div>
               {canRespond ? (
                 <div className="flex flex-wrap gap-2">
@@ -187,14 +199,15 @@ export default function CustomerQuoteDetail() {
                     <th className="px-3 py-2">Dispositivo</th>
                     <th className="px-3 py-2">Zona</th>
                     <th className="px-3 py-2">Cantidad</th>
-                    <th className="px-3 py-2">Precio</th>
-                    <th className="px-3 py-2">Subtotal</th>
+                    <th className="px-3 py-2">Precio equipo</th>
+                    <th className="px-3 py-2">Instalacion</th>
+                    <th className="px-3 py-2">Total linea</th>
                   </tr>
                 </thead>
                 <tbody>
                   {budget.items.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-500">
+                      <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
                         No hay dispositivos en la cotizacion.
                       </td>
                     </tr>
@@ -207,8 +220,9 @@ export default function CustomerQuoteDetail() {
                         <td className="px-3 py-3 text-slate-600">{item.zoneName ?? "Sin zona"}</td>
                         <td className="px-3 py-3 text-slate-600">{item.quantity}</td>
                         <td className="px-3 py-3 text-slate-600">{formatCurrency(item.unitPrice)}</td>
+                        <td className="px-3 py-3 text-slate-600">{formatCurrency(item.installationUnitPrice)}</td>
                         <td className="px-3 py-3 font-semibold text-slate-800">
-                          {formatCurrency(item.subtotal)}
+                          {formatCurrency(item.totalSubtotal)}
                         </td>
                       </tr>
                     ))
@@ -217,8 +231,22 @@ export default function CustomerQuoteDetail() {
               </table>
             </div>
 
+            {budget.extraCharges.length > 0 ? (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 className="text-sm font-semibold text-slate-900">Cargos adicionales</h3>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  {budget.extraCharges.map((charge) => (
+                    <div key={charge.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <span>{charge.label}</span>
+                      <span className="font-semibold text-slate-800">{formatCurrency(charge.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              Subtotal {formatCurrency(totals.subtotal)} · Impuestos {formatCurrency(totals.taxAmount)} · Total {formatCurrency(totals.total)}
+              Equipos {formatCurrency(totals.devicesSubtotal)} · Instalacion {formatCurrency(totals.installationSubtotal)} · Extras {formatCurrency(totals.extraChargesSubtotal)} · Impuestos {formatCurrency(totals.taxAmount)} · Total {formatCurrency(totals.total)}
             </div>
           </section>
         </>
